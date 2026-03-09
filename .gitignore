@@ -1,0 +1,27 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+**/*.g.dart
+**/*.freezed.dart
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+.env
+*.db
+*.sqlite3
+
+# IDEs y Sistema
+.vscode/
+.idea/
+.DS_Store
+*.log
