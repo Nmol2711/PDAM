@@ -5,43 +5,63 @@ class CustomTextField extends StatelessWidget {
   final IconData icon;
   final bool isPassword;
   final TextEditingController? controller;
+  final Function(String)? onChanged;
+  
 
   const CustomTextField({
     super.key,
     required this.label,
     required this.icon,
     this.isPassword = false,
-    this.controller,
+    this.controller, this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return TextField(
       controller: controller,
       obscureText: isPassword,
+      onChanged: onChanged,
+      // Texto que escribe el usuario
+      style: TextStyle(
+        color: theme.textTheme.bodyLarge?.color,
+      ),
 
-      style: const TextStyle(
-        color: Colors.white,
-      ), // Texto que escribe el usuario
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white70),
+
+        // Color del label según el tema
+        labelStyle: TextStyle(
+          color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+        ),
+
+        // Icono
         prefixIcon: Icon(
           icon,
-          color: const Color(0xFF917CFF),
-        ), // El morado de tu paleta
-        // Fondo del campo de texto
-        filled: true,
-        fillColor: const Color(0x8D1E1E2C),
+          color: colors.primary,
+        ),
 
-        // Bordes redondeados y personalizados
+        // Fondo del campo
+        filled: true,
+        fillColor: theme.cardColor,
+
+        // Bordes
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Colors.white10),
+          borderSide: BorderSide(
+            color: colors.outline.withValues(alpha: 0.5),
+          ),
         ),
+
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide: const BorderSide(color: Color(0xFF917CFF), width: 2),
+          borderSide: BorderSide(
+            color: colors.primary,
+            width: 2,
+          ),
         ),
       ),
     );

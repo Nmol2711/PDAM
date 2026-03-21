@@ -13,6 +13,11 @@ dependencies:
   dio: ^5.9.2
   flutter_secure_storage: ^10.0.0
   auto_size_text: ^3.0.0
+  bloc: ^9.2.0
+  flutter_bloc: ^9.1.1
+  equatable: ^2.0.8
+  get_it: ^9.2.1
+
 
 
 dev_dependencies:
@@ -22,3 +27,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/
+    - assets/imgs/
+    - assets/icos/
+  

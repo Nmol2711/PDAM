@@ -15,22 +15,38 @@ class CustomOutlinedButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        // "Semi cuadrado": un radio de 8 o 10 es ideal
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        side: const BorderSide(color: Colors.white24), // Borde sutil
-        padding: const EdgeInsets.symmetric(vertical: 15), // Altura cómoda
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+
+        // Color del borde según el tema
+        side: BorderSide(
+          color: colors.outline,
+        ),
+
+        padding: const EdgeInsets.symmetric(vertical: 15),
+
+        // Color cuando se presiona
+        foregroundColor: colors.primary,
       ),
       child: Center(
-        // Asegura que el texto esté centrado
         child: Padding(
-          padding: const EdgeInsetsGeometry.symmetric(
+          padding: const EdgeInsets.symmetric(
             horizontal: 20,
             vertical: 5,
           ),
-          child: AppTypography.textBody(text, fontSize: fontSize),
+          child: AppTypography.textBody(
+            context,
+            text,
+            fontSize: fontSize,
+            color: theme.textTheme.bodyMedium?.color,
+          ),
         ),
       ),
     );

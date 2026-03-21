@@ -1,12 +1,13 @@
 import 'package:app_movil_pdam/domain/entities/auth_token.dart';
 import 'package:app_movil_pdam/domain/repositories/auth_repository.dart';
 
-class SaveToken {
+class GetTokenUseCase {
   final AuthRepository repository;
 
-  SaveToken(this.repository);
+  GetTokenUseCase(this.repository);
 
-  Future<void> execute(AuthToken token) async {
-    await repository.saveToken(token);
+  Future<AuthToken?> execute() async {
+    final result = await repository.getToken();
+    return result;
   }
 }

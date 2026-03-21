@@ -1,15 +1,16 @@
-import 'package:app_movil_pdam/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class CustomCardWidget extends StatelessWidget {
+
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final Color? color;
   const CustomCardWidget({
+
     super.key,
     required this.child,
     this.padding,
-    this.color,
+    this.color, 
   });
 
   @override
@@ -18,7 +19,7 @@ class CustomCardWidget extends StatelessWidget {
       padding: padding ?? const EdgeInsets.all(20),
       decoration: BoxDecoration(
         // Usamos el color de tu paleta (darkCard)
-        color: color ?? AppColors.darkCard,
+        color: color ?? Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(
           20,
         ), // Bordes redondeados profesionales

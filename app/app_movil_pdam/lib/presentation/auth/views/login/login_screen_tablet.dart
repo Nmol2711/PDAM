@@ -13,7 +13,8 @@ class LoginScreenTablet extends StatelessWidget {
       backgroundColor: AppColors.darkBackground,
       body: Center(
         child: CustomCardWidget(
-          child: AppTypography.textTitle('Login Screen', fontSize: fontSize),
+       
+          child: AppTypography.textTitle(context,'Login Screen', fontSize: fontSize),
         ),
       ),
     );
