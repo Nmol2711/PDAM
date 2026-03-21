@@ -1,4 +1,46 @@
-# PDAM - Prototipo de Dispensador Automático de Alimento para Mascotas
+---
+
+## 🇺🇸 English Version
+
+# PDAM - Automatic Pet Food Dispenser Prototype
+
+This project is a comprehensive system designed to automate and monitor pet feeding. Developed as part of the Systems Engineering program at the Universidad Politécnica Territorial José Félix Ribas.
+
+### 🚀 Technologies Used
+
+The PDAM ecosystem is divided into three main components:
+* **Frontend (Mobile App):** Developed with **Flutter & Dart**, implementing **Clean Architecture** and the **BLoC** design pattern for robust state management.
+* **Backend (API):** Built with **FastAPI (Python)**, responsible for business logic, data persistence, and hardware communication.
+* **Hardware:** Controlled via **Arduino**, in charge of the physical dispenser activation and level sensors.
+
+### 🏗️ Mobile Application Architecture
+
+The app follows Clean Architecture principles to ensure scalability and ease of maintenance:
+* **Data:** Implementation of repositories, models, and data sources (Remote & Local).
+* **Domain:** Pure business entities and use cases.
+* **Presentation:** Responsive UI with dark/light mode support and state management with BLoC/Cubit.
+
+### 📋 Main Features
+* **Authentication:** Secure login system for users.
+* **Dashboard:** Real-time monitoring of the dispenser status.
+* **Scheduling:** Configuration of specific schedules for feeding.
+* **History (Logs):** Detailed record of every meal served.
+* **Responsive Interface:** Adapted for mobile devices, tablets, and desktops.
+
+### 🛠️ Installation and Setup
+
+#### 🐍 Backend (API)
+1. **Environment Setup:** Create a `.env` file in the `api/` folder and define the variables for `SECRET_KEY` and `DATABASE_URL`.
+2. **Dependencies:** Run `pip install -r requirements.txt`.
+
+#### 📱 Frontend (Mobile App)
+1. **Packages:** Run `flutter pub get` to download dependencies.
+2. **Run:** Execute `flutter run` on your connected device.
+
+**Author:** Nelson - Systems & Informatics Engineering Student.
+
+
+# PDAM - Prototipo de Dispensador Automático de Alimento para Mascotas (Es)
 
 Este proyecto es un sistema integral diseñado para automatizar y monitorear la alimentación de mascotas. Desarrollado como parte de la formación en Ingeniería de Sistemas en la Universidad Politécnica Territorial José Félix Ribas.
 
