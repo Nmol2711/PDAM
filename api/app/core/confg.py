@@ -12,3 +12,10 @@ class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL")
 
 settings = Settings()
+
+# Validaciones de seguridad: Evitar que la app arranque sin configuración crítica
+if not settings.SECRET_KEY:
+    raise ValueError("FATAL: No se ha configurado la variable de entorno SECRET_KEY. Revisa tu archivo .env.")
+
+if not settings.DATABASE_URL:
+    raise ValueError("FATAL: No se ha configurado la variable de entorno DATABASE_URL. Revisa tu archivo .env.")
