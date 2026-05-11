@@ -6,6 +6,7 @@ from app.db.database import get_db
 from app.core.confg import settings
 from app.services import user_service
 from app.models import models
+from typing import Annotated
 
 # Esto le dice a FastAPI que busque el token en el header "Authorization"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
@@ -30,3 +31,5 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     if user is None:
         raise credentials_exception
     return user
+
+CurrentUser = Annotated[models.User, Depends(get_current_user)]
