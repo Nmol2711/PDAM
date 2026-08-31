@@ -1,1 +1,1 @@
-from .models import Base, User, Schedule, ActivityLog
+from .models import Base, User, Pet, Schedule, ActivityLog

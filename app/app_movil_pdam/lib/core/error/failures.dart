@@ -3,11 +3,14 @@ abstract class Failures {
   Failures(this.message);
 }
 
-
 class MapFailure {
   static String mapFailureToMessage(Failures failure) {
     return failure.message;
   }
+}
+
+class UserFailures extends Failures {
+  UserFailures(super.message);
 }
 
 class ServerFailures extends Failures {
@@ -20,4 +23,8 @@ class ConfigurationFailure extends Failures {
 
 class NetworkFailures extends Failures {
   NetworkFailures(super.message);
+}
+
+class LocalStorageFailures extends Failures {
+  LocalStorageFailures(super.message);
 }

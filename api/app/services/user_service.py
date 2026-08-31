@@ -5,8 +5,16 @@ from app.schemas import schemas
 from app.core.security import get_password_hash
 
 # Función para buscar si un usuario ya existe
-def obtener_usuario_por_email(db: Session, email: str):
-    return db.query(models.User).filter(models.User.email == email).first()
+def obtener_usuario_por_email(db: Session, email: str) -> schemas.User:
+    user_db = db.query(models.User).filter(models.User.email == email).first()
+
+    if user_db:
+        return schemas.User.model_validate(user_db)
+    return None
+
+def obtener_password_por_email(db: Session, email:str) -> str | None:
+    user_db = db.query(models.User).filter(models.User.email == email).first()
+    return  user_db.hashed_password if user_db else None
 
 def crear_usuario(db: Session, user: schemas.UserCreate):
     # 1. Validar si el usuario ya existe

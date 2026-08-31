@@ -4,6 +4,8 @@ from jose import jwt
 from typing import Optional
 from app.core.confg import settings  # Importamos nuestra configuración
 
+
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_password_hash(password: str):
@@ -24,3 +26,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     # Usamos SECRET_KEY y ALGORITHM de settings
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
+
+def verify_secret_key_qr(secret_key_qr: str) -> bool:
+    return settings.MASTER_HARDWARE_KEY == secret_key_qr
