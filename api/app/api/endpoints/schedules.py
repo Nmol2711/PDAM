@@ -74,3 +74,12 @@ def obtener_horario_por_mascota(
     pet = pet_service.obtener_mascota_por_id(db=db, pet_id=pet_id, user_id=current_user.id)
 
     return schedule_service.obtener_horarios_por_mascota(db=db, pet_id=pet.id)
+
+@router.post("/auto-generate/{pet_id}", response_model=schemas.AutoScheduleResponse)
+def auto_generar_horarios(
+    current_user: CurrentUser,
+    pet_id: int,
+    req: schemas.AutoScheduleRequest,
+    db: Session = Depends(get_db),
+):
+    return schedule_service.auto_generar_horarios_wsava(db=db, pet_id=pet_id, user_id=current_user.id, req=req)

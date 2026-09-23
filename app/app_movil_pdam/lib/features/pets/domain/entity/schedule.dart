@@ -11,3 +11,13 @@ class Schedule {
     required this.petId,
   });
 }
+
+class ScheduleFetchResult {
+  final List<Schedule> schedules;
+  final bool isOffline;
+
+  const ScheduleFetchResult({
+    required this.schedules,
+    required this.isOffline,
+  });
+}

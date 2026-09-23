@@ -1,11 +1,14 @@
-import 'dart:ui'; // 💡 IMPORTANTE: Necesario para usar ImageFilter
+import 'dart:math' as Math;
+import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
+import 'package:app_movil_pdam/features/pets/domain/entity/schedule.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/pets/presentation/views/edit_pet_view.dart';
 
 class PetDetailView extends StatefulWidget {
   final Pet pet;
@@ -28,13 +31,37 @@ class _PetDetailViewState extends State<PetDetailView> {
     context.read<DispenserBloc>().add(LoadDispenserByPetEvent(widget.pet.id));
   }
 
+  String _getDefaultAssetPath(TypePest species) {
+    switch (species) {
+      case TypePest.canino:
+        return "assets/imgs/perro.png";
+      case TypePest.felino:
+      case TypePest.otros:
+        return "assets/imgs/gato_1.png";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Detectamos si el tema actual es oscuro o claro para ajustar la opacidad de la capa intermedia
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      appBar: AppBar(title: Text(widget.pet.name), centerTitle: true),
+      appBar: AppBar(
+        title: Text(widget.pet.name),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Editar mascota',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EditPetView(pet: widget.pet),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,47 +71,19 @@ class _PetDetailViewState extends State<PetDetailView> {
               height: 220,
               width: double.infinity,
               child: widget.pet.imgUrl != null && widget.pet.imgUrl!.isNotEmpty
-                  ? Stack(
-                      children: [
-                        // Capa 1: Fondo estirado (Imagen de fondo difusa)
-                        Container(
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: NetworkImage(widget.pet.imgUrl!),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        // Capa 2: Filtro de desenfoque Gaussiano adaptativo al tema
-                        Positioned.fill(
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(
-                              sigmaX: 15.0,
-                              sigmaY: 15.0,
-                            ),
-                            child: Container(
-                              // Se mimetiza con el fondo actual del scaffold
-                              color: Theme.of(context).scaffoldBackgroundColor
-                                  .withOpacity(isDarkMode ? 0.4 : 0.6),
-                            ),
-                          ),
-                        ),
-                        // Capa 3: Imagen nítida, centrada y completa sin recortes
-                        Center(
-                          child: Image.network(
-                            widget.pet.imgUrl!,
-                            fit: BoxFit.contain,
-                          ),
-                        ),
-                      ],
+                  ? Image.network(
+                      widget.pet.imgUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.asset(
+                          _getDefaultAssetPath(widget.pet.species),
+                          fit: BoxFit.cover,
+                        );
+                      },
                     )
-                  : Container(
-                      color: Colors.grey.shade300,
-                      child: const Icon(
-                        Icons.pets,
-                        size: 80,
-                        color: Colors.grey,
-                      ),
+                  : Image.asset(
+                      _getDefaultAssetPath(widget.pet.species),
+                      fit: BoxFit.cover,
                     ),
             ),
             const SizedBox(height: 16),
@@ -226,11 +225,9 @@ class _PetDetailViewState extends State<PetDetailView> {
                       size: 28,
                     ),
                     onPressed: () {
-                      // 🚀 Navegamos al formulario guiado pasando el objeto pet actual
-                      context.pushNamed(
-                        'guided_schedule_form',
-                        extra: widget.pet,
-                      );
+                      final state = context.read<ScheduleBloc>().state;
+                      final schedules = state is ScheduleLoaded ? state.schedules : <Schedule>[];
+                      _showAddScheduleOptionsDialog(context, schedules);
                     },
                   ),
                 ],
@@ -239,7 +236,18 @@ class _PetDetailViewState extends State<PetDetailView> {
             const SizedBox(height: 8),
 
             // --- 3. LISTA DE HORARIOS ORIGINAL (Conectada al Bloc) ---
-            BlocBuilder<ScheduleBloc, ScheduleState>(
+            BlocConsumer<ScheduleBloc, ScheduleState>(
+              listener: (context, state) {
+                if (state is ScheduleLoaded && state.isOffline) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Los horarios se reflejarán cuando haya conexión con el servidor'),
+                      backgroundColor: Colors.orange,
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                }
+              },
               builder: (context, state) {
                 if (state is ScheduleLoading) {
                   return const Center(
@@ -286,7 +294,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           onTap: () {
-                            print("Horario seleccionado: ${schedule.id}");
+                            _showEditScheduleDialog(context, schedule, widget.pet.id);
                           },
                           child: ListTile(
                             leading: const CircleAvatar(
@@ -306,7 +314,13 @@ class _PetDetailViewState extends State<PetDetailView> {
                             subtitle: Text(
                               "Porción: ${schedule.amount} gramos",
                             ),
-                            trailing: const Icon(Icons.chevron_right),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                              tooltip: 'Editar horario',
+                              onPressed: () {
+                                _showEditScheduleDialog(context, schedule, widget.pet.id);
+                              },
+                            ),
                           ),
                         ),
                       );
@@ -377,6 +391,346 @@ class _PetDetailViewState extends State<PetDetailView> {
           ],
         );
       },
+    );
+  }
+
+  double _calculateWsavaDailyGrams(Pet pet, double foodKcalPerKg) {
+    final hoy = DateTime.now();
+    final edadDias = hoy.difference(pet.birthDate).inDays;
+    final edadMeses = edadDias / 30.44;
+
+    final weight = pet.weight;
+    final rer = 70 * Math.pow(weight, 0.75);
+
+    final species = pet.species.name.toLowerCase();
+    final isNeutered = pet.reproductiveStatus;
+    final isGrowth = edadMeses < 12;
+
+    double factorMer = 1.6;
+    if (species.contains('canino') || species.contains('dog')) {
+      if (isGrowth) {
+        factorMer = edadMeses < 4 ? 3.0 : 2.0;
+      } else {
+        if (isNeutered) {
+          factorMer = 1.6;
+        } else {
+          factorMer = 1.8;
+        }
+      }
+    } else {
+      if (isGrowth) {
+        factorMer = 2.5;
+      } else {
+        if (isNeutered) {
+          factorMer = 1.2;
+        } else {
+          factorMer = 1.4;
+        }
+      }
+    }
+
+    final mer = rer * factorMer;
+    final dailyKcal = mer;
+    final dailyGrams = foodKcalPerKg > 0 ? (dailyKcal / foodKcalPerKg) * 1000 : 0.0;
+    return dailyGrams;
+  }
+
+  void _showAddScheduleOptionsDialog(BuildContext context, List<Schedule> existingSchedules) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              "Agregar Horario de Comida",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.blueAccent,
+                child: Icon(Icons.add, color: Colors.white),
+              ),
+              title: const Text("Agregar horario individual"),
+              subtitle: const Text("Registra una hora y porción con validación WSAVA"),
+              onTap: () {
+                Navigator.pop(context);
+                _showAddScheduleDialog(context, existingSchedules, widget.pet.id);
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: Colors.orangeAccent,
+                child: Icon(Icons.auto_awesome, color: Colors.white),
+              ),
+              title: const Text("Plan Nutricional Automático WSAVA"),
+              subtitle: const Text("Generar horarios basados en BCS, MCS y densidad calórica"),
+              onTap: () {
+                Navigator.pop(context);
+                context.pushNamed('guided_schedule_form', extra: widget.pet);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddScheduleDialog(BuildContext context, List<Schedule> existingSchedules, int petId) {
+    final timeController = TextEditingController();
+    final amountController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Nuevo Horario",
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: timeController,
+                decoration: const InputDecoration(
+                  labelText: "Hora (HH:MM)",
+                  hintText: "Ej. 08:30",
+                  prefixIcon: Icon(Icons.access_time),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Requerido";
+                  if (!RegExp(r"^([01]\d|2[0-3]):([0-5]\d)$").hasMatch(v)) {
+                    return 'Formato HH:MM (ej: 08:30)';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: "Cantidad (gramos)",
+                  hintText: "Ej. 150",
+                  prefixIcon: Icon(Icons.scale),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                  suffixText: 'g',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Requerido";
+                  if (double.tryParse(v) == null || double.parse(v) <= 0) {
+                    return 'Cantidad inválida';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    final newAmount = double.parse(amountController.text.trim());
+                    final existingTotal = existingSchedules.fold(0.0, (sum, s) => sum + s.amount);
+                    final totalPlanned = existingTotal + newAmount;
+                    
+                    final wsavaLimitGrams = _calculateWsavaDailyGrams(widget.pet, 3850.0);
+                    final excess = totalPlanned - wsavaLimitGrams;
+
+                    if (excess > 50.0) {
+                      Navigator.pop(context);
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("⚠️ Límite WSAVA Excedido"),
+                          content: Text(
+                            "No se puede crear este horario porque excede significativamente el límite diario recomendado por WSAVA para ${widget.pet.name}.\n\n"
+                            "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
+                            "• Total con este horario: ${totalPlanned.toStringAsFixed(0)}g\n\n"
+                            "Superar este límite puede causar sobrepeso y riesgos metabólicos.",
+                          ),
+                          actions: [
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text("Entendido"),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (excess > 0.0) {
+                      Navigator.pop(context);
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text("⚠️ Advertencia Nutricional WSAVA"),
+                          content: Text(
+                            "Esta porción supera ligeramente la recomendación diaria recomendada por WSAVA.\n\n"
+                            "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
+                            "• Total planeado: ${totalPlanned.toStringAsFixed(0)}g\n\n"
+                            "¿Deseas continuar y registrar el horario de todas formas?",
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text("Cancelar"),
+                            ),
+                            FilledButton(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                context.read<ScheduleBloc>().add(
+                                      ScheduleCreatePressed(
+                                        petId: petId,
+                                        time: timeController.text.trim(),
+                                        amount: newAmount,
+                                      ),
+                                    );
+                              },
+                              child: const Text("Continuar"),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
+
+                    Navigator.pop(context);
+                    context.read<ScheduleBloc>().add(
+                          ScheduleCreatePressed(
+                            petId: petId,
+                            time: timeController.text.trim(),
+                            amount: newAmount,
+                          ),
+                        );
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text("Guardar Horario", style: TextStyle(fontSize: 16)),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  void _showEditScheduleDialog(BuildContext context, Schedule schedule, int petId) {
+    final timeController = TextEditingController(text: schedule.time);
+    final amountController = TextEditingController(text: schedule.amount.toString());
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                "Editar Horario",
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: timeController,
+                decoration: const InputDecoration(
+                  labelText: "Hora (HH:MM)",
+                  prefixIcon: Icon(Icons.access_time),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Requerido";
+                  if (!RegExp(r"^([01]\d|2[0-3]):([0-5]\d)$").hasMatch(v)) {
+                    return 'Formato HH:MM (ej: 08:30)';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: "Cantidad (gramos)",
+                  prefixIcon: Icon(Icons.scale),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                  suffixText: 'g',
+                ),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return "Requerido";
+                  if (double.tryParse(v) == null || double.parse(v) <= 0) {
+                    return 'Cantidad inválida';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    BlocProvider.of<ScheduleBloc>(context).add(
+                      ScheduleUpdatePressed(
+                        scheduleId: schedule.id,
+                        petId: petId,
+                        time: timeController.text.trim(),
+                        amount: double.parse(amountController.text.trim()),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  }
+                },
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text("Guardar Cambios", style: TextStyle(fontSize: 16)),
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

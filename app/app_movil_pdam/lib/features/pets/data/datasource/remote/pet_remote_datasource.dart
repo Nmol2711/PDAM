@@ -14,8 +14,9 @@ abstract class PetRemoteDatasource {
   Future<Pet> createPet(
     String name,
     TypePest species,
-    int age,
+    DateTime birthDate,
     double weight,
+    bool reproductiveStatus,
     File? imageFile,
   );
   Future<Pet> getPet(int petId);
@@ -24,8 +25,9 @@ abstract class PetRemoteDatasource {
     int petId, {
     String? name,
     TypePest? species,
-    int? age,
+    DateTime? birthDate,
     double? weight,
+    bool? reproductiveStatus,
     File? imageFile,
   });
   Future<bool> deletePet(int petId);
@@ -41,17 +43,18 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
   Future<Pet> createPet(
     String name,
     TypePest species,
-    int age,
+    DateTime birthDate,
     double weight,
+    bool reproductiveStatus,
     File? imageFile,
   ) async {
     try {
       final Map<String, dynamic> formDataMap = {
         'name': name,
         'species': species.name,
-        'age': age
-            .toString(), // FastAPI lee los campos Form como strings o números nativos
+        'birth_date': birthDate.toIso8601String().split('T').first,
         'weight': weight.toString(),
+        'reproductive_status': reproductiveStatus.toString(),
       };
 
       if (imageFile != null) {
@@ -81,7 +84,7 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
   @override
   Future<Pet> getPet(int petId) async {
     try {
-      final response = await _dioClient.dio.get('${ApiConstants.pet}/$id');
+      final response = await _dioClient.dio.get('${ApiConstants.pet}$petId');
       return PetModel.fromJson(response.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw Exception(
@@ -110,25 +113,43 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
     int petId, {
     String? name,
     TypePest? species,
-    int? age,
+    DateTime? birthDate,
     double? weight,
+    bool? reproductiveStatus,
     File? imageFile,
   }) async {
     try {
+      final Map<String, dynamic> formDataMap = {};
+      if (name != null) formDataMap['name'] = name;
+      if (species != null) formDataMap['species'] = species.name;
+      if (birthDate != null) {
+        formDataMap['birth_date'] = birthDate.toIso8601String().split('T').first;
+      }
+      if (weight != null) formDataMap['weight'] = weight.toString();
+      if (reproductiveStatus != null) {
+        formDataMap['reproductive_status'] = reproductiveStatus.toString();
+      }
+
+      if (imageFile != null) {
+        formDataMap['file'] = await MultipartFile.fromFile(
+          imageFile.path,
+          filename: imageFile.path.split('/').last,
+        );
+      }
+
+      final formData = FormData.fromMap(formDataMap);
+
       final response = await _dioClient.dio.put(
-        '${ApiConstants.pet}/$petId',
-        data: {
-          'name': name,
-          'species': species,
-          'age': age,
-          'weight': weight,
-          "file": imageFile,
-        },
+        '${ApiConstants.pet}$petId',
+        data: formData,
+        options: Options(
+          contentType: 'multipart/form-data',
+        ),
       );
       return PetModel.fromJson(response.data);
     } on DioException catch (e) {
       throw Exception(
-        e.message ?? "Error con el servidor al interar actualizar la mascota",
+        e.message ?? "Error con el servidor al intentar actualizar la mascota",
       );
     }
   }
@@ -137,7 +158,7 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
   Future<bool> deletePet(int petId) async {
     try {
       final response = await _dioClient.dio.delete(
-        '${ApiConstants.pet}/$petId',
+        '${ApiConstants.pet}$petId',
       );
       if (response.statusCode == 200) {
         return true;

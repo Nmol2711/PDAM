@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGradient" cx="512" cy="440" r="600" fx="512" fy="400" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#A855F7" />
+      <stop offset="40%" stop-color="#7E22CE" />
+      <stop offset="75%" stop-color="#581C87" />
+      <stop offset="100%" stop-color="#3B0764" />
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bgGradient)" />
+</svg>

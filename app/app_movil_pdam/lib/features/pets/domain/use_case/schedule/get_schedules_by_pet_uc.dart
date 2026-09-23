@@ -8,7 +8,7 @@ class GetSchedulesByPetUc {
 
   const GetSchedulesByPetUc({required this.repository});
 
-  Future<Either<Failures, List<Schedule>>> call(int petId) async {
+  Future<Either<Failures, ScheduleFetchResult>> call(int petId) async {
     return await repository.getShedulesByPet(petId);
   }
 }

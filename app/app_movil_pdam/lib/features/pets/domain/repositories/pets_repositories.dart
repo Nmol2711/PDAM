@@ -9,8 +9,9 @@ abstract class PetsRepositories {
   Future<Either<Failures, Pet>> createPet(
     String name,
     TypePest species,
-    int age,
+    DateTime birthDate,
     double weight,
+    bool reproductiveStatus,
     File? imageFile,
   );
   Future<Either<Failures, Pet>> getPet(int petId);
@@ -19,8 +20,9 @@ abstract class PetsRepositories {
     int petId, {
     String? name,
     TypePest? species,
-    int? age,
+    DateTime? birthDate,
     double? weight,
+    bool? reproductiveStatus,
     File? imageFile,
   });
   Future<Either<Failures, bool>> deletePet(int petId);

@@ -10,7 +10,8 @@ class ScheduleLoading extends ScheduleState {}
 
 class ScheduleLoaded extends ScheduleState {
   final List<Schedule> schedules;
-  const ScheduleLoaded({required this.schedules});
+  final bool isOffline;
+  const ScheduleLoaded({required this.schedules, this.isOffline = false});
 }
 
 class ScheduleDetailLoaded extends ScheduleState {

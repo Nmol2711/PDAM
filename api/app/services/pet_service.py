@@ -7,8 +7,9 @@ def crear_mascota(db: Session, pet: schemas.PetCreate, user_id: int):
     nueva_mascota = models.Pet(
         name=pet.name,
         species=pet.species,
-        age=pet.age,
+        birth_date=pet.birth_date,
         weight=pet.weight,
+        reproductive_status=pet.reproductive_status,
         path_url=pet.path_url,
         user_id=user_id
     )
@@ -37,6 +38,14 @@ def actualizar_mascota(db: Session, pet_id: int, pet_data: schemas.PetUpdate, us
         mascota.name = pet_data.name
     if pet_data.species is not None:
         mascota.species = pet_data.species
+    if pet_data.birth_date is not None:
+        mascota.birth_date = pet_data.birth_date
+    if pet_data.weight is not None:
+        mascota.weight = pet_data.weight
+    if pet_data.reproductive_status is not None:
+        mascota.reproductive_status = pet_data.reproductive_status
+    if pet_data.path_url is not None:
+        mascota.path_url = pet_data.path_url
         
     db.commit()
     db.refresh(mascota)

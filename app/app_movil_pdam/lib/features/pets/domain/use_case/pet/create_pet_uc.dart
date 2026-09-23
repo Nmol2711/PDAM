@@ -14,10 +14,11 @@ class CreatePetUc {
   Future<Either<Failures, Pet>> call(
     String name,
     TypePest species,
-    int age,
+    DateTime birthDate,
     double weight,
+    bool reproductiveStatus,
     File? imageFile,
   ) async {
-    return await repository.createPet(name, species, age, weight, imageFile);
+    return await repository.createPet(name, species, birthDate, weight, reproductiveStatus, imageFile);
   }
 }

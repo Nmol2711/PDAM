@@ -21,8 +21,14 @@ class UserRepositoriesImpl implements UserRepositories {
       final result = await _authRemoteDatasource.currentUser();
       return Right(result);
     } catch (e) {
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
-      return Left(ServerFailures(errorMessage));
+      // 🔄 OFFLINE FALLBACK: Si el servidor está apagado/sin internet, pero hay token local, permitimos acceso offline
+      try {
+        await _authLocalDatasource.getToken();
+        return Right(User(id: 1, email: 'usuario@offline.com'));
+      } catch (_) {
+        final errorMessage = e.toString().replaceAll('Exception: ', '');
+        return Left(ServerFailures(errorMessage));
+      }
     }
   }
 

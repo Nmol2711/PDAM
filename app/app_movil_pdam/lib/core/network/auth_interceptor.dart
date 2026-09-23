@@ -14,6 +14,11 @@ class AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    // Si es una ruta pública de autenticación, no adjuntamos el token
+    if (options.path.contains('/auth/login') || options.path.contains('/auth/register')) {
+      return super.onRequest(options, handler);
+    }
+
     String? token;
     String? typeToken;
 

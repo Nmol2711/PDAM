@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, Integer, String, Boolean, ForeignKey, DateTime
+from sqlalchemy import Column, Float, Integer, String, Boolean, ForeignKey, DateTime, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.database import Base
@@ -22,8 +22,9 @@ class Pet(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     species = Column(String, nullable=False)
-    age = Column(Integer, nullable=False)
+    birth_date = Column(Date, nullable=False)
     weight = Column(Float, nullable=False)
+    reproductive_status = Column(Boolean, nullable=False, default=False)
 
     path_url = Column(String, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"))
@@ -70,6 +71,7 @@ class ActivityLog(Base):
     event = Column(String, nullable=False)   # Ej: "Dispensador activado"
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     user_id = Column(Integer, ForeignKey("users.id"))
+    pet_id = Column(Integer, ForeignKey("pets.id", ondelete="SET NULL"), nullable=True)
 
     # Relación hacia el usuario que generó el log
     owner = relationship("User", back_populates="logs")

@@ -8,7 +8,7 @@ class GetSchedulesUc {
 
   const GetSchedulesUc({required this.repository});
 
-  Future<Either<Failures, List<Schedule>>> call() async {
+  Future<Either<Failures, ScheduleFetchResult>> call() async {
     return await repository.getShedules();
   }
 }

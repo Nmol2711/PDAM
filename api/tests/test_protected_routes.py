@@ -51,7 +51,7 @@ class TestProtectedEndpoints(BaseApiTests):
 
     def test_post_routes_require_authentication(self):
         routes = [
-            ("/pets/", {"name": "Milo", "species": "perro", "age": 3, "weight": 5.2}),
+            ("/pets/", {"name": "Milo", "species": "perro", "birth_date": "2023-01-01", "weight": 5.2, "reproductive_status": False}),
             ("/dispensers/", {"pet_id": 1, "mac_address": "AA:BB:CC:DD:EE:FF", "secret_key_qr": "abc123"}),
             ("/logs/", {"description": "prueba", "type": "info"}),
             ("/schedules/", {"time": "08:00", "amount": 50}),

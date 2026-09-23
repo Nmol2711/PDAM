@@ -1,6 +1,7 @@
 import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/core/router/app_router.dart';
 import 'package:app_movil_pdam/core/services/storage_service.dart';
+import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
 import 'package:app_movil_pdam/features/auth/data/datasources/local/auth_local_datasource.dart';
 import 'package:app_movil_pdam/features/auth/data/datasources/remote/auth_remote_datasource.dart';
 import 'package:app_movil_pdam/features/auth/data/repositories_impl/auth_repositories_impl.dart';
@@ -12,6 +13,10 @@ import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/current_user
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/login_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/register_uc.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:app_movil_pdam/features/dashboard/data/datasources/dashboard_remote_datasource.dart';
+import 'package:app_movil_pdam/features/dashboard/data/repositories/dashboard_repository_impl.dart';
+import 'package:app_movil_pdam/features/dashboard/domain/repositories/dashboard_repository.dart';
+import 'package:app_movil_pdam/features/dashboard/presentation/bloc/dashboard_cubit.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/repositories_impl/dispenser_repository_impl.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
@@ -22,6 +27,8 @@ import 'package:app_movil_pdam/features/dispenser/domain/use_case/dasactivate_di
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/delete_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/get_dispenser_by_pet_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/pets/data/datasource/local/local_pet_datasource.dart';
+import 'package:app_movil_pdam/features/pets/data/datasource/local/local_schedule_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/remote/pet_remote_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/repository_impl/pet_repositories_impl.dart';
 import 'package:app_movil_pdam/features/pets/domain/repositories/pets_repositories.dart';
@@ -38,6 +45,14 @@ import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/create_sch
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/get_schedule_uc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/get_schedules_by_pet_uc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/get_schedules_uc.dart';
+import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/auto_generate_schedules_uc.dart';
+import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/update_schedule_uc.dart';
+import 'package:app_movil_pdam/features/logs/data/datasource/local/local_log_datasource.dart';
+import 'package:app_movil_pdam/features/logs/data/datasource/remote/log_remote_datasource.dart';
+import 'package:app_movil_pdam/features/logs/data/repository_impl/log_repository_impl.dart';
+import 'package:app_movil_pdam/features/logs/domain/repository/log_repositories.dart';
+import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
+import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
@@ -62,6 +77,18 @@ Future<void> setup() async {
     () => PetRemoteDatasourceImpl(dioClient: sl<DioClient>()),
   );
 
+  sl.registerLazySingleton<LocalPetDatasource>(
+    () => LocalPetDatasourceImpl(),
+  );
+
+  sl.registerLazySingleton<LocalLogDatasource>(
+    () => LocalLogDatasourceImpl(),
+  );
+
+  sl.registerLazySingleton<LocalScheduleDatasource>(
+    () => LocalScheduleDatasourceImpl(),
+  );
+
   sl.registerLazySingleton<ScheduleRemoteDatasource>(
     () => ScheduleTemoteDatasourceImp(dioClient: sl<DioClient>()),
   );
@@ -72,6 +99,14 @@ Future<void> setup() async {
 
   sl.registerLazySingleton<DispenserRemoteDatasource>(
     () => DispenserRemoteDatasourceImpl(dioClient: sl<DioClient>()),
+  );
+
+  sl.registerLazySingleton<LogRemoteDatasource>(
+    () => LogRemoteDatasourceImpl(dioClient: sl<DioClient>()),
+  );
+
+  sl.registerLazySingleton<DashboardRemoteDatasource>(
+    () => DashboardRemoteDatasourceImpl(dioClient: sl<DioClient>()),
   );
 
   // Repositorios
@@ -87,12 +122,16 @@ Future<void> setup() async {
   );
 
   sl.registerLazySingleton<PetsRepositories>(
-    () => PetRepositoriesImpl(petRemoteDataosurce: sl<PetRemoteDatasource>()),
+    () => PetRepositoriesImpl(
+      petRemoteDataosurce: sl<PetRemoteDatasource>(),
+      localPetDatasource: sl<LocalPetDatasource>(),
+    ),
   );
 
   sl.registerLazySingleton<ScheduleRepositories>(
     () => ScheduleRepositoryImpl(
       scheduleRemoteDatasource: sl<ScheduleRemoteDatasource>(),
+      localScheduleDatasource: sl<LocalScheduleDatasource>(),
     ),
   );
 
@@ -100,6 +139,17 @@ Future<void> setup() async {
     () => DispenserRepositoryImpl(
       dispenserRemoteDatasource: sl<DispenserRemoteDatasource>(),
     ),
+  );
+
+  sl.registerLazySingleton<LogRepositories>(
+    () => LogRepositoryImpl(
+      remoteDatasource: sl<LogRemoteDatasource>(),
+      localLogDatasource: sl<LocalLogDatasource>(),
+    ),
+  );
+
+  sl.registerLazySingleton<DashboardRepository>(
+    () => DashboardRepositoryImpl(remoteDatasource: sl<DashboardRemoteDatasource>()),
   );
 
   // Use Case
@@ -146,6 +196,16 @@ Future<void> setup() async {
   );
   sl.registerLazySingleton(
     () => GetSchedulesByPetUc(repository: sl<ScheduleRepositories>()),
+  );
+  sl.registerLazySingleton(
+    () => AutoGenerateSchedulesUc(repository: sl<ScheduleRepositories>()),
+  );
+  sl.registerLazySingleton(
+    () => UpdateScheduleUc(repository: sl<ScheduleRepositories>()),
+  );
+
+  sl.registerLazySingleton(
+    () => GetLogsUc(repository: sl<LogRepositories>()),
   );
 
   // Dispenser
@@ -205,7 +265,21 @@ Future<void> setup() async {
       getScheduleUc: sl<GetScheduleUc>(),
       getSchedulesUc: sl<GetSchedulesUc>(),
       getSchedulesByPetUc: sl<GetSchedulesByPetUc>(),
+      autoGenerateSchedulesUc: sl<AutoGenerateSchedulesUc>(),
+      updateScheduleUc: sl<UpdateScheduleUc>(),
     ),
+  );
+
+  sl.registerLazySingleton(
+    () => LogBloc(getLogsUc: sl<GetLogsUc>()),
+  );
+
+  sl.registerFactory(
+    () => DashboardCubit(repository: sl<DashboardRepository>()),
+  );
+
+  sl.registerLazySingleton(
+    () => ThemeCubit(storageService: sl<StorageService>()),
   );
 
   sl.registerLazySingleton(() => AppRouter(sl<AuthBloc>()));

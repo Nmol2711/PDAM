@@ -19,6 +19,14 @@ engine = create_engine(
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    try:
+        cursor.execute("PRAGMA table_info(logs)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if columns and 'pet_id' not in columns:
+            cursor.execute("ALTER TABLE logs ADD COLUMN pet_id INTEGER")
+            dbapi_connection.commit()
+    except Exception:
+        pass
     cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

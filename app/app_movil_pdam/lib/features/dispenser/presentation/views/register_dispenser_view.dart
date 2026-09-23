@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../bloc/dispenser_bloc.dart';
+import '../widgets/register_dispenser_form_widget.dart';
 
 class RegisterDispenserView extends StatefulWidget {
   final int petId;
@@ -18,15 +19,13 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
 
   @override
   void dispose() {
-    _macController.dispose(); // Súper importante para evitar fugas de memoria
+    _macController.dispose();
     super.dispose();
   }
 
   void _scanQrCode() async {
     if (!mounted) return;
 
-    // Dejamos que GoRouter abra la pantalla directamente.
-    // El paquete MobileScanner se encargará de disparar el diálogo nativo automáticamente.
     final Map<String, String?>? result = await context
         .pushNamed<Map<String, String?>>('qr_scanner');
 
@@ -96,54 +95,14 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
             },
           ),
         ],
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Asocia un dispositivo PDAM escaneando su código QR.',
-                style: TextStyle(fontSize: 15, color: Colors.grey),
-              ),
-              const SizedBox(height: 24),
-
-              TextFormField(
-                controller: _macController,
-                readOnly: true,
-                decoration: InputDecoration(
-                  labelText: 'Dirección MAC del Dispositivo',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.qr_code_scanner, color: Colors.blue),
-                    onPressed: _scanQrCode,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              BlocBuilder<DispenserBloc, DispenserState>(
-                builder: (context, state) {
-                  final isLoading = state is DispenserLoading;
-
-                  return ElevatedButton(
-                    onPressed: isLoading ? null : _vincularDispositivo,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text(
-                            'Vincular Dispositivo',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                  );
-                },
-              ),
-            ],
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: RegisterDispenserFormWidget(
+              macController: _macController,
+              onScanQr: _scanQrCode,
+              onSubmit: _vincularDispositivo,
+            ),
           ),
         ),
       ),

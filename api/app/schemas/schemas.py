@@ -1,7 +1,7 @@
 import re
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 
 # --- SCHEMAS DE USUARIO ---
 class UserBase(BaseModel):
@@ -21,8 +21,9 @@ class User(UserBase):
 class PetBase(BaseModel):
     name: str
     species: str
-    age:int
+    birth_date: date
     weight:float
+    reproductive_status: bool = False
 
 class PetCreate(PetBase):
     path_url: Optional[str] = None
@@ -30,6 +31,9 @@ class PetCreate(PetBase):
 class PetUpdate(BaseModel):
     name: Optional[str] = None
     species: Optional[str] = None
+    birth_date: Optional[date] = None
+    weight: Optional[float] = None
+    reproductive_status: Optional[bool] = None
     path_url: Optional[str] = None
 
 class Pet(PetBase):
@@ -129,9 +133,29 @@ class FeedingStatus(BaseModel):
     is_feeding_time: bool
     amount: float
 
+class AutoScheduleRequest(BaseModel):
+    food_kcal_per_kg: float
+    bcs: int = 5
+    mcs: str = "normal"
+    activity_level: str = "medium"
+    meals_per_day: int = 2
+
+class AutoScheduleResponse(BaseModel):
+    rer: float
+    mer: float
+    daily_grams: float
+    water_min_ml: float
+    water_max_ml: float
+    warnings: List[str]
+    schedules: List[Schedule]
+
+    class Config:
+        from_attributes = True
+
 # --- SCHEMAS DE LOGS (HISTORIAL) ---
 class ActivityLogBase(BaseModel):
     event: str
+    pet_id: Optional[int] = None
 
 class ActivityLogCreate(ActivityLogBase):
     pass
@@ -140,6 +164,17 @@ class ActivityLog(ActivityLogBase):
     id: int
     timestamp: datetime
     user_id: int
+    pet_id: Optional[int] = None
 
     class Config:
         from_attributes = True
+
+# --- SCHEMAS DE DASHBOARD ---
+class DashboardSummary(BaseModel):
+    total_pets: int
+    sterilized_pets: int
+    food_dispensed_today: float
+    food_target_today: float
+    pending_feedings: int
+    completed_feedings: int
+    weekly_dispensed: List[float]

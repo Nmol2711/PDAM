@@ -47,8 +47,9 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     final result = await _createPetUc(
       event.name,
       event.species,
-      event.age,
+      event.birthDate,
       event.weight,
+      event.reproductiveStatus,
       event.imageFile,
     );
 
@@ -92,8 +93,9 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       event.petId,
       name: event.name,
       species: event.species,
-      age: event.age,
+      birthDate: event.birthDate,
       weight: event.weight,
+      reproductiveStatus: event.reproductiveStatus,
       imageFile: event.imageFile,
     );
 

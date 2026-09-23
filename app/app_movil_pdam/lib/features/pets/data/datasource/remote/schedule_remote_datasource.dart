@@ -9,7 +9,15 @@ abstract class ScheduleRemoteDatasource {
   Future<Schedule> getSchedule(int id, int petId);
   Future<List<Schedule>> getSchedules();
   Future<List<Schedule>> getSchedulesByPet(int petId);
-  Future<Schedule> updateSchedule(int id);
+  Future<List<Schedule>> autoGenerateSchedules(
+    int petId,
+    double foodKcalPerKg,
+    int bcs,
+    String mcs,
+    String activityLevel,
+    int mealsPerDay,
+  );
+  Future<Schedule> updateSchedule(int id, {String? time, double? amount});
   Future<bool> deleteSchedule(int id);
 }
 
@@ -80,14 +88,53 @@ class ScheduleTemoteDatasourceImp implements ScheduleRemoteDatasource {
   }
 
   @override
+  Future<List<Schedule>> autoGenerateSchedules(
+    int petId,
+    double foodKcalPerKg,
+    int bcs,
+    String mcs,
+    String activityLevel,
+    int mealsPerDay,
+  ) async {
+    try {
+      final response = await _dioClient.dio.post(
+        '${ApiConstants.schedules}auto-generate/$petId',
+        data: {
+          'food_kcal_per_kg': foodKcalPerKg,
+          'bcs': bcs,
+          'mcs': mcs,
+          'activity_level': activityLevel,
+          'meals_per_day': mealsPerDay,
+        },
+      );
+      final schedulesList = response.data['schedules'] as List;
+      return schedulesList
+          .map((e) => ScheduleModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw Exception(e.message ?? "Error al autogenerar los horarios nutricionales");
+    }
+  }
+
+  @override
   Future<bool> deleteSchedule(int id) {
     // TODO: implement deleteSchedule
     throw UnimplementedError();
   }
 
   @override
-  Future<Schedule> updateSchedule(int id) {
-    // TODO: implement updateSchedule
-    throw UnimplementedError();
+  Future<Schedule> updateSchedule(int id, {String? time, double? amount}) async {
+    try {
+      final response = await _dioClient.dio.put(
+        '${ApiConstants.schedules}$id',
+        data: {
+          if (time != null) 'time': time,
+          if (amount != null) 'amount': amount,
+        },
+      );
+      return ScheduleModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw Exception(e.message ?? "Error con el servidor al actualizar el horario");
+    }
   }
 }

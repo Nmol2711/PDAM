@@ -111,5 +111,111 @@ def verificar_horario_pet(db: Session, pet_id: int, user_id: int):
 
     return {"is_feeding_time": False, "amount": 0}
 
+def auto_generar_horarios_wsava(db: Session, pet_id: int, user_id: int, req: schemas.AutoScheduleRequest):
+    mascota = db.query(models.Pet).filter(models.Pet.id == pet_id, models.Pet.user_id == user_id).first()
+    if not mascota:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mascota no encontrada")
+    
+    hoy = datetime.now().date()
+    edad_dias = (hoy - mascota.birth_date).days
+    edad_meses = edad_dias / 30.44
+
+    weight = mascota.weight
+    rer = 70 * (weight ** 0.75)
+
+    species = mascota.species.lower()
+    is_neutered = mascota.reproductive_status
+    is_growth = edad_meses < 12
+
+    factor_mer = 1.6
+    if "canino" in species or "dog" in species:
+        if is_growth:
+            factor_mer = 3.0 if edad_meses < 4 else 2.0
+        else:
+            if is_neutered:
+                factor_mer = 1.4 if req.activity_level == "low" else 1.6
+            else:
+                factor_mer = 1.8
+    elif "felino" in species or "cat" in species:
+        if is_growth:
+            factor_mer = 2.5
+        else:
+            if is_neutered:
+                factor_mer = 1.0 if req.activity_level == "low" else 1.2
+            else:
+                factor_mer = 1.4
+
+    if req.bcs >= 7:
+        factor_mer *= 0.85
+    elif req.bcs <= 3:
+        factor_mer *= 1.15
+
+    # Ajuste adicional por MCS (Masa muscular)
+    if req.mcs == "moderate":
+        factor_mer *= 1.05
+    elif req.mcs == "marked":
+        factor_mer *= 1.10
+
+    mer = rer * factor_mer
+    daily_kcal = mer
+    daily_grams = (daily_kcal / req.food_kcal_per_kg) * 1000
+
+    # Requerimiento de agua (ml/día) según WSAVA (44 - 66 ml/kg)
+    water_min_ml = weight * 44
+    water_max_ml = weight * 66
+
+    warnings = []
+    if req.mcs != "normal":
+        warnings.append("Riesgo de Desequilibrio Metabólico detectado (MCS anormal). Se sugiere evaluación veterinaria.")
+    if req.bcs >= 7 or req.bcs <= 3:
+        warnings.append(f"Condición Corporal (BCS {req.bcs}/9) fuera del rango ideal (4-5). Se ajustó el requerimiento energético.")
+    if "canino" in species or "dog" in species:
+        warnings.append("Nota: El MER en perros puede variar ±30% según metabolismo individual.")
+    else:
+        warnings.append("Nota: El MER en gatos puede variar ±50% según metabolismo individual.")
+
+    db.query(models.Schedule).filter(models.Schedule.pet_id == pet_id).delete()
+
+    meals = req.meals_per_day
+    grams_per_meal = round(daily_grams / meals, 2)
+
+    horas_sugeridas = []
+    if meals == 1:
+        horas_sugeridas = ["08:00"]
+    elif meals == 2:
+        horas_sugeridas = ["08:00", "20:00"]
+    elif meals == 3:
+        horas_sugeridas = ["08:00", "14:00", "20:00"]
+    elif meals == 4:
+        horas_sugeridas = ["07:00", "12:00", "17:00", "21:00"]
+    elif meals == 5:
+        horas_sugeridas = ["07:00", "11:00", "15:00", "19:00", "22:00"]
+    else:
+        horas_sugeridas = ["06:00", "09:30", "13:00", "16:30", "20:00", "23:00"]
+
+    nuevos_horarios = []
+    for hora in horas_sugeridas[:meals]:
+        horario = models.Schedule(
+            time=hora,
+            amount=grams_per_meal,
+            pet_id=pet_id
+        )
+        db.add(horario)
+        nuevos_horarios.append(horario)
+
+    db.commit()
+    for h in nuevos_horarios:
+        db.refresh(h)
+
+    return {
+        "rer": round(rer, 2),
+        "mer": round(mer, 2),
+        "daily_grams": round(daily_grams, 2),
+        "water_min_ml": round(water_min_ml, 1),
+        "water_max_ml": round(water_max_ml, 1),
+        "warnings": warnings,
+        "schedules": nuevos_horarios
+    }
+
 
     

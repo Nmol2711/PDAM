@@ -3,6 +3,8 @@ import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/create_sch
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/get_schedule_uc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/get_schedules_by_pet_uc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/get_schedules_uc.dart';
+import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/auto_generate_schedules_uc.dart';
+import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/update_schedule_uc.dart';
 
 import 'package:bloc/bloc.dart';
 
@@ -14,21 +16,29 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
   final GetScheduleUc _getScheduleUc;
   final GetSchedulesUc _getSchedulesUc;
   final GetSchedulesByPetUc _getSchedulesByPetUc;
+  final AutoGenerateSchedulesUc _autoGenerateSchedulesUc;
+  final UpdateScheduleUc _updateScheduleUc;
   ScheduleBloc({
     required CreateScheduleUc createScheduleUc,
     required GetScheduleUc getScheduleUc,
     required GetSchedulesUc getSchedulesUc,
     required GetSchedulesByPetUc getSchedulesByPetUc,
+    required AutoGenerateSchedulesUc autoGenerateSchedulesUc,
+    required UpdateScheduleUc updateScheduleUc,
   }) : _createScheduleUc = createScheduleUc,
        _getScheduleUc = getScheduleUc,
        _getSchedulesUc = getSchedulesUc,
        _getSchedulesByPetUc = getSchedulesByPetUc,
+       _autoGenerateSchedulesUc = autoGenerateSchedulesUc,
+       _updateScheduleUc = updateScheduleUc,
        super(ScheduleInicial()) {
     on<ScheduleCreatePressed>(_onScheduleCreatePressed);
     on<ScheduleGetRequested>(_onScheduleDetailRequested);
     on<ScheduleListRequested>(_onScheduleListRequested);
     on<ScheduleListPetRequested>(_onScheduleListByPetRequested);
     on<ScheduleCreateMultipleRequested>(_onScheduleCreateMultipleRequested);
+    on<AutoGenerateSchedulesRequested>(_onAutoGenerateSchedulesRequested);
+    on<ScheduleUpdatePressed>(_onScheduleUpdatePressed);
   }
 
   Future<void> _onScheduleCreatePressed(
@@ -81,11 +91,7 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     if (tieneError) {
       emit(ScheduleError(message: mensajeError));
     } else {
-      // 🔥 Si TODO salió bien, llamamos a tu manejador para refrescar la lista de la Pet
-      await _onScheduleListByPetRequested(
-        ScheduleListPetRequested(petId: event.petId),
-        emit,
-      );
+      add(ScheduleListPetRequested(petId: event.petId));
     }
   }
 
@@ -110,7 +116,7 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     final result = await _getSchedulesUc();
     result.fold(
       (failure) => emit(ScheduleError(message: failure.message)),
-      (schedules) => emit(ScheduleLoaded(schedules: schedules)),
+      (fetchResult) => emit(ScheduleLoaded(schedules: fetchResult.schedules, isOffline: fetchResult.isOffline)),
     );
   }
 
@@ -122,7 +128,44 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     final result = await _getSchedulesByPetUc(event.petId);
     result.fold(
       (failure) => emit(ScheduleError(message: failure.message)),
-      (schedules) => emit(ScheduleLoaded(schedules: schedules)),
+      (fetchResult) => emit(ScheduleLoaded(schedules: fetchResult.schedules, isOffline: fetchResult.isOffline)),
+    );
+  }
+
+  Future<void> _onAutoGenerateSchedulesRequested(
+    AutoGenerateSchedulesRequested event,
+    Emitter<ScheduleState> emit,
+  ) async {
+    emit(ScheduleLoading());
+    final result = await _autoGenerateSchedulesUc(
+      event.petId,
+      event.foodKcalPerKg,
+      event.bcs,
+      event.mcs,
+      event.activityLevel,
+      event.mealsPerDay,
+    );
+    result.fold(
+      (failure) => emit(ScheduleError(message: failure.message)),
+      (fetchResult) => emit(ScheduleLoaded(schedules: fetchResult.schedules, isOffline: fetchResult.isOffline)),
+    );
+  }
+
+  Future<void> _onScheduleUpdatePressed(
+    ScheduleUpdatePressed event,
+    Emitter<ScheduleState> emit,
+  ) async {
+    emit(ScheduleLoading());
+    final result = await _updateScheduleUc(
+      event.scheduleId,
+      time: event.time,
+      amount: event.amount,
+    );
+    result.fold(
+      (failure) => emit(ScheduleError(message: failure.message)),
+      (_) {
+        add(ScheduleListPetRequested(petId: event.petId));
+      },
     );
   }
 }

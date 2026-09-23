@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+from datetime import date
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 from app.db.database import get_db
@@ -16,8 +17,9 @@ def crear_mascota(
     current_user: CurrentUser,
     name: str = Form(...),
     species: str = Form(...),
-    age: int = Form(...),
+    birth_date: date = Form(...),
     weight: float = Form(...),
+    reproductive_status: bool = Form(False),
     file: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
@@ -25,8 +27,9 @@ def crear_mascota(
     pet = schemas.PetCreate(
         name=name,
         species=species,
-        age=age,
+        birth_date=birth_date,
         weight=weight,
+        reproductive_status=reproductive_status,
         path_url=path_url
     )
     print(f"Pet Creada con exito f{pet}")
@@ -52,9 +55,23 @@ def obtener_mascota_detalle(
 def actualizar_mascota(
     current_user: CurrentUser,
     pet_id: int,
-    pet_update: schemas.PetUpdate,
+    name: Optional[str] = Form(None),
+    species: Optional[str] = Form(None),
+    birth_date: Optional[date] = Form(None),
+    weight: Optional[float] = Form(None),
+    reproductive_status: Optional[bool] = Form(None),
+    file: UploadFile = File(None),
     db: Session = Depends(get_db),
 ):
+    path_url = storage_service.save_pet_image(file=file) if file else None
+    pet_update = schemas.PetUpdate(
+        name=name,
+        species=species,
+        birth_date=birth_date,
+        weight=weight,
+        reproductive_status=reproductive_status,
+        path_url=path_url
+    )
     return pet_service.actualizar_mascota(db, pet_id, pet_update, current_user.id)
 
 @router.delete("/{pet_id}")

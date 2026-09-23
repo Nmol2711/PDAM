@@ -28,14 +28,19 @@ class MainNavigationShell extends StatelessWidget {
         // Los botones del menú inferior
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
             label: 'Inicio',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.pets_outlined),
             activeIcon: Icon(Icons.pets),
             label: 'Mascotas',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history_outlined),
+            activeIcon: Icon(Icons.history),
+            label: 'Historial',
           ),
         ],
       ),

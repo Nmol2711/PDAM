@@ -1,4 +1,5 @@
 import 'package:app_movil_pdam/features/auth/domain/entity/user.dart';
+import 'package:app_movil_pdam/core/offline/isar_service.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/auth_token_uc/delete_token_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/current_user_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/login_uc.dart';
@@ -84,6 +85,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthLoading());
 
     final result = await _deleteTokenUc();
+    await IsarService.clearAllData();
 
     result.fold(
       (failures) => emit(AuthError(message: failures.message)),

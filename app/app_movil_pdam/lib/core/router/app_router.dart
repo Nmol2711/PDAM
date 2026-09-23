@@ -12,6 +12,8 @@ import 'package:go_router/go_router.dart';
 // Importamos tus pantallas
 import 'package:app_movil_pdam/features/auth/presentation/views/login_view.dart';
 import 'package:app_movil_pdam/features/auth/presentation/views/register_view.dart';
+import 'package:app_movil_pdam/features/logs/presentation/views/logs_view.dart';
+import 'package:app_movil_pdam/features/dashboard/presentation/views/dashboard_view.dart';
 import 'package:app_movil_pdam/features/home/presentation/views/home_view.dart';
 
 // Importamos el Bloc y el puente que creamos
@@ -36,6 +38,10 @@ class AppRouter {
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterView(),
+      ),
+      GoRoute(
+        path: '/create_pet',
+        builder: (context, state) => const CreatePetView(),
       ),
       GoRoute(
         path: '/detail_pet',
@@ -83,7 +89,11 @@ class AppRouter {
             routes: [
               GoRoute(
                 path: '/home',
-                builder: (context, state) => const HomeView(),
+                builder: (context, state) => HomeView(),
+              ),
+              GoRoute(
+                path: '/dashboard',
+                builder: (context, state) => DashboardView(),
               ),
             ],
           ),
@@ -98,8 +108,8 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/create_pet',
-                builder: (context, state) => const CreatePetView(),
+                path: '/logs',
+                builder: (context, state) => LogsView(),
               ),
             ],
           ),

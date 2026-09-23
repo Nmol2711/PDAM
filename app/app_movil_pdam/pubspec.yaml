@@ -21,13 +21,27 @@ dependencies:
   image_picker: ^1.0.7
   mobile_scanner: ^5.2.0 
   permission_handler: ^11.3.1
+  fl_chart: ^0.70.0
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  path_provider: ^2.1.5
+  connectivity_plus: ^6.0.0
 
-
- 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  build_runner: ^2.4.8
+  isar_generator: ^3.1.0+1
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  image_path: "assets/imgs/logo.png"
+  android: true
+  ios: true
+  adaptive_icon_background: "assets/imgs/ic_launcher_background.png"
+  adaptive_icon_foreground: "assets/imgs/ic_launcher_foreground.png"
+  adaptive_icon_monochrome: "assets/imgs/icon_monochrome.png"
 
 flutter:
   uses-material-design: true

@@ -15,16 +15,18 @@ class UpdatePetUc {
     int petId, {
     String? name,
     TypePest? species,
-    int? age,
+    DateTime? birthDate,
     double? weight,
+    bool? reproductiveStatus,
     File? imageFile,
   }) async {
     return await repository.updatePet(
       petId,
       name: name,
       species: species,
-      age: age,
+      birthDate: birthDate,
       weight: weight,
+      reproductiveStatus: reproductiveStatus,
       imageFile: imageFile,
     );
   }

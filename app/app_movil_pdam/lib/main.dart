@@ -1,9 +1,12 @@
 import 'package:app_movil_pdam/core/router/app_router.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
+import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
+import 'package:app_movil_pdam/core/offline/isar_service.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
+import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/utils/app_bloc_observer.dart';
 import 'package:flutter/material.dart';
 
@@ -14,6 +17,7 @@ void main() async {
   // Asegurar la inicializacion de Flutter
   WidgetsFlutterBinding.ensureInitialized();
   Bloc.observer = AppBlocObserver();
+  await IsarService.init();
   await di.setup();
   runApp(const MainApp());
 }
@@ -35,6 +39,8 @@ class MainApp extends StatelessWidget {
         BlocProvider<DispenserBloc>(
           create: (context) => di.sl<DispenserBloc>(),
         ),
+        BlocProvider<LogBloc>(create: (context) => di.sl<LogBloc>()),
+        BlocProvider<ThemeCubit>(create: (context) => di.sl<ThemeCubit>()),
       ],
 
       child: Builder(
@@ -44,14 +50,18 @@ class MainApp extends StatelessWidget {
           // lea el contexto actualizado del BlocProvider.
           final appRouter = di.sl<AppRouter>().router;
 
-          return MaterialApp.router(
-            routerConfig: appRouter,
-            // Registrar temas
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: ThemeMode.system,
-            debugShowCheckedModeBanner: false,
-            title: "PDAM",
+          return BlocBuilder<ThemeCubit, ThemeMode>(
+            builder: (context, themeMode) {
+              return MaterialApp.router(
+                routerConfig: appRouter,
+                // Registrar temas
+                theme: AppTheme.lightTheme,
+                darkTheme: AppTheme.darkTheme,
+                themeMode: themeMode,
+                debugShowCheckedModeBanner: false,
+                title: "PDAM",
+              );
+            },
           );
         },
       ),

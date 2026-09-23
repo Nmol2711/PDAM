@@ -42,3 +42,35 @@ class ScheduleListPetRequested extends ScheduleEvent {
 
   const ScheduleListPetRequested({required this.petId});
 }
+
+class AutoGenerateSchedulesRequested extends ScheduleEvent {
+  final int petId;
+  final double foodKcalPerKg;
+  final int bcs;
+  final String mcs;
+  final String activityLevel;
+  final int mealsPerDay;
+
+  const AutoGenerateSchedulesRequested({
+    required this.petId,
+    required this.foodKcalPerKg,
+    required this.bcs,
+    required this.mcs,
+    required this.activityLevel,
+    required this.mealsPerDay,
+  });
+}
+
+class ScheduleUpdatePressed extends ScheduleEvent {
+  final int scheduleId;
+  final int petId;
+  final String? time;
+  final double? amount;
+
+  const ScheduleUpdatePressed({
+    required this.scheduleId,
+    required this.petId,
+    this.time,
+    this.amount,
+  });
+}

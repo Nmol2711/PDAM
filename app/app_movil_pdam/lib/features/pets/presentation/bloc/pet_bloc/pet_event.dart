@@ -7,15 +7,17 @@ sealed class PetEvent {
 final class PetCreatePressed extends PetEvent {
   final String name;
   final TypePest species;
-  final int age;
+  final DateTime birthDate;
   final double weight;
+  final bool reproductiveStatus;
   final File? imageFile;
 
   PetCreatePressed({
     required this.name,
     required this.species,
-    required this.age,
+    required this.birthDate,
     required this.weight,
+    required this.reproductiveStatus,
     this.imageFile,
   });
 }
@@ -31,16 +33,18 @@ final class PetUpdatePressed extends PetEvent {
   final int petId;
   final String? name;
   final TypePest? species;
-  final int? age;
+  final DateTime? birthDate;
   final double? weight;
+  final bool? reproductiveStatus;
   final File? imageFile;
 
   PetUpdatePressed({
     required this.petId,
     this.name,
     this.species,
-    this.age,
+    this.birthDate,
     this.weight,
+    this.reproductiveStatus,
     this.imageFile,
   });
 }

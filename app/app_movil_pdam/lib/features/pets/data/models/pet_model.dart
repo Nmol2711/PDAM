@@ -7,8 +7,9 @@ class PetModel extends Pet {
     required super.id,
     required super.name,
     required super.species,
-    required super.age,
+    required super.birthDate,
     required super.weight,
+    required super.reproductiveStatus,
     super.imgUrl,
   });
 
@@ -26,13 +27,21 @@ class PetModel extends Pet {
       id: json['id'],
       name: json['name'],
       species: species,
-      age: json['age'],
+      birthDate: DateTime.parse(json['birth_date']),
       weight: json['weight'],
+      reproductiveStatus: json['reproductive_status'] ?? false,
       imgUrl: imgUrl,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'name': name, 'spcies': species};
+    return {
+      'id': id,
+      'name': name,
+      'species': species.name,
+      'birth_date': birthDate.toIso8601String().split('T').first,
+      'weight': weight,
+      'reproductive_status': reproductiveStatus,
+    };
   }
 }

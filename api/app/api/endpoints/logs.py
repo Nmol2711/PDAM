@@ -1,5 +1,6 @@
-from typing import List
-from fastapi import APIRouter, Depends
+from typing import List, Optional
+from datetime import date
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser
 from app.models import models
@@ -12,9 +13,11 @@ router = APIRouter()
 @router.get("/", response_model=List[schemas.ActivityLog])
 def obtener_mis_logs(
     current_user: CurrentUser,
+    pet_id: Optional[int] = Query(None),
+    fecha: Optional[date] = Query(None),
     db: Session = Depends(get_db)
 ):
-    return logs_service.obtener_mis_logs(db=db, user_id=current_user.id)
+    return logs_service.obtener_mis_logs(db=db, user_id=current_user.id, pet_id=pet_id, fecha=fecha)
 
 @router.post("/", response_model=schemas.ActivityLog)   
 def crear_log(
