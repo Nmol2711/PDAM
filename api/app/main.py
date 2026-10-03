@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler   
-from app.api.endpoints import auth, logs, schedules, users, pets, dispenser, dashboard
+from app.api.endpoints import auth, logs, schedules, users, pets, dispenser, dashboard, sync
 from app.db.database import engine, Base, SessionLocal
 from app.models import models
 
@@ -56,5 +56,6 @@ app.include_router(schedules.router, prefix="/schedules", tags=["Horarios"])
 app.include_router(logs.router, prefix="/logs", tags=["Logs"])
 app.include_router(dispenser.router,prefix="/dispensers", tags=["Dispensador"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
+app.include_router(sync.router, prefix="/sync", tags=["Sincronización"])
 
 app.mount("/static", StaticFiles(directory="static"), name="static")

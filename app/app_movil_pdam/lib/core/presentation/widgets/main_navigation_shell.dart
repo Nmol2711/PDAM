@@ -9,41 +9,92 @@ class MainNavigationShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // El cuerpo será la pantalla actual que GoRouter inyecte dinámicamente
-      body: navigationShell,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWideScreen = constraints.maxWidth >= 600;
 
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: navigationShell.currentIndex,
-        type: BottomNavigationBarType
-            .fixed, // Mantiene los iconos fijos con sus textos
-        // Al tocar un elemento, GoRouter cambia de rama automáticamente
-        onTap: (int index) {
-          navigationShell.goBranch(
-            index,
-            initialLocation: index == navigationShell.currentIndex,
+        if (isWideScreen) {
+          const titles = ['Inicio', 'Mascotas', 'Historial'];
+          final currentTitle = titles[navigationShell.currentIndex];
+
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(currentTitle),
+            ),
+            drawer: NavigationDrawer(
+              selectedIndex: navigationShell.currentIndex,
+              onDestinationSelected: (int index) {
+                navigationShell.goBranch(
+                  index,
+                  initialLocation: index == navigationShell.currentIndex,
+                );
+                Navigator.of(context).pop(); // Cierra el drawer al seleccionar
+              },
+              children: const [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(28, 24, 16, 12),
+                  child: Text(
+                    'PDAM - Menú',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Divider(),
+                NavigationDrawerDestination(
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard),
+                  label: Text('Inicio'),
+                ),
+                NavigationDrawerDestination(
+                  icon: Icon(Icons.pets_outlined),
+                  selectedIcon: Icon(Icons.pets),
+                  label: Text('Mascotas'),
+                ),
+                NavigationDrawerDestination(
+                  icon: Icon(Icons.history_outlined),
+                  selectedIcon: Icon(Icons.history),
+                  label: Text('Historial'),
+                ),
+              ],
+            ),
+            body: navigationShell,
           );
-        },
+        }
 
-        // Los botones del menú inferior
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Inicio',
+        // Vista móvil normal: mantiene la barra de navegación inferior clásica
+        return Scaffold(
+          body: navigationShell,
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: navigationShell.currentIndex,
+            type: BottomNavigationBarType.fixed,
+            onTap: (int index) {
+              navigationShell.goBranch(
+                index,
+                initialLocation: index == navigationShell.currentIndex,
+              );
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard_outlined),
+                activeIcon: Icon(Icons.dashboard),
+                label: 'Inicio',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.pets_outlined),
+                activeIcon: Icon(Icons.pets),
+                label: 'Mascotas',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.history_outlined),
+                activeIcon: Icon(Icons.history),
+                label: 'Historial',
+              ),
+            ],
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.pets_outlined),
-            activeIcon: Icon(Icons.pets),
-            label: 'Mascotas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
-            label: 'Historial',
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

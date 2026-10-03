@@ -6,6 +6,9 @@ abstract class AuthLocalDatasource {
   Future<AuthTokenModel> cacheToken(String token, String typeToken);
   Future<AuthTokenModel> getToken();
   Future<void> deleteToken();
+  Future<void> cacheUserCredentials(String email, String password);
+  Future<Map<String, String?>> getCachedCredentials();
+  Future<void> clearCachedCredentials();
 }
 
 class AuthLocalDatasourceImpl implements AuthLocalDatasource {
@@ -104,5 +107,52 @@ class AuthLocalDatasourceImpl implements AuthLocalDatasource {
     }
 
     return AuthTokenModel(token: token!, typeToken: typeToken!);
+  }
+
+  @override
+  Future<void> cacheUserCredentials(String email, String password) async {
+    final resultEmail = await _storageService.saveString(
+      TokenConstant.keyCachedEmail,
+      email,
+    );
+    resultEmail.fold(
+      (failure) => throw Exception("Error al guardar email en caché: ${failure.message}"),
+      (_) => null,
+    );
+
+    final resultPassword = await _storageService.saveString(
+      TokenConstant.keyCachedPassword,
+      password,
+    );
+    resultPassword.fold(
+      (failure) => throw Exception("Error al guardar contraseña en caché: ${failure.message}"),
+      (_) => null,
+    );
+  }
+
+  @override
+  Future<Map<String, String?>> getCachedCredentials() async {
+    String? email;
+    String? password;
+
+    final resultEmail = await _storageService.getString(TokenConstant.keyCachedEmail);
+    resultEmail.fold(
+      (failure) => throw Exception("Error leyendo email de caché: ${failure.message}"),
+      (val) => email = val,
+    );
+
+    final resultPassword = await _storageService.getString(TokenConstant.keyCachedPassword);
+    resultPassword.fold(
+      (failure) => throw Exception("Error leyendo contraseña de caché: ${failure.message}"),
+      (val) => password = val,
+    );
+
+    return {'email': email, 'password': password};
+  }
+
+  @override
+  Future<void> clearCachedCredentials() async {
+    await _storageService.deleteString(TokenConstant.keyCachedEmail);
+    await _storageService.deleteString(TokenConstant.keyCachedPassword);
   }
 }

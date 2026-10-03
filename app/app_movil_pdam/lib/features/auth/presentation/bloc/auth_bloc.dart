@@ -4,6 +4,7 @@ import 'package:app_movil_pdam/features/auth/domain/usecase/auth_token_uc/delete
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/current_user_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/login_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/register_uc.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 part 'auth_event.dart';
@@ -64,6 +65,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthRegisterRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // RF-03: Restricción de actualización o registro de credenciales sin conexión
+    final connectivityResults = await Connectivity().checkConnectivity();
+    final hasConnection = !connectivityResults.contains(ConnectivityResult.none);
+
+    if (!hasConnection) {
+      emit(
+        const AuthError(
+          message:
+              "Se requiere conexión activa con el servidor para registrarse o actualizar credenciales",
+        ),
+      );
+      return;
+    }
+
     emit(AuthLoading());
 
     final result = await _registerUc(

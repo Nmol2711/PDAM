@@ -157,9 +157,20 @@ Sistema encargado de dispensadar alimento seco para mascotas (Perros y Gatos). P
 
 ## Comando
 
-* **Iniciar el servidor:**  `uvicorn app.main:app --reload --port 8000 ` añadir `--host 0.0.0.0` para iniciar el servidor en red publica local.
+* **Backend (API):**
 
-* **Iniciar la aplicación:** `flutter run`
+  - **Iniciar entorno virtual:** `cd api && source venv/bin/activate`
+  * **Iniciar servidor:** `cd api && uvicorn app.main:app --reload --port 8000 --host 0.0.0.0`
+  * **Correr tests:** `cd api && pytest`
+
+* **Frontend (App Móvil):**
+
+  * **Iniciar aplicación:** `cd app/app_movil_pdam && flutter run`
+  * **Correr tests:** `cd app/app_movil_pdam && flutter test`
+
+* **Hardware (ESP32):**
+
+  * **Compilación / Pruebas:** `cd arduino/sketch_jul3a && pio test` (o compilación en Arduino IDE)
 
 ## Datos
 
@@ -234,6 +245,10 @@ Para asegurar la integridad de nutrientes esenciales (evitando desequilibrios po
 - Mantenlo breve (máximo ~50 líneas): resume o elimina lo que ya no aporte.
 - Si algo se convierte en una regla permanente, propón moverlo a `AGENTS.md` en lugar de dejarlo en la memoria.
 - No guardes nunca datos sensibles (claves, tokens, datos personales).
+
+## Reglas
+
+- Lee `docs/constitution.md` y la spec activa (`specs/NNN-*/`) antes de tocar código.
 
 ## Límites
 
