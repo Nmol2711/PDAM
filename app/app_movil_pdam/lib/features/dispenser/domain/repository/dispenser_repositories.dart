@@ -20,4 +20,12 @@ abstract class DispenserRepositories {
 
   Future<Either<Failures, bool>> activateDispenser(int dispenserId, int petId);
   Future<Either<Failures, Dispenser>> getDispenserByPet(int petId);
+
+  /// Cambia la dirección MAC de un dispensador ya registrado (RF-04, RF-14).
+  /// Requiere conexión: el cambio de MAC solo existe si el servidor lo acepta.
+  Future<Either<Failures, Dispenser>> updateDispenserMac(
+    int dispenserId,
+    int petId,
+    String macAddress,
+  );
 }

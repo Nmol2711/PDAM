@@ -1,4 +1,5 @@
 import 'package:app_movil_pdam/core/constant/api_constant.dart';
+import 'package:app_movil_pdam/core/error/api_exception.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/features/dispenser/data/models/dispenser_model.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
@@ -15,6 +16,11 @@ abstract class DispenserRemoteDatasource {
   Future<bool> activateDispenser(int dispenserId, int petId);
   Future<Dispenser> getDispenserByPet(int petId);
   Future<bool> deleteDispenserByPet(int petId);
+
+  /// Cambia la dirección MAC del dispensador (RF-04, RF-14). El servidor
+  /// valida formato y unicidad por forma normalizada, así que un conflicto
+  /// llega como `ApiException` con `code` `mac_in_use` o `mac_invalid_format`.
+  Future<Dispenser> updateDispenserMac(int dispenserId, int petId, String macAddress);
 }
 
 class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
@@ -40,9 +46,37 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
       );
       return DispenserModel.fromJson(response.data);
     } on DioException catch (e) {
-      final String message = _extractErrorMessage(e);
-      throw Exception(message);
+      throw _apiExceptionFrom(
+        e,
+        staticMessage: 'Error con el servidor al asociar el dispensador',
+      );
     }
+  }
+
+  /// Traduce el contrato de DO-5 a `ApiException`.
+  ///
+  /// Cuando `detail` ya es un objeto se toma su `code`, que es el identificador
+  /// estable (AC-4). Cuando sigue siendo texto (403, 404, 422 de esquema o
+  /// endpoints no migrados) se cae en [ApiException.serverErrorCode] con el
+  /// texto que ya se mostraba, para no romper los flujos existentes.
+  ApiException _apiExceptionFrom(DioException e, {required String staticMessage}) {
+    final Object? detail = e.response?.data is Map<String, dynamic>
+        ? (e.response!.data as Map<String, dynamic>)['detail']
+        : null;
+
+    if (detail is Map<String, dynamic> && detail['code'] != null) {
+      return ApiException(
+        code: detail['code'].toString(),
+        message: detail['message']?.toString() ?? staticMessage,
+        status: e.response?.statusCode,
+      );
+    }
+
+    return ApiException(
+      code: ApiException.serverErrorCode,
+      message: _extractErrorMessage(e, staticMessage: staticMessage),
+      status: e.response?.statusCode,
+    );
   }
 
   String _extractErrorMessage(
@@ -75,7 +109,10 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
 
       return response.data;
     } on DioException catch (e) {
-      throw Exception(_extractErrorMessage(e));
+      throw _apiExceptionFrom(
+        e,
+        staticMessage: 'Error con el servidor al consultar la tarea pendiente',
+      );
     }
   }
 
@@ -120,6 +157,23 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
   }
 
   @override
+  Future<Dispenser> updateDispenserMac(int dispenserId, int petId, String macAddress) async {
+    try {
+      final response = await _dioClient.dio.put(
+        '${ApiConstants.dispenser}$dispenserId',
+        data: {'pet_id': petId, 'mac_address': macAddress},
+      );
+
+      return DispenserModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _apiExceptionFrom(
+        e,
+        staticMessage: 'Error con el servidor al cambiar la dirección del dispensador',
+      );
+    }
+  }
+
+  @override
   Future<bool> deleteDispenserByPet(int petId) async {
     try {
       final response = await _dioClient.dio.delete(
@@ -132,17 +186,17 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
           final dispenser = await getDispenserByPet(petId);
           return await dasactivateDispenser(dispenser.id, petId);
         } catch (_) {
-          throw Exception(
-            'El servidor no permite eliminar el dispensador desde esta ruta. Intenta desactivarlo.',
+          throw ApiException(
+            code: ApiException.serverErrorCode,
+            message: 'El servidor no permite eliminar el dispensador desde esta ruta. Intenta desactivarlo.',
+            status: e.response?.statusCode,
           );
         }
       }
 
-      throw Exception(
-        _extractErrorMessage(
-          e,
-          staticMessage: "Error al eliminar el dispensador",
-        ),
+      throw _apiExceptionFrom(
+        e,
+        staticMessage: "Error al eliminar el dispensador",
       );
     }
   }

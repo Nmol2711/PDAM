@@ -1,4 +1,5 @@
 import 'package:app_movil_pdam/core/network/dio_client.dart';
+import 'package:app_movil_pdam/core/offline/sync_service.dart';
 import 'package:app_movil_pdam/core/router/app_router.dart';
 import 'package:app_movil_pdam/core/services/storage_service.dart';
 import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
@@ -27,6 +28,7 @@ import 'package:app_movil_pdam/features/dispenser/domain/use_case/check_pending_
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/dasactivate_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/delete_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/get_dispenser_by_pet_uc.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/use_case/update_dispenser_mac_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/local/local_pet_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/local/local_schedule_datasource.dart';
@@ -69,6 +71,9 @@ Future<void> setup() async {
 
   // Dio Cleinte
   sl.registerLazySingleton(() => DioClient(sl<StorageService>()));
+
+  // Sincronización (consulta de conexión usada por el registro de dispensadores)
+  sl.registerLazySingleton<SyncService>(() => SyncService(dioClient: sl<DioClient>()));
 
   // Fuente de Datos
   sl.registerLazySingleton<AuthRemoteDatasource>(
@@ -144,6 +149,7 @@ Future<void> setup() async {
     () => DispenserRepositoryImpl(
       dispenserRemoteDatasource: sl<DispenserRemoteDatasource>(),
       localDispenserDatasource: sl<LocalDispenserDatasource>(),
+      syncService: sl<SyncService>(),
     ),
   );
 
@@ -233,6 +239,10 @@ Future<void> setup() async {
 
   sl.registerLazySingleton(
     () => DeleteDispenserUc(repository: sl<DispenserRepositories>()),
+  );
+
+  sl.registerLazySingleton(
+    () => UpdateDispenserMacUc(repository: sl<DispenserRepositories>()),
   );
 
   sl.registerLazySingleton(

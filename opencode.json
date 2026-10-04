@@ -1,8 +1,28 @@
 {
-  "$schema": "https://opencode.ai/config.json",
+    "$schema": "https://opencode.ai/config.json",
     "mcp": {
         "github": {
             "enabled": true
+        },
+        "dart-flutter": {
+            "type": "local",
+            "enabled": true,
+            "command": [
+                "dart",
+                "mcp-server"
+            ]
+        },
+        "flutter-devtools": {
+            "type": "local",
+            "enabled": true,
+            "command": [
+                "npx",
+                "-y",
+                "flutter-devtools-mcp"
+            ],
+            "environment": {
+                "FLUTTER_VM_SERVICE_URL": "http://127.0.0.1:8888"
+            }
         }
     }
 }

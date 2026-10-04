@@ -3,6 +3,9 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from app.schemas.sync_schema import SyncBatchRequest, SyncBatchResponse, SyncItem, resolve_conflict
 
+# Discriminante que identifica un ítem de dispensador dentro del lote de sincronización.
+TIPO_ITEM_DISPENSER = "dispenser"
+
 def process_sync_batch(db: Session, user_id: int, batch_request: SyncBatchRequest) -> SyncBatchResponse:
     """
     Procesa un lote de sincronización bidireccional (RF-04, RF-05).
@@ -13,6 +16,13 @@ def process_sync_batch(db: Session, user_id: int, batch_request: SyncBatchReques
     synced_items: List[SyncItem] = []
 
     for item in batch_request.items:
+        # RF-15: los dispensadores no se registran por lote. El único camino que crea
+        # uno es `POST /dispensers`, que exige la clave del QR y devuelve un conflicto
+        # accionable. Un huérfano local enviado por aquí se omite, así que nunca puede
+        # convertirse en un dispensador remoto (RF-19).
+        if item.data.get("type") == TIPO_ITEM_DISPENSER:
+            continue
+
         try:
             # Simulación de estado remoto en servidor para validación y resolución
             remote_item_dict = {

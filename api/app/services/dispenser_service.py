@@ -1,36 +1,59 @@
-from datetime import datetime, timedelta
-
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models import models
 
 from app.schemas import schemas
+from app.services.mac_service import (
+    CODE_MAC_ALREADY_REGISTERED,
+    CODE_MAC_IN_USE,
+    CODE_PET_ALREADY_HAS_DISPENSER,
+    MENSAJE_MAC_ALREADY_REGISTERED,
+    MENSAJE_MAC_IN_USE,
+    MENSAJE_PET_ALREADY_HAS_DISPENSER,
+    normalize_mac,
+    validate_mac_or_raise,
+)
+
+
+def _detalle(codigo: str, mensaje: str) -> dict:
+    """Contrato de error de DO-5 y AC-4: `detail` es un objeto clasificable.
+
+    El cliente decide por `code`; el `message` es la copia en español y es genérico,
+    sin datos de la mascota, del usuario ni del dispensador en conflicto (RF-16).
+    """
+    return {"code": codigo, "message": mensaje}
 
 
 def create_new_dispenser(
         db: Session, 
         new_dispenser: schemas.DispenserCreate
 ) -> schemas.Dispenser:
-    
-    # 1. Validar si el hardware ya existe
-    if exist_dispensar(db=db, mac_address=new_dispenser.mac_address):
+
+    # 1. Validar el formato antes de tocar la base de datos. La comparación posterior
+    # se hace siempre con la forma canónica devuelta (RF-02, RF-06).
+    mac_normalizada = validate_mac_or_raise(new_dispenser.mac_address)
+
+    # 2. Validar si el hardware ya existe por su forma normalizada, de modo que
+    # cualquier formato equivalente cuenta como la misma MAC (RF-03).
+    if exist_dispensar(db=db, mac_normalizada=mac_normalizada):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta dirección MAC ya está registrada."
-        )
-    
-    
-    # 2. Validar la relación 1-a-1
-    if has_pet_dispenser(db=db, pet_id=new_dispenser.pet_id):
-        # 🔴 CORRECCIÓN: Se agregó el 'raise' que faltaba aquí
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta mascota ya posee un dispensador registrado."
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_detalle(CODE_MAC_ALREADY_REGISTERED, MENSAJE_MAC_ALREADY_REGISTERED)
         )
 
-    # 3. Creación del registro si todo está OK
+    # 3. Validar la relación 1-a-1 (regla existente, solo cambia su código de error)
+    if has_pet_dispenser(db=db, pet_id=new_dispenser.pet_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_detalle(CODE_PET_ALREADY_HAS_DISPENSER, MENSAJE_PET_ALREADY_HAS_DISPENSER)
+        )
+
+    # 4. Creación del registro si todo está OK. `mac_address` conserva el texto tal
+    # como lo introdujo el usuario y `mac_normalized` la forma comparable (DO-2).
     dispenser_db = models.Dispenser(
         mac_address=new_dispenser.mac_address,
+        mac_normalized=mac_normalizada,
         pet_id=new_dispenser.pet_id,
         is_active=True
     )
@@ -40,13 +63,16 @@ def create_new_dispenser(
         db.commit()
         db.refresh(dispenser_db)
         return schemas.Dispenser.model_validate(dispenser_db)
+    except IntegrityError:
+        # RF-07: la comprobación previa no cubre la carrera entre dos altas simultáneas.
+        # El índice único de `mac_normalized` es la garantía real de unicidad.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_detalle(CODE_MAC_ALREADY_REGISTERED, MENSAJE_MAC_ALREADY_REGISTERED)
+        )
     except Exception as e:
         db.rollback()
-        if "UNIQUE constraint failed" in str(e) or "duplicate key" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Este dispensador (dirección MAC) ya está registrado con otra mascota."
-            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error interno del servidor: {str(e)}"
@@ -66,10 +92,18 @@ def has_pet_dispenser(db: Session, pet_id: int) -> schemas.Dispenser | None:
             detail=f"Error interno del servidor en la validación: {str(e)}"
         )
 
-def exist_dispensar(db: Session, mac_address: str) -> bool:
+def exist_dispensar(db: Session, mac_normalizada: str, excluir_id: int | None = None) -> bool:
+    """Indica si la forma canónica ya está registrada.
+
+    Solo compara `mac_normalized`, nunca el texto: así todos los formatos
+    equivalentes de una misma dirección se consideran el mismo hardware (RF-02).
+    `excluir_id` permite ignorar el propio dispensador en una modificación (RF-05).
+    """
     try:
-        result = db.query(models.Dispenser).filter(models.Dispenser.mac_address == mac_address).first()
-        return result is not None 
+        consulta = db.query(models.Dispenser).filter(models.Dispenser.mac_normalized == mac_normalizada)
+        if excluir_id is not None:
+            consulta = consulta.filter(models.Dispenser.id != excluir_id)
+        return consulta.first() is not None
 
     except Exception as e:
         raise HTTPException(
@@ -91,13 +125,23 @@ def update_dispenser(
             detail=f"No se encontró ningún dispensador con el ID {dispenser_id}."
         )
 
-    # 2. Si se intenta actualizar la dirección MAC, validar que no esté duplicada
-    if dispenser_update.mac_address is not None and dispenser_update.mac_address != dispenser_db.mac_address:
-        if exist_dispensar(db=db, mac_address=dispenser_update.mac_address):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La nueva dirección MAC ya se encuentra registrada en otro dispositivo."
-            )
+    # 2. Si se intenta actualizar la dirección MAC, se compara por forma normalizada:
+    # cambiar mayúsculas, guiones o espacios no es cambiar de dirección (CL-4, RF-05).
+    if dispenser_update.mac_address is not None:
+        mac_normalizada = validate_mac_or_raise(dispenser_update.mac_address)
+        # Las filas anteriores a `mac_normalized` pueden tenerlo vacío: se normaliza su
+        # texto para no confundir un formato distinto con una dirección nueva.
+        actual_normalizada = dispenser_db.mac_normalized or normalize_mac(dispenser_db.mac_address)
+
+        if mac_normalizada != actual_normalizada:
+            if exist_dispensar(db=db, mac_normalizada=mac_normalizada, excluir_id=dispenser_db.id):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=_detalle(CODE_MAC_IN_USE, MENSAJE_MAC_IN_USE)
+                )
+
+            dispenser_db.mac_normalized = mac_normalizada
+            dispenser_db.mac_address = dispenser_update.mac_address
 
     # 3. Si se intenta cambiar o asignar una mascota, validar las reglas relacionales
     if dispenser_update.pet_id is not None and dispenser_update.pet_id != dispenser_db.pet_id:
@@ -106,29 +150,30 @@ def update_dispenser(
         if has_pet_dispenser(db=db, pet_id=dispenser_update.pet_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="La mascota especificada ya posee un dispensador registrado."
+                detail=_detalle(CODE_PET_ALREADY_HAS_DISPENSER, MENSAJE_PET_ALREADY_HAS_DISPENSER)
             )
 
     # 4. Aplicar los cambios dinámicamente desglosando el esquema de Pydantic
     # .model_dump(exclude_unset=True) procesa únicamente los campos que la App envió en el JSON
 
-    print("antes actualizados: ", dispenser_db)
-   
-    if dispenser_update.mac_address is not None:
-        dispenser_db.mac_address = dispenser_update.mac_address
     if dispenser_update.is_active is not None:
         dispenser_db.is_active = dispenser_update.is_active
     if dispenser_update.pending_dispensing is not None:
         dispenser_db.pending_dispensing = dispenser_update.pending_dispensing
-
-    
-    print("Datos actualizados: ", dispenser_db)
 
     try:
         db.commit()
         db.refresh(dispenser_db)
         return schemas.Dispenser.model_validate(dispenser_db)
         
+    except IntegrityError:
+        # RF-07: si otra fila toma la forma normalizada entre la comprobación y el
+        # commit, manda el índice único y el cambio se rechaza como conflicto.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_detalle(CODE_MAC_IN_USE, MENSAJE_MAC_IN_USE)
+        )
     except Exception as e:
         db.rollback()
         raise HTTPException(
@@ -137,8 +182,11 @@ def update_dispenser(
         )
     
 def check_pending_task(db: Session, mac_address: str, test:bool = False) -> dict:
-    # 1. Buscar el dispensador por la MAC que envía el ESP32
-    dispenser_db = db.query(models.Dispenser).filter(models.Dispenser.mac_address == mac_address).first()
+    # 1. Buscar el dispensador por la forma normalizada de la MAC que envía el ESP32,
+    # con el mismo criterio que el alta y la modificación: el hardware puede usar
+    # guiones, espacios, puntos o minúsculas y sigue siendo el mismo equipo (RF-08).
+    mac_normalizada = normalize_mac(mac_address)
+    dispenser_db = db.query(models.Dispenser).filter(models.Dispenser.mac_normalized == mac_normalizada).first()
     
     if not dispenser_db:
         raise HTTPException(
@@ -152,13 +200,13 @@ def check_pending_task(db: Session, mac_address: str, test:bool = False) -> dict
     # 2. Si la app o el cron activaron la bandera pendiente...
     if dispenser_db.pending_dispensing:
         
-        # 🔍 Buscamos el horario planeado para esta mascota.
+        # Buscamos el horario planeado para esta mascota.
         # Quitamos el filtro estricto de hora aquí, ya que el segundo plano ya lo validó.
         schedule = db.query(models.Schedule).filter(
             models.Schedule.pet_id == dispenser_db.pet_id
         ).first()
         
-        # 🚨 Si por alguna razón extraña no hay horario, salimos SIN apagar la bandera
+        # Si por alguna razón extraña no hay horario, salimos SIN apagar la bandera
         if schedule is None:
             return {"serve": False, "amount": 0}
             

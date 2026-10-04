@@ -7,6 +7,9 @@ import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/schedule.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/widgets/dispenser_notice_mapper.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/views/edit_pet_view.dart';
 
@@ -120,6 +123,8 @@ class _PetDetailViewState extends State<PetDetailView> {
                     context.read<DispenserBloc>().add(
                       LoadDispenserByPetEvent(widget.pet.id),
                     );
+                  } else if (state is DispenserFailure) {
+                    _mostrarAviso(context, state.failure);
                   }
                 },
                 builder: (context, state) {
@@ -132,8 +137,10 @@ class _PetDetailViewState extends State<PetDetailView> {
                     );
                   }
 
-                  if (state is DispenserLoaded) {
-                    final dispenser = state.dispenser;
+                  if (state is DispenserLoaded || (state is DispenserFailure && state.dispenser != null)) {
+                    final dispenser = state is DispenserLoaded 
+                        ? state.dispenser 
+                        : (state as DispenserFailure).dispenser!;
                     final isActive = dispenser.isActive;
 
                     return InkWell(
@@ -324,6 +331,19 @@ class _PetDetailViewState extends State<PetDetailView> {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _mostrarAviso(BuildContext context, Failures failure) async {
+    final AppNoticeParams aviso = appNoticeFor(failure);
+
+    await AppNoticeDialog.show(
+      context,
+      tone: aviso.tone,
+      icon: aviso.icon,
+      title: aviso.title,
+      message: aviso.message,
+      actionLabel: aviso.actionLabel,
     );
   }
 

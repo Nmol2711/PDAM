@@ -1,7 +1,10 @@
+import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../bloc/dispenser_bloc.dart';
+import '../widgets/dispenser_notice_mapper.dart';
 import '../widgets/register_dispenser_form_widget.dart';
 
 class RegisterDispenserView extends StatefulWidget {
@@ -59,6 +62,21 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
     );
   }
 
+  /// Muestra el aviso reutilizable con el copy que corresponde al fallo. La
+  /// vista solo enruta: no valida direcciones ni llama al servidor (RNF-01).
+  Future<void> _mostrarAviso(BuildContext context, Failures failure) async {
+    final AppNoticeParams aviso = appNoticeFor(failure);
+
+    await AppNoticeDialog.show(
+      context,
+      tone: aviso.tone,
+      icon: aviso.icon,
+      title: aviso.title,
+      message: aviso.message,
+      actionLabel: aviso.actionLabel,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -76,12 +94,9 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
                 );
                 context.pop();
               } else if (state is DispenserFailure) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(state.message),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                // Los cuatro rechazos (RF-10 a RF-13) se muestran con el
+                // diálogo de aviso, no con un SnackBar rojo (RNF-05).
+                _mostrarAviso(context, state.failure);
               }
             },
           ),

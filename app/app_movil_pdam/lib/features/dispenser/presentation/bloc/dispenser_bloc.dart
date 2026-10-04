@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/activate_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/associate_dispenser_uc.dart';
@@ -16,6 +17,8 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
   final DesactivateDispenserUc deactivateUseCase;
   final DeleteDispenserUc deleteDispenserUseCase;
 
+  Dispenser? _lastLoadedDispenser;
+
   DispenserBloc({
     required this.associateUseCase,
     required this.getDispenserByPetUseCase,
@@ -32,10 +35,10 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
         event.secretKeyQr,
       );
 
+      // El fallo viaja tipado hasta la presentación, que decide el copy
+      // (RF-10 a RF-13). Aquí no hay textos (RNF-01).
       failureOrDispenser.fold(
-        (failure) => emit(
-          DispenserFailure(failure.message),
-        ), // Dependiendo de cómo extraigas el string de tu Failure
+        (failure) => emit(DispenserFailure(failure)),
         (dispenser) => emit(DispenserSuccess()),
       );
     });
@@ -46,10 +49,14 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
       final failureOrDispenser = await getDispenserByPetUseCase(event.petId);
 
       failureOrDispenser.fold(
-        (failure) => emit(
-          DispenserEmpty(),
-        ), // Si da error 404 de que no existe, asumimos vacío
-        (dispenser) => emit(DispenserLoaded(dispenser)),
+        (failure) {
+          _lastLoadedDispenser = null;
+          emit(DispenserEmpty());
+        }, // Si da error 404 de que no existe, asumimos vacío
+        (dispenser) {
+          _lastLoadedDispenser = dispenser;
+          emit(DispenserLoaded(dispenser));
+        },
       );
     });
 
@@ -59,7 +66,7 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
 
       if (result.isLeft()) {
         result.fold(
-          (failure) => emit(DispenserFailure(failure.message)),
+          (failure) => emit(DispenserFailure(failure, dispenser: _lastLoadedDispenser)),
           (_) => null,
         );
         return;
@@ -67,14 +74,17 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
 
       final success = result.getOrElse(() => false);
       if (!success) {
-        emit(DispenserFailure('No se pudo activar el dispensador'));
+        emit(DispenserFailure(_falloOperacionNoCompletada().failure, dispenser: _lastLoadedDispenser));
         return;
       }
 
       final refreshed = await getDispenserByPetUseCase(event.petId);
       refreshed.fold(
-        (failure) => emit(DispenserFailure(failure.message)),
-        (dispenser) => emit(DispenserLoaded(dispenser)),
+        (failure) => emit(DispenserFailure(failure, dispenser: _lastLoadedDispenser)),
+        (dispenser) {
+          _lastLoadedDispenser = dispenser;
+          emit(DispenserLoaded(dispenser));
+        },
       );
     });
 
@@ -84,7 +94,7 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
 
       if (result.isLeft()) {
         result.fold(
-          (failure) => emit(DispenserFailure(failure.message)),
+          (failure) => emit(DispenserFailure(failure, dispenser: _lastLoadedDispenser)),
           (_) => null,
         );
         return;
@@ -92,14 +102,17 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
 
       final success = result.getOrElse(() => false);
       if (!success) {
-        emit(DispenserFailure('No se pudo desactivar el dispensador'));
+        emit(DispenserFailure(_falloOperacionNoCompletada().failure, dispenser: _lastLoadedDispenser));
         return;
       }
 
       final refreshed = await getDispenserByPetUseCase(event.petId);
       refreshed.fold(
-        (failure) => emit(DispenserFailure(failure.message)),
-        (dispenser) => emit(DispenserLoaded(dispenser)),
+        (failure) => emit(DispenserFailure(failure, dispenser: _lastLoadedDispenser)),
+        (dispenser) {
+          _lastLoadedDispenser = dispenser;
+          emit(DispenserLoaded(dispenser));
+        },
       );
     });
 
@@ -109,7 +122,7 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
 
       if (result.isLeft()) {
         result.fold(
-          (failure) => emit(DispenserFailure(failure.message)),
+          (failure) => emit(DispenserFailure(failure, dispenser: _lastLoadedDispenser)),
           (_) => null,
         );
         return;
@@ -117,10 +130,11 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
 
       final success = result.getOrElse(() => false);
       if (!success) {
-        emit(DispenserFailure('No se pudo eliminar el dispensador'));
+        emit(DispenserFailure(_falloOperacionNoCompletada().failure, dispenser: _lastLoadedDispenser));
         return;
       }
 
+      _lastLoadedDispenser = null;
       emit(DispenserEmpty());
     });
 
@@ -134,3 +148,10 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
     });
   }
 }
+
+/// Fallo para el caso en que la operación responde sin resultado, que solo
+/// debería ocurrir ante una inconsistencia interna del caso de uso. Viaja sin
+/// mensaje porque el copy del aviso lo decide la presentación
+/// (`dispenser_notice_mapper`) y el BLoC no contiene textos (RNF-01).
+DispenserFailure _falloOperacionNoCompletada() =>
+    DispenserFailure(ServerFailures(''));

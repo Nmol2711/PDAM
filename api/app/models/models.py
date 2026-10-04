@@ -39,7 +39,13 @@ class Dispenser(Base):
     __tablename__ = "dispensers"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Texto tal como lo introdujo o escaneó el usuario: es lo que se muestra.
     mac_address = Column(String, unique=True, nullable=False)
+    # Forma canónica (12 hexadecimales en mayúsculas, sin separadores). Es el
+    # único campo con el que se compara y el que garantiza la unicidad real
+    # mediante su índice único (RF-01, RF-07). La migración que lo rellena está
+    # en el listener `connect` de `app/db/database.py`.
+    mac_normalized = Column(String, nullable=True, unique=True, index=True)
     is_active = Column(Boolean, default=True)
     pending_dispensing = Column(Boolean, default=False, nullable=False)
 

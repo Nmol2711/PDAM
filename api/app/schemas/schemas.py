@@ -55,13 +55,11 @@ class DispenserBase(BaseModel):
 class DispenserAssociation(DispenserBase):
     secret_key_qr: str
 
-    @field_validator('mac_address')
-    @classmethod
-    def validate_mac(cls, v: str) -> str:
-        mac_regex = r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
-        if not re.match(mac_regex, v):
-            raise ValueError('Formato de dirección MAC inválido')
-        return v.upper()
+    # El formato de `mac_address` no se valida aquí: un validador de esquema responde
+    # 422 con un detalle genérico y obliga a un único formato (mayúsculas y dos puntos),
+    # lo que contradice RF-02 y oculta la diferencia entre formato inválido (400
+    # `mac_invalid_format`) y conflicto (409). El formato se valida en
+    # `app/services/mac_service.py`, que acepta todos los formatos equivalentes.
 
 class DispenserCreate(DispenserBase):
     pass

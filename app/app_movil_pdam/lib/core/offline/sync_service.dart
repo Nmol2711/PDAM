@@ -5,7 +5,6 @@ import 'package:app_movil_pdam/core/offline/sync_conflict_resolver.dart';
 import 'package:app_movil_pdam/core/offline/models/local_pet.dart';
 import 'package:app_movil_pdam/core/offline/models/local_schedule.dart';
 import 'package:app_movil_pdam/core/offline/models/local_log.dart';
-import 'package:app_movil_pdam/core/offline/models/local_dispenser.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:isar/isar.dart';
@@ -84,9 +83,12 @@ class SyncService {
       final unsyncedPets = await isar.localPets.filter().isSyncedEqualTo(false).findAll();
       final unsyncedSchedules = await isar.localSchedules.filter().isSyncedEqualTo(false).findAll();
       final unsyncedLogs = await isar.localLogs.filter().isSyncedEqualTo(false).findAll();
-      final unsyncedDispensers = await isar.localDispensers.filter().isSyncedEqualTo(false).findAll();
 
-      if (unsyncedPets.isEmpty && unsyncedSchedules.isEmpty && unsyncedLogs.isEmpty && unsyncedDispensers.isEmpty) {
+      // Los dispensadores no se sincronizan: el servidor nunca los registra por
+      // lote y la única forma de crearlos es con conexión y validación de MAC
+      // (RF-15, RF-19). Sus registros locales nacen siempre sincronizados.
+
+      if (unsyncedPets.isEmpty && unsyncedSchedules.isEmpty && unsyncedLogs.isEmpty) {
         return true;
       }
 
@@ -140,22 +142,6 @@ class SyncService {
         });
       }
 
-      for (final disp in unsyncedDispensers) {
-        items.add({
-          'id': 'dispenser_${disp.remoteId ?? disp.id}',
-          'updated_at': disp.updatedAt.millisecondsSinceEpoch.toDouble(),
-          'data': {
-            'type': 'dispenser',
-            'id': disp.remoteId ?? disp.id,
-            'mac_address': disp.macAddress,
-            'pet_id': disp.petRemoteId,
-            'secret_key_qr': disp.secretKeyQr,
-            'is_active': disp.isActive,
-            'updated_at': disp.updatedAt.millisecondsSinceEpoch.toDouble(),
-          },
-        });
-      }
-
       final response = await _dioClient.dio.post(
         ApiConstants.sync,
         data: {
@@ -192,10 +178,6 @@ class SyncService {
           for (final log in unsyncedLogs) {
             log.isSynced = true;
             await isar.localLogs.put(log);
-          }
-          for (final disp in unsyncedDispensers) {
-            disp.isSynced = true;
-            await isar.localDispensers.put(disp);
           }
         });
 
