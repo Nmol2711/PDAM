@@ -63,10 +63,16 @@ class PetRepositoriesImpl implements PetsRepositories {
   Future<Either<Failures, bool>> deletePet(int petId) async {
     try {
       final result = await _petRemoteDatasource.deletePet(petId);
+      await _localPetDatasource.deleteLocalPet(petId);
       return Right(result);
     } catch (e) {
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
-      return Left(ServerFailures(errorMessage));
+      try {
+        await _localPetDatasource.deleteLocalPet(petId);
+        return const Right(true);
+      } catch (_) {
+        final errorMessage = e.toString().replaceAll('Exception: ', '');
+        return Left(ServerFailures(errorMessage));
+      }
     }
   }
 

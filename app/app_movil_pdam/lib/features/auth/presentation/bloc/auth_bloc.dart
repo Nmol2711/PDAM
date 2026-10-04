@@ -99,12 +99,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(AuthLoading());
 
-    final result = await _deleteTokenUc();
-    await IsarService.clearAllData();
-
-    result.fold(
-      (failures) => emit(AuthError(message: failures.message)),
-      (_) => emit(AuthUnauthenticated()),
-    );
+    // NOTA (Offline-First): No eliminamos el token ni borramos Isar en logout para preservar
+    // la disponibilidad continua de datos locales y la autenticación al operar offline o reconectar.
+    emit(AuthUnauthenticated());
   }
 }

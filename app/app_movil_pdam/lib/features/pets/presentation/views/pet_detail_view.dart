@@ -236,18 +236,7 @@ class _PetDetailViewState extends State<PetDetailView> {
             const SizedBox(height: 8),
 
             // --- 3. LISTA DE HORARIOS ORIGINAL (Conectada al Bloc) ---
-            BlocConsumer<ScheduleBloc, ScheduleState>(
-              listener: (context, state) {
-                if (state is ScheduleLoaded && state.isOffline) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Los horarios se reflejarán cuando haya conexión con el servidor'),
-                      backgroundColor: Colors.orange,
-                      duration: Duration(seconds: 4),
-                    ),
-                  );
-                }
-              },
+            BlocBuilder<ScheduleBloc, ScheduleState>(
               builder: (context, state) {
                 if (state is ScheduleLoading) {
                   return const Center(

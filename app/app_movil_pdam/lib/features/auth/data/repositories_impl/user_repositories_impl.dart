@@ -1,4 +1,5 @@
 import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/core/offline/isar_service.dart';
 import 'package:app_movil_pdam/features/auth/data/datasources/local/auth_local_datasource.dart';
 import 'package:app_movil_pdam/features/auth/data/datasources/remote/auth_remote_datasource.dart';
 import 'package:app_movil_pdam/features/auth/domain/entity/user.dart';
@@ -35,6 +36,15 @@ class UserRepositoriesImpl implements UserRepositories {
   @override
   Future<Either<Failures, User>> login(String email, String password) async {
     try {
+      // Verificar si hay cambio de usuario para limpiar caché local anterior si corresponde
+      try {
+        final cached = await _authLocalDatasource.getCachedCredentials();
+        final cachedEmail = cached['email'];
+        if (cachedEmail != null && cachedEmail != email) {
+          await IsarService.clearAllData();
+        }
+      } catch (_) {}
+
       // 1. Intentar login online con timeout estricto de 10 segundos (RF-02)
       final token = await _authRemoteDatasource.login(email, password).timeout(
         const Duration(seconds: 10),

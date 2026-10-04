@@ -165,7 +165,7 @@ Sistema encargado de dispensadar alimento seco para mascotas (Perros y Gatos). P
 
 * **Frontend (App Móvil):**
 
-  * **Iniciar aplicación:** `cd app/app_movil_pdam && flutter run`
+  * **Iniciar aplicación:** `cd app/app_movil_pdam && flutter run --debug --host-vmservice-port=8888`
   * **Correr tests:** `cd app/app_movil_pdam && flutter test`
 
 * **Hardware (ESP32):**

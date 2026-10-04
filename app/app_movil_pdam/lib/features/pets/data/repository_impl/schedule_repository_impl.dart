@@ -141,9 +141,17 @@ class ScheduleRepositoryImpl implements ScheduleRepositories {
   @override
   Future<Either<Failures, bool>> deleteShedule(int id) async {
     try {
-      return const Right(true);
+      final result = await _scheduleRemoteDatasource.deleteSchedule(id);
+      await _localScheduleDatasource.deleteLocalSchedule(id);
+      return Right(result);
     } catch (e) {
-      return Left(ServerFailures(e.toString()));
+      try {
+        await _localScheduleDatasource.deleteLocalSchedule(id);
+        return const Right(true);
+      } catch (_) {
+        final errorMessage = e.toString().replaceAll('Exception: ', '');
+        return Left(ServerFailures(errorMessage));
+      }
     }
   }
 

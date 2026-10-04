@@ -17,6 +17,7 @@ import 'package:app_movil_pdam/features/dashboard/data/datasources/dashboard_rem
 import 'package:app_movil_pdam/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:app_movil_pdam/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/bloc/dashboard_cubit.dart';
+import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_dispenser_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/repositories_impl/dispenser_repository_impl.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
@@ -89,6 +90,10 @@ Future<void> setup() async {
     () => LocalScheduleDatasourceImpl(),
   );
 
+  sl.registerLazySingleton<LocalDispenserDatasource>(
+    () => LocalDispenserDatasourceImpl(),
+  );
+
   sl.registerLazySingleton<ScheduleRemoteDatasource>(
     () => ScheduleTemoteDatasourceImp(dioClient: sl<DioClient>()),
   );
@@ -138,6 +143,7 @@ Future<void> setup() async {
   sl.registerLazySingleton<DispenserRepositories>(
     () => DispenserRepositoryImpl(
       dispenserRemoteDatasource: sl<DispenserRemoteDatasource>(),
+      localDispenserDatasource: sl<LocalDispenserDatasource>(),
     ),
   );
 

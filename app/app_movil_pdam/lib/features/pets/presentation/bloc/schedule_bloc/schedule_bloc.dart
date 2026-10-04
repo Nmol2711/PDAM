@@ -45,6 +45,14 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     ScheduleCreatePressed event,
     Emitter<ScheduleState> emit,
   ) async {
+    final currentState = state;
+    List<Schedule> currentSchedules = [];
+    bool isOffline = false;
+    if (currentState is ScheduleLoaded) {
+      currentSchedules = List.from(currentState.schedules);
+      isOffline = currentState.isOffline;
+    }
+
     emit(ScheduleLoading());
     final result = await _createScheduleUc(
       event.time,
@@ -53,7 +61,17 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     );
     result.fold(
       (failure) => emit(ScheduleError(message: failure.message)),
-      (schedule) => emit(ScheduleDetailLoaded(schedule: schedule)),
+      (schedule) {
+        if (currentState is ScheduleLoaded) {
+          final updatedSchedules = List<Schedule>.from(currentState.schedules);
+          if (!updatedSchedules.any((s) => s.id == schedule.id)) {
+            updatedSchedules.add(schedule);
+          }
+          emit(ScheduleLoaded(schedules: updatedSchedules, isOffline: isOffline));
+        } else {
+          emit(ScheduleLoaded(schedules: [schedule], isOffline: isOffline));
+        }
+      },
     );
   }
 

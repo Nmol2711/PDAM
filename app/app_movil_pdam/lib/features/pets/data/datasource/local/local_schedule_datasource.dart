@@ -7,17 +7,25 @@ abstract class LocalScheduleDatasource {
   Future<List<Schedule>> getLocalSchedules({int? petId});
   Future<void> cacheSchedules(List<Schedule> schedules);
   Future<void> saveLocalSchedule(Schedule schedule, {bool isSynced = true});
+  Future<void> deleteLocalSchedule(int scheduleId);
 }
 
 class LocalScheduleDatasourceImpl implements LocalScheduleDatasource {
+  final String? testDirectory;
+
+  LocalScheduleDatasourceImpl({this.testDirectory});
+
+  Future<Isar> _getIsar() async {
+    return await IsarService.init(directory: testDirectory);
+  }
+
   @override
   Future<List<Schedule>> getLocalSchedules({int? petId}) async {
-    final isar = await IsarService.init();
-    var query = isar.localSchedules.where();
-    List<LocalSchedule> localSchedules = await query.findAll();
+    final isar = await _getIsar();
+    List<LocalSchedule> localSchedules = await isar.localSchedules.where().findAll();
 
     if (petId != null) {
-      localSchedules = localSchedules.where((s) => s.petRemoteId == petId).toList();
+      localSchedules = localSchedules.where((ls) => ls.petRemoteId == petId).toList();
     }
 
     return localSchedules
@@ -32,7 +40,7 @@ class LocalScheduleDatasourceImpl implements LocalScheduleDatasource {
 
   @override
   Future<void> cacheSchedules(List<Schedule> schedules) async {
-    final isar = await IsarService.init();
+    final isar = await _getIsar();
     await isar.writeTxn(() async {
       for (final schedule in schedules) {
         final existing = await isar.localSchedules.filter().remoteIdEqualTo(schedule.id).findFirst();
@@ -57,7 +65,7 @@ class LocalScheduleDatasourceImpl implements LocalScheduleDatasource {
 
   @override
   Future<void> saveLocalSchedule(Schedule schedule, {bool isSynced = true}) async {
-    final isar = await IsarService.init();
+    final isar = await _getIsar();
     await isar.writeTxn(() async {
       final existing = schedule.id > 0 
           ? await isar.localSchedules.filter().remoteIdEqualTo(schedule.id).findFirst()
@@ -71,6 +79,19 @@ class LocalScheduleDatasourceImpl implements LocalScheduleDatasource {
       local.updatedAt = DateTime.now();
       local.isSynced = isSynced;
       await isar.localSchedules.put(local);
+    });
+  }
+
+  @override
+  Future<void> deleteLocalSchedule(int scheduleId) async {
+    final isar = await _getIsar();
+    await isar.writeTxn(() async {
+      final existing = await isar.localSchedules.filter().remoteIdEqualTo(scheduleId).findFirst();
+      if (existing != null) {
+        await isar.localSchedules.delete(existing.id);
+      } else {
+        await isar.localSchedules.delete(scheduleId);
+      }
     });
   }
 }

@@ -128,18 +128,7 @@ class _LogsViewState extends State<LogsView> {
 
           // --- LISTA DE LOGS ---
           Expanded(
-            child: BlocConsumer<LogBloc, LogState>(
-              listener: (context, state) {
-                if (state is LogLoaded && state.isOffline) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Los registros se reflejarán cuando haya conexión con el servidor'),
-                      backgroundColor: Colors.orange,
-                      duration: Duration(seconds: 4),
-                    ),
-                  );
-                }
-              },
+            child: BlocBuilder<LogBloc, LogState>(
               builder: (context, state) {
                 if (state is LogLoading) {
                   return const Center(child: CircularProgressIndicator());
