@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:app_movil_pdam/core/offline/isar_service.dart';
 import 'package:app_movil_pdam/core/offline/models/local_pet.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
@@ -33,7 +32,10 @@ class LocalPetDatasourceImpl implements LocalPetDatasource {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
       for (final pet in pets) {
-        final existing = await isar.localPets.filter().remoteIdEqualTo(pet.id).findFirst();
+        final existing = await isar.localPets
+            .filter()
+            .remoteIdEqualTo(pet.id)
+            .findFirst();
         final local = existing ?? LocalPet();
         local.remoteId = pet.id;
         local.userId = 'default_user';
@@ -54,7 +56,10 @@ class LocalPetDatasourceImpl implements LocalPetDatasource {
   Future<void> saveLocalPet(Pet pet, {bool isSynced = true}) async {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
-      final existing = await isar.localPets.filter().remoteIdEqualTo(pet.id).findFirst();
+      final existing = await isar.localPets
+          .filter()
+          .remoteIdEqualTo(pet.id)
+          .findFirst();
       final local = existing ?? LocalPet();
       local.remoteId = pet.id > 0 ? pet.id : null;
       local.userId = 'default_user';
@@ -74,7 +79,10 @@ class LocalPetDatasourceImpl implements LocalPetDatasource {
   Future<void> deleteLocalPet(int petId) async {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
-      final existing = await isar.localPets.filter().remoteIdEqualTo(petId).findFirst();
+      final existing = await isar.localPets
+          .filter()
+          .remoteIdEqualTo(petId)
+          .findFirst();
       if (existing != null) {
         await isar.localPets.delete(existing.id);
       } else {

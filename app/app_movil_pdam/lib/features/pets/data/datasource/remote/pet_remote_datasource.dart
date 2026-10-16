@@ -6,7 +6,6 @@ import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/features/pets/data/models/pet_model.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
-import 'package:dartz/dartz.dart';
 
 import 'package:dio/dio.dart';
 
@@ -123,7 +122,10 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
       if (name != null) formDataMap['name'] = name;
       if (species != null) formDataMap['species'] = species.name;
       if (birthDate != null) {
-        formDataMap['birth_date'] = birthDate.toIso8601String().split('T').first;
+        formDataMap['birth_date'] = birthDate
+            .toIso8601String()
+            .split('T')
+            .first;
       }
       if (weight != null) formDataMap['weight'] = weight.toString();
       if (reproductiveStatus != null) {
@@ -142,9 +144,7 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
       final response = await _dioClient.dio.put(
         '${ApiConstants.pet}$petId',
         data: formData,
-        options: Options(
-          contentType: 'multipart/form-data',
-        ),
+        options: Options(contentType: 'multipart/form-data'),
       );
       return PetModel.fromJson(response.data);
     } on DioException catch (e) {
@@ -157,9 +157,7 @@ class PetRemoteDatasourceImpl implements PetRemoteDatasource {
   @override
   Future<bool> deletePet(int petId) async {
     try {
-      final response = await _dioClient.dio.delete(
-        '${ApiConstants.pet}$petId',
-      );
+      final response = await _dioClient.dio.delete('${ApiConstants.pet}$petId');
       if (response.statusCode == 200) {
         return true;
       } else {

@@ -3,15 +3,14 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-* #### Dirección MAC Única por Dispensador (`specs/003-mac-unica-dispensador`) — **Completado y Corregido (Desactivación y Eliminación Offline en UI)**
-  * Especificación actualizada e implementada al 100%: alta, cambio de MAC, desactivación y eliminación exigen conexión obligatoria.
-  * Corregido `PetDetailView` y `DispenserBloc`: al intentar desactivar o eliminar sin conexión, el BLoC emite `DispenserFailure` conservando el dispensador en el estado (`dispenser: _lastLoadedDispenser`) para evitar que la UI borre la tarjeta visualmente, y `PetDetailView` muestra correctamente el componente reutilizable `AppNoticeDialog`.
-  * Pruebas completas: 52 pytest y 98 flutter test en verde. Flutter analyze limpio en `lib/`.
+* #### Compilación APK Release y Pruebas Isar en Flutter — **Completado con Éxito**
+  * Solucionado el error de compilación `verifyReleaseResources` (`lStar not found`) en `:isar_flutter_libs` actualizando `compileSdk = 36` en `app/build.gradle.kts` y configurando un hook `afterEvaluate` en `build.gradle.kts` para forzar `compileSdk = 36` en todos los submódulos.
+  * APK compilado exitosamente: `build/app/outputs/flutter-apk/app-release.apk (81.5MB)`.
+  * Pruebas completas: 52 pytest y 98 flutter test en verde (100%).
 
 ## Decisiones (y por qué)
-- Preservar la base de datos local Isar en logout para cumplir estrictamente con el principio Offline-First.
-- Validación de cambio de usuario en `UserRepositoriesImpl.login` para limpiar Isar únicamente cuando cambia el email.
-- Unicidad de MAC garantizada tanto a nivel de servicio como de base de datos con `mac_normalized`.
+- Forzar `compileSdk = 36` a nivel global y de submódulos para resolver referencias a atributos nuevos (`lStar`) en dependencias nativas como Isar.
+- Usar `Isar.initializeIsarCore(download: true)` en tests.
 
 ## Aprendizajes y errores a evitar
 - Nunca vaciar bases de datos locales en operaciones de cierre de sesión ordinarias.

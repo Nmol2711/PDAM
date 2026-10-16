@@ -46,10 +46,8 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     Emitter<ScheduleState> emit,
   ) async {
     final currentState = state;
-    List<Schedule> currentSchedules = [];
     bool isOffline = false;
     if (currentState is ScheduleLoaded) {
-      currentSchedules = List.from(currentState.schedules);
       isOffline = currentState.isOffline;
     }
 
@@ -59,20 +57,19 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
       event.amount,
       event.petId,
     );
-    result.fold(
-      (failure) => emit(ScheduleError(message: failure.message)),
-      (schedule) {
-        if (currentState is ScheduleLoaded) {
-          final updatedSchedules = List<Schedule>.from(currentState.schedules);
-          if (!updatedSchedules.any((s) => s.id == schedule.id)) {
-            updatedSchedules.add(schedule);
-          }
-          emit(ScheduleLoaded(schedules: updatedSchedules, isOffline: isOffline));
-        } else {
-          emit(ScheduleLoaded(schedules: [schedule], isOffline: isOffline));
+    result.fold((failure) => emit(ScheduleError(message: failure.message)), (
+      schedule,
+    ) {
+      if (currentState is ScheduleLoaded) {
+        final updatedSchedules = List<Schedule>.from(currentState.schedules);
+        if (!updatedSchedules.any((s) => s.id == schedule.id)) {
+          updatedSchedules.add(schedule);
         }
-      },
-    );
+        emit(ScheduleLoaded(schedules: updatedSchedules, isOffline: isOffline));
+      } else {
+        emit(ScheduleLoaded(schedules: [schedule], isOffline: isOffline));
+      }
+    });
   }
 
   Future<void> _onScheduleCreateMultipleRequested(
@@ -134,7 +131,12 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     final result = await _getSchedulesUc();
     result.fold(
       (failure) => emit(ScheduleError(message: failure.message)),
-      (fetchResult) => emit(ScheduleLoaded(schedules: fetchResult.schedules, isOffline: fetchResult.isOffline)),
+      (fetchResult) => emit(
+        ScheduleLoaded(
+          schedules: fetchResult.schedules,
+          isOffline: fetchResult.isOffline,
+        ),
+      ),
     );
   }
 
@@ -146,7 +148,12 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     final result = await _getSchedulesByPetUc(event.petId);
     result.fold(
       (failure) => emit(ScheduleError(message: failure.message)),
-      (fetchResult) => emit(ScheduleLoaded(schedules: fetchResult.schedules, isOffline: fetchResult.isOffline)),
+      (fetchResult) => emit(
+        ScheduleLoaded(
+          schedules: fetchResult.schedules,
+          isOffline: fetchResult.isOffline,
+        ),
+      ),
     );
   }
 
@@ -165,7 +172,12 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     );
     result.fold(
       (failure) => emit(ScheduleError(message: failure.message)),
-      (fetchResult) => emit(ScheduleLoaded(schedules: fetchResult.schedules, isOffline: fetchResult.isOffline)),
+      (fetchResult) => emit(
+        ScheduleLoaded(
+          schedules: fetchResult.schedules,
+          isOffline: fetchResult.isOffline,
+        ),
+      ),
     );
   }
 
@@ -179,11 +191,10 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
       time: event.time,
       amount: event.amount,
     );
-    result.fold(
-      (failure) => emit(ScheduleError(message: failure.message)),
-      (_) {
-        add(ScheduleListPetRequested(petId: event.petId));
-      },
-    );
+    result.fold((failure) => emit(ScheduleError(message: failure.message)), (
+      _,
+    ) {
+      add(ScheduleListPetRequested(petId: event.petId));
+    });
   }
 }

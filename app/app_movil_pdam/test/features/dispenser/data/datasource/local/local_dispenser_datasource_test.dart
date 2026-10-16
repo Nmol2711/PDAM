@@ -16,7 +16,10 @@ void main() {
 
   setUpAll(() async {
     try {
-      await Isar.initializeIsarCore();
+      await Isar.initializeIsarCore(download: true);
+      final warmupDir = await Directory.systemTemp.createTemp('isar_warmup_');
+      await IsarService.init(directory: warmupDir.path);
+      await warmupDir.delete(recursive: true);
     } catch (_) {}
   });
 
