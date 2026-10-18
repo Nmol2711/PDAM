@@ -48,9 +48,8 @@ DeviceState currentState = STATE_CHECK_NVS;
 // Callbacks para recepcion de caracteristicas BLE
 class ProvisioningCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic *pCharacteristic) {
-    std::string value = pCharacteristic->getValue();
-    if (value.length() > 0) {
-      String rxValue = String(value.c_str());
+    String rxValue = pCharacteristic->getValue();
+    if (rxValue.length() > 0) {
       if (pCharacteristic->getUUID().equals(BLEUUID(CHARACTERISTIC_UUID_SSID))) {
         receivedSsid = rxValue;
         Serial.print("SSID recibido via BLE: ");
