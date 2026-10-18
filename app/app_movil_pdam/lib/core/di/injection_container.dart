@@ -57,6 +57,11 @@ import 'package:app_movil_pdam/features/logs/domain/repository/log_repositories.
 import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
+import 'package:app_movil_pdam/features/dispensers/data/datasources/dispensers_local_datasource.dart';
+import 'package:app_movil_pdam/features/dispensers/data/services/ble_provisioning_service.dart';
+import 'package:app_movil_pdam/features/dispensers/data/repositories/dispensers_repository_impl.dart';
+import 'package:app_movil_pdam/features/dispensers/domain/repositories/dispensers_repository.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 
@@ -288,6 +293,23 @@ Future<void> setup() async {
 
   sl.registerLazySingleton(
     () => LogBloc(getLogsUc: sl<GetLogsUc>()),
+  );
+
+  // Feature Dispensers (BLE Provisioning)
+  sl.registerLazySingleton<DispensersLocalDatasource>(
+    () => DispensersLocalDatasource(),
+  );
+  sl.registerLazySingleton<BleProvisioningService>(
+    () => BleProvisioningService(),
+  );
+  sl.registerLazySingleton<DispensersRepository>(
+    () => DispensersRepositoryImpl(
+      localDatasource: sl<DispensersLocalDatasource>(),
+      bleService: sl<BleProvisioningService>(),
+    ),
+  );
+  sl.registerFactory(
+    () => DispensersBloc(repository: sl<DispensersRepository>()),
   );
 
   sl.registerFactory(

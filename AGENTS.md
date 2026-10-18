@@ -120,17 +120,30 @@ Sistema encargado de dispensadar alimento seco para mascotas (Perros y Gatos). P
 
    - Componentes: ServoMotor MG966R, Aplificador HX711, Celda de carga 5gm.
 
-   - proyecto-esp32/
-     ├── include/              # (Opcional en PlatformIO) Archivos de cabecera globales (.h)
-     ├── src/                  # Código fuente principal
-     │   ├── config/           # Credenciales WiFi, pines GPIO y constantes globales
-     │   ├── drivers/          # Capa de hardware (baja abstracción)
-     │   ├── services/         # Lógica de negocio y conectividad
-     │   ├── tasks/            # Tareas concurrentes (FreeRTOS) o hilos de ejecución
-     │   └── main.cpp          # Punto de entrada (inicialización y loop principal)
-     ├── lib/                  # Librerías locales o personalizadas del proyecto
-     ├── test/                 # Pruebas unitarias para el ESP32
-     └── platformio.ini        # Archivo de configuración (si usas PlatformIO / VS Code)
+   - sketch_jul3a/
+      ├── sketch_jul3a.ino             <-- Punto de entrada principal (setup y loop)
+      ├── test/
+      └── src/
+        ├── config/
+        ├── drivers/
+        ├── services/
+        └── tasks/
+
+   - **`sketch_jul3a/`**: Carpeta raíz del proyecto. Su nombre debe coincidir exactamente con el archivo `.ino` principal.
+
+   - **`sketch_jul3a.ino`**: Punto de entrada del programa. Debe contener únicamente la inicialización (`setup()`), el bucle principal (`loop()`) e incluir los módulos necesarios de la carpeta `src/`.
+
+   - **`test/`**: Scripts de pruebas unitarias y de integración para validar las funciones del proyecto.
+
+   - **`src/`**: Contenedor obligatorio para subcarpetas de código modular en el IDE de Arduino.
+
+   - **`src/config/`**: Definiciones de pines GPIO, constantes globales y credenciales.
+
+   - **`src/drivers/`**: Capa de abstracción para el control directo de sensores y actuadores.
+
+   - **`src/services/`**: Lógica principal del sistema y comunicaciones.
+
+   - **`src/tasks/`**: Manejo de tareas en segundo plano o multihilo con FreeRTOS.
 
 ## Arquitecturas
 

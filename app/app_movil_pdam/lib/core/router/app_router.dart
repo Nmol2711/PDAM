@@ -15,6 +15,10 @@ import 'package:app_movil_pdam/features/auth/presentation/views/register_view.da
 import 'package:app_movil_pdam/features/logs/presentation/views/logs_view.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/views/dashboard_view.dart';
 import 'package:app_movil_pdam/features/home/presentation/views/home_view.dart';
+import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_device.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/views/dispensers_page.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/views/ble_scan_page.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/views/wifi_provisioning_page.dart';
 
 // Importamos el Bloc y el puente que creamos
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
@@ -110,6 +114,27 @@ class AppRouter {
               GoRoute(
                 path: '/logs',
                 builder: (context, state) => LogsView(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/dispensers',
+                builder: (context, state) => const DispensersPage(),
+                routes: [
+                  GoRoute(
+                    path: 'scan',
+                    builder: (context, state) => const BleScanPage(),
+                  ),
+                  GoRoute(
+                    path: 'provision',
+                    builder: (context, state) {
+                      final device = state.extra as ScannedDevice;
+                      return WifiProvisioningPage(device: device);
+                    },
+                  ),
+                ],
               ),
             ],
           ),
