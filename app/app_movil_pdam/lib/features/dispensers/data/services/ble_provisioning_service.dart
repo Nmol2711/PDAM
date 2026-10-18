@@ -57,7 +57,7 @@ class BleProvisioningService {
     targetDevice ??= BluetoothDevice(remoteId: DeviceIdentifier(deviceId));
 
     // Connect
-    await targetDevice.connect(timeout: const Duration(seconds: 15));
+    await targetDevice.connect(license: License.nonprofit, timeout: const Duration(seconds: 15));
 
     try {
       // Discover services
