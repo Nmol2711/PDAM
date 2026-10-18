@@ -48,6 +48,7 @@ class Dispenser(Base):
     mac_normalized = Column(String, nullable=True, unique=True, index=True)
     is_active = Column(Boolean, default=True)
     pending_dispensing = Column(Boolean, default=False, nullable=False)
+    pending_wifi_reset = Column(Boolean, default=False, nullable=False)
 
     pet_id = Column(
         Integer,

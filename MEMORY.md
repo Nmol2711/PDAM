@@ -3,19 +3,20 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-* #### Compilación APK Release y Pruebas Isar en Flutter — **Completado con Éxito**
-  * Solucionado el error de compilación `verifyReleaseResources` (`lStar not found`) en `:isar_flutter_libs` actualizando `compileSdk = 36` en `app/build.gradle.kts` y configurando un hook `afterEvaluate` en `build.gradle.kts` para forzar `compileSdk = 36` en todos los submódulos.
-  * APK compilado exitosamente: `build/app/outputs/flutter-apk/app-release.apk (81.5MB)`.
-  * Pruebas completas: 52 pytest y 98 flutter test en verde (100%).
+* #### Spec 005 (Aprovisionamiento WiFi por Bluetooth) — **En Progreso (Tareas T1 y T2 completadas)**
+  * T1: Definidos modelos y esquemas Pydantic para dispensadores y reseteo WiFi (`api/app/schemas/dispenser.py`).
+  * T2: Implementado servicio `reset_wifi_credentials` y endpoint `/dispensers/{id}/reset-wifi` en FastAPI (RF-09).
+  * Todos los tests de backend (`pytest`) pasan exitosamente (54/54).
 
 ## Decisiones (y por qué)
-- Forzar `compileSdk = 36` a nivel global y de submódulos para resolver referencias a atributos nuevos (`lStar`) en dependencias nativas como Isar.
-- Usar `Isar.initializeIsarCore(download: true)` en tests.
+- Modularización de esquemas Pydantic de dispensadores en `api/app/schemas/dispenser.py` manteniendo compatibilidad con `schemas.py`.
+- Inclusión del campo `pending_wifi_reset` en el modelo `Dispenser` con migración automática SQLite en `database.py`.
+- Cobertura de pruebas unitarias y de integración para el reseteo de WiFi (`TestDispenserWiFiReset`).
 
 ## Aprendizajes y errores a evitar
 - Nunca vaciar bases de datos locales en operaciones de cierre de sesión ordinarias.
-- Las migraciones en SQLite se hacen en el listener `connect`. Las críticas (`mac_normalized`) propagan `RuntimeError`.
+- Las migraciones en SQLite se hacen en el listener `connect`.
 - `scrollable: true` en `AlertDialog` y constraints explícitas (`BoxConstraints`) para evitar overflow con fuentes grandes.
 
 ## Próximos pasos
-- Spec 003 totalmente completada. Preparado para siguientes requerimientos del sistema.
+- Continuar con la tarea T3 (Hardware ESP32: gestión WiFi y NVS).

@@ -92,6 +92,15 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         except Exception:
             pass
 
+        try:
+            cursor.execute("PRAGMA table_info(dispensers)")
+            dispenser_cols = [row[1] for row in cursor.fetchall()]
+            if dispenser_cols and 'pending_wifi_reset' not in dispenser_cols:
+                cursor.execute("ALTER TABLE dispensers ADD COLUMN pending_wifi_reset BOOLEAN DEFAULT 0")
+                dbapi_connection.commit()
+        except Exception:
+            pass
+
         # A diferencia de la migración de `logs`, aquí los errores no se silencian:
         # una colisión de MAC debe detener el arranque en lugar de dejar la base
         # de datos sin la garantía de unicidad.

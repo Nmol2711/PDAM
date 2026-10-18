@@ -240,3 +240,32 @@ def delete_dispenser(db:Session, pet_id:int) -> bool:
         db.rollback()
         print("Error fue: ",str(e))
         return False
+
+
+def reset_wifi_credentials(
+    db: Session,
+    dispenser_id: int
+) -> schemas.DispenserWiFiResetResponse:
+    dispenser_db = db.query(models.Dispenser).filter(models.Dispenser.id == dispenser_id).first()
+    if not dispenser_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún dispensador con el ID {dispenser_id}."
+        )
+
+    dispenser_db.pending_wifi_reset = True
+    try:
+        db.commit()
+        db.refresh(dispenser_db)
+        return schemas.DispenserWiFiResetResponse(
+            success=True,
+            message="Orden de reseteo de credenciales WiFi enviada exitosamente al dispensador.",
+            dispenser_id=dispenser_db.id,
+            mac_address=dispenser_db.mac_address
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al procesar el reseteo de WiFi: {str(e)}"
+        )

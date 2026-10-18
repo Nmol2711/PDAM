@@ -907,5 +907,37 @@ class TestContratoDeErroresYCodigosHttp(BaseDispenserApiTests):
         )
 
 
+class TestDispenserWiFiReset(BaseDispenserApiTests):
+    """Pruebas unitarias y de integración para el reseteo de WiFi del dispensador (RF-09)."""
+
+    def test_reset_wifi_exitoso(self):
+        response = self.client.post(f"/dispensers/{self.dispensador.id}/reset-wifi")
+        self.assertEqual(
+            response.status_code,
+            200,
+            f"El reseteo de WiFi debe retornar 200. Cuerpo: {response.text}",
+        )
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["dispenser_id"], self.dispensador.id)
+        self.assertEqual(data["mac_address"], MAC_REGISTRADA)
+        self.assertTrue(data["message"])
+
+        sesion = SessionLocal()
+        try:
+            disp_db = sesion.query(models.Dispenser).filter(models.Dispenser.id == self.dispensador.id).first()
+            self.assertTrue(disp_db.pending_wifi_reset)
+        finally:
+            sesion.close()
+
+    def test_reset_wifi_dispensador_no_encontrado(self):
+        response = self.client.post("/dispensers/99999/reset-wifi")
+        self.assertEqual(
+            response.status_code,
+            404,
+            f"Debe retornar 404 para dispensador inexistente. Cuerpo: {response.text}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
