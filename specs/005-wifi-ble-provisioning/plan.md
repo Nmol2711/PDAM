@@ -14,7 +14,7 @@ La implementación del aprovisionamiento WiFi por BLE abarca tres capas principa
 
 3. **Frontend (Flutter + BLoC + GoRouter + Isar):**
    - **Componentes afectados:** `app/app_movil_pdam/lib/features/dispensers/` (Clean Architecture: `domain`, `data`, `presentation`), integración en `GoRouter`, y almacenamiento local con Isar (`Offline-First`).
-   - **Responsabilidad:** Proveer una sección dedicada "Dispensadores" en la navegación principal, escanear dispositivos BLE cercanos (`flutter_blue_plus`), mostrar advertencias técnicas sobre la limitación de redes de **2.4GHz**, enviar credenciales mediante características GATT, y reflejar el estado de conexión.
+   - **Responsabilidad:** Proveer una sección dedicada "Dispensadores" en la navegación principal, verificar el estado del Bluetooth (`FlutterBluePlus.adapterStateNow`), escanear dispositivos BLE cercanos con filtrado robusto por prefijo `PDAM-Config-*`, permitir la cancelación del escaneo en tiempo real (`FlutterBluePlus.stopScan()`), mostrar advertencias técnicas sobre la limitación de redes de **2.4GHz**, enviar credenciales mediante características GATT, y reflejar el estado de conexión.
 
 ---
 
@@ -33,8 +33,8 @@ La implementación del aprovisionamiento WiFi por BLE abarca tres capas principa
 ### Fase 3: Frontend (Flutter)
 - **Estructura Clean Architecture (`features/dispensers/`):**
   - `domain/entities/dispenser.dart`, `domain/repositories/dispenser_repository.dart`, `domain/usecases/`
-  - `data/models/dispenser_model.dart`, `data/datasources/dispenser_local_datasource_isar.dart`, `data/datasources/dispenser_remote_datasource.dart`, `data/repositories/dispenser_repository_impl.dart`, `data/services/ble_provisioning_service.dart`
-  - `presentation/bloc/dispenser_bloc.dart`, `presentation/views/dispensers_page.dart`, `presentation/views/ble_scan_page.dart`, `presentation/views/wifi_provisioning_page.dart`
+  - `data/models/dispenser_model.dart`, `data/datasources/dispenser_local_datasource_isar.dart`, `data/datasources/dispenser_remote_datasource.dart`, `data/repositories/dispenser_repository_impl.dart`, `data/services/ble_provisioning_service.dart` (incluyendo verificación de estado de Bluetooth con `FlutterBluePlus.adapterStateNow`, filtrado robusto por prefijo `PDAM-Config-*`, y control de cancelación mediante `FlutterBluePlus.stopScan()`).
+  - `presentation/bloc/dispenser_bloc.dart`, `presentation/views/dispensers_page.dart`, `presentation/views/ble_scan_page.dart` (con botón de parada/cancelación en tiempo real), `presentation/views/wifi_provisioning_page.dart`
 - **Integración GoRouter:** Añadir la ruta `/dispensers` y sus subrutas en la navegación principal.
 - **Offline-First con Isar:** Persistencia local de dispensadores registrados para disponibilidad sin conexión.
 - **UI & Tema:** Uso de paleta de colores global, componentes limpios (sin lógica de negocio en vistas), advertencia clara de 2.4GHz, y textos completamente en español.
@@ -44,7 +44,7 @@ La implementación del aprovisionamiento WiFi por BLE abarca tres capas principa
 ## 3. Decisiones Técnicas y Alternativas Descartadas
 
 * **Decisión 1:** Uso de `flutter_blue_plus` para la gestión BLE en Flutter.
-  - *Alternativa descartada:* Bibliotecas BLE discontinuadas o propietarias complejas. `flutter_blue_plus` ofrece mantenimiento activo, soporte multiplataforma robusto y control preciso de características GATT.
+  - *Alternativa descartada:* Bibliotecas BLE discontinuadas o propietarias complejas. `flutter_blue_plus` ofrece mantenimiento activo, soporte multiplataforma robusto y control preciso de características GATT, así como manejo nativo de estado de adaptador (`adapterStateNow`), parada de escaneo (`stopScan()`) y filtrado por nombre publicitado.
 * **Decisión 2:** Transmisión de credenciales WiFi en texto plano sobre canal GATT BLE local.
   - *Alternativa descartada:* Cifrado asimétrico complejo en microcontrolador de recursos limitados (ESP32) para aprovisionamiento inicial. Se justifica por la restricción física obligatoria (el usuario debe estar a menos de 5 metros del dispositivo), cumpliendo con el estándar de la industria IoT (Wi-Fi Provisioning BLE).
 * **Decisión 3:** Restricción estricta a redes de 2.4GHz en el ESP32 y advertencia prominente en la App.
@@ -57,7 +57,8 @@ La implementación del aprovisionamiento WiFi por BLE abarca tres capas principa
 | Requisito Funcional | Componente Afectado | Tipo de Prueba | Herramienta / Framework | Caso de Prueba Asociado |
 |---------------------|---------------------|----------------|--------------------------|-------------------------|
 | **RF-01** | Frontend (GoRouter / Navigation) | Prueba de Widget / Integración | `flutter test` | CP-05 |
-| **RF-02** | Frontend (BLE Service / BLoC) | Prueba Unitaria / Mock BLE | `flutter_test`, Mockito | CP-01 |
+| **RF-02** | Frontend (BLE Service / BLoC - Estado BT & Filtrado `PDAM-Config-*`) | Prueba Unitaria / Mock BLE | `flutter_test`, Mockito | CP-01 |
+| **RF-02.1**| Frontend (BLE Service / UI - Cancelación de Escaneo) | Prueba de Widget / Integración | `flutter test` | CP-01 |
 | **RF-03** | Frontend (BLE Service) | Prueba de Integración / Mock | `flutter test` | CP-01 |
 | **RF-04** | Frontend (UI / Provisioning View) | Prueba de Widget | `flutter test` | CP-02 |
 | **RF-05** | Frontend (BLE Service) | Prueba de Integración | `flutter test` | CP-03 |

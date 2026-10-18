@@ -43,40 +43,66 @@ class _BleScanPageState extends State<BleScanPage> {
         builder: (context, state) {
           if (state is BleScanningState) {
             final devices = state.scannedDevices;
-            if (devices.isEmpty) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 24),
-                    Text('Buscando dispensadores cercanos (PDAM-Config-[...])...'),
-                    SizedBox(height: 8),
-                    Text(
-                      'Asegúrate de que el dispositivo esté en modo de configuración.',
-                      style: TextStyle(color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+            return Column(
+              children: [
+                Expanded(
+                  child: devices.isEmpty
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(24.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 24),
+                                Text(
+                                  'Buscando dispensadores cercanos (PDAM-Config-*)...',
+                                  textAlign: TextAlign.center,
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Asegúrate de que el dispositivo esté encendido y en modo de configuración.',
+                                  style: TextStyle(color: Colors.grey),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: devices.length,
+                          itemBuilder: (context, index) {
+                            final device = devices[index];
+                            return ListTile(
+                              leading: const Icon(Icons.bluetooth),
+                              title: Text(device.name),
+                              subtitle: Text('ID / MAC: ${device.remoteId} (RSSI: ${device.rssi})'),
+                              trailing: ElevatedButton(
+                                onPressed: () {
+                                  context.read<DispensersBloc>().add(StopScanBleEvent());
+                                  context.go('/dispensers/provision', extra: device);
+                                },
+                                child: const Text('Conectar'),
+                              ),
+                            );
+                          },
+                        ),
                 ),
-              );
-            }
-            return ListView.builder(
-              itemCount: devices.length,
-              itemBuilder: (context, index) {
-                final device = devices[index];
-                return ListTile(
-                  leading: const Icon(Icons.bluetooth),
-                  title: Text(device.name),
-                  subtitle: Text('ID / MAC: ${device.remoteId} (RSSI: ${device.rssi})'),
-                  trailing: ElevatedButton(
-                    onPressed: () {
-                      context.go('/dispensers/provision', extra: device);
-                    },
-                    child: const Text('Conectar'),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        context.read<DispensersBloc>().add(StopScanBleEvent());
+                        context.pop();
+                      },
+                      icon: const Icon(Icons.cancel),
+                      label: const Text('Cancelar Escaneo'),
+                    ),
                   ),
-                );
-              },
+                ),
+              ],
             );
           }
           if (state is DispensersErrorState) {

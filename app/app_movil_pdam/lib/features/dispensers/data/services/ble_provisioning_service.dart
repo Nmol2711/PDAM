@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_device.dart';
@@ -19,25 +20,41 @@ class BleProvisioningService {
   }
 
   Stream<List<ScannedDevice>> scanDevices() async* {
-    // Check if bluetooth is supported / on
+    // Check if bluetooth is supported
     if (await FlutterBluePlus.isSupported == false) {
-      throw Exception('Bluetooth no es soportado en este dispositivo');
+      throw Exception('Bluetooth no es soportado en este dispositivo.');
+    }
+
+    // Check if bluetooth is on, try to turn on or throw descriptive error
+    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+      try {
+        if (Platform.isAndroid) {
+          await FlutterBluePlus.turnOn();
+        }
+      } catch (_) {
+        throw Exception('El Bluetooth está desactivado. Por favor, actívalo en la configuración de tu teléfono para buscar dispensadores.');
+      }
+      // Wait briefly for adapter to turn on
+      await Future.delayed(const Duration(seconds: 1));
+      if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+        throw Exception('El Bluetooth está desactivado. Por favor, enciende el Bluetooth para continuar.');
+      }
     }
 
     // Request runtime permissions for BLE scanning and connection
     await _requestPermissions();
 
     // Start scanning
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
 
     try {
       await for (final scanResults in FlutterBluePlus.scanResults) {
         final filtered = <ScannedDevice>[];
         for (final r in scanResults) {
           final name = r.device.platformName.isNotEmpty ? r.device.platformName : r.advertisementData.advName;
-          if (name.startsWith('PDAM-Config-[')) {
+          if (name.startsWith('PDAM-Config-') || name.contains('PDAM-Config')) {
             filtered.add(ScannedDevice(
-              name: name,
+              name: name.isNotEmpty ? name : 'PDAM-Config-Device',
               remoteId: r.device.remoteId.toString(),
               rssi: r.rssi,
             ));

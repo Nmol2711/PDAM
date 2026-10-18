@@ -16,11 +16,13 @@ El objetivo de esta especificación es definir los requisitos funcionales, no fu
 ## Historias de usuario
 
 * **HU-1.** Como usuario, quiero navegar a una sección dedicada a "Dispensadores" en la barra de navegación principal para ver mis dispensadores registrados y buscar nuevos dispositivos cercanos por Bluetooth.
-* **HU-2.** Como usuario, quiero que la aplicación escanee y encuentre dispensadores cercanos que estén en modo de configuración (anunciándose con el prefijo `PDAM-Config-[MAC]`) para seleccionarlos e iniciar la configuración WiFi.
+* **HU-2.** Como usuario, quiero que la aplicación escanee y encuentre dispensadores cercanos que estén en modo de configuración mediante un filtrado robusto de dispositivos cuyo nombre publicitado comience con `PDAM-Config-` (ej. `PDAM-Config-[MAC]` o variantes con guion/asterisk).
 * **HU-3.** Como usuario, quiero ser advertido claramente de que el dispensador solo soporta redes WiFi de **2.4GHz**, para evitar intentar conectarlo a redes de 5GHz que no son compatibles.
 * **HU-4.** Como usuario, quiero ingresar el SSID y la contraseña de mi red WiFi y enviarlos al dispensador seleccionado mediante BLE de forma sencilla y directa.
 * **HU-5.** Como usuario, quiero recibir confirmación visual cuando el dispensador se haya conectado exitosamente al WiFi y haya apagado su radio BLE.
 * **HU-6.** Como administrador o usuario avanzado, quiero contar con un endpoint en la API backend que permita ordenar al dispensador borrar sus credenciales WiFi actuales de la NVS y reiniciar en modo de aprovisionamiento BLE.
+* **HU-7.** Como usuario, quiero que la aplicación verifique si el Bluetooth está encendido al intentar escanear o aprovisionar, indicándome y solicitándome que lo encienda si se encuentra desactivado.
+* **HU-8.** Como usuario, quiero poder cancelar el escaneo BLE de manera fluida y en cualquier momento desde la interfaz.
 
 ## Definiciones
 
@@ -33,7 +35,8 @@ El objetivo de esta especificación es definir los requisitos funcionales, no fu
 ## Requisitos funcionales (EARS)
 
 * **RF-01 (Sección de Dispensadores en Navegación):** EL SISTEMA debe incluir una nueva sección denominada **"Dispensadores"** en la barra de navegación principal de la aplicación móvil, accesible mediante GoRouter, donde se listen los dispensadores registrados y se permita acceder al escáner BLE.
-* **RF-02 (Escáner BLE de Dispensadores Cercanos):** CUANDO el usuario acceda a la función de búsqueda de dispositivos en la sección de Dispensadores, EL SISTEMA (empleando `flutter_blue_plus`) debe escanear y listar los dispositivos BLE cercanos cuyo nombre publicitado comience con el prefijo `PDAM-Config-[` (siguiendo el patrón `PDAM-Config-[MAC]`).
+* **RF-02 (Verificación de Bluetooth, Escaneo BLE y Filtrado Robusto):** CUANDO el usuario acceda a la función de búsqueda de dispositivos en la sección de Dispensadores, EL SISTEMA debe comprobar el estado del Bluetooth del dispositivo móvil; SI el Bluetooth está desactivado, ENTONCES EL SISTEMA debe indicar y solicitar al usuario que lo encienda. SI el Bluetooth está activo, EL SISTEMA debe iniciar el escaneo y listar los dispositivos BLE cercanos cuyo nombre publicitado comience con el prefijo `PDAM-Config-` (incluyendo variantes como `PDAM-Config-[MAC]` o formatos con guiones y asteriscos), filtrando otros dispositivos ajenos.
+* **RF-02.1 (Cancelación de Escaneo en Tiempo Real):** MIENTRAS el escaneo BLE esté en curso, EL SISTEMA debe proporcionar un control interactivo en la interfaz para permitir al usuario cancelar dicho escaneo de manera fluida e inmediata en cualquier momento.
 * **RF-03 (Selección de Dispositivo y Conexión BLE):** CUANDO el usuario seleccione un dispensador de la lista de escaneo BLE, EL SISTEMA debe establecer una conexión GATT con el ESP32 seleccionado.
 * **RF-04 (Advertencia de Restricción de 2.4GHz):** EL SISTEMA debe mostrar de forma prominente en la interfaz de aprovisionamiento WiFi una advertencia técnica indicando que el dispensador ESP32 **solo es compatible con redes WiFi de 2.4GHz** y no soporta bandas de 5GHz.
 * **RF-05 (Envío de Credenciales WiFi vía BLE):** CUANDO el usuario introduzca el SSID y la contraseña de la red WiFi y pulse el botón de envío, EL SISTEMA debe transmitir dichos valores a través de las características GATT correspondientes del servicio de aprovisionamiento del ESP32.
@@ -69,7 +72,7 @@ El objetivo de esta especificación es definir los requisitos funcionales, no fu
 
 ## Casos de prueba requeridos
 
-* **CP-01 (Escaneo BLE):** Verificar que la app detecta correctamente los dispositivos con prefijo `PDAM-Config-[MAC]` y filtra otros dispositivos Bluetooth ajenos.
+* **CP-01 (Verificación de Bluetooth, Escaneo Robusto y Cancelación):** Verificar que la app comprueba el estado del Bluetooth (solicitando su activación si está apagado), filtra robustamente dispositivos con el prefijo `PDAM-Config-*` (incluyendo variantes), y permite cancelar el escaneo en tiempo real de forma fluida.
 * **CP-02 (Advertencia de 2.4GHz):** Comprobar que la UI muestra de forma visible y clara la advertencia sobre la incompatibilidad con redes de 5GHz.
 * **CP-03 (Envío y Persistencia BLE):** Validar que la escritura de SSID y Password a través de las características GATT del ESP32 resulta en el almacenamiento exitoso en NVS y el apagado del radio BLE en el hardware.
 * **CP-04 (Fallo de Red y Reapertura BLE):** Simular credenciales incorrectas y comprobar que el ESP32 reabre el modo BLE de aprovisionamiento automáticamente.
