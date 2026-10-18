@@ -6,6 +6,7 @@ import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
+import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_event.dart';
 import 'package:app_movil_pdam/utils/app_bloc_observer.dart';
