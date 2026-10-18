@@ -308,7 +308,7 @@ Future<void> setup() async {
       bleService: sl<BleProvisioningService>(),
     ),
   );
-  sl.registerFactory(
+  sl.registerLazySingleton(
     () => DispensersBloc(repository: sl<DispensersRepository>()),
   );
 

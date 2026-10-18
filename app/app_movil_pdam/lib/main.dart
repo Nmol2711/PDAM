@@ -6,7 +6,8 @@ import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
-import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_event.dart';
 import 'package:app_movil_pdam/utils/app_bloc_observer.dart';
 import 'package:flutter/material.dart';
 
@@ -40,6 +41,9 @@ class MainApp extends StatelessWidget {
           create: (context) => di.sl<DispenserBloc>(),
         ),
         BlocProvider<LogBloc>(create: (context) => di.sl<LogBloc>()),
+        BlocProvider<DispensersBloc>(
+          create: (context) => di.sl<DispensersBloc>()..add(LoadDispensersEvent()),
+        ),
         BlocProvider<ThemeCubit>(create: (context) => di.sl<ThemeCubit>()),
       ],
 
