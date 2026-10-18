@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_device.dart';
 
 class BleProvisioningService {
@@ -9,11 +10,22 @@ class BleProvisioningService {
   static const String ssidCharacteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a6";
   static const String passwordCharacteristicUuid = "1eb67500-8e45-4df9-bffd-a3e973e87c0e";
 
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.locationWhenInUse,
+    ].request();
+  }
+
   Stream<List<ScannedDevice>> scanDevices() async* {
     // Check if bluetooth is supported / on
     if (await FlutterBluePlus.isSupported == false) {
       throw Exception('Bluetooth no es soportado en este dispositivo');
     }
+
+    // Request runtime permissions for BLE scanning and connection
+    await _requestPermissions();
 
     // Start scanning
     await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
@@ -43,6 +55,8 @@ class BleProvisioningService {
     required String ssid,
     required String password,
   }) async {
+    await _requestPermissions();
+
     BluetoothDevice? targetDevice;
     
     // Find device in connected or scan results
