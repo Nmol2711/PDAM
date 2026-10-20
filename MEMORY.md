@@ -3,23 +3,23 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-* #### Spec 006 (Interfaz de Dispositivos, Visualización de Dispensadores Vinculados y Gestión de Credenciales WiFi) — **Completado, Robustecido y Verificado con Éxito**
-  * Mejora en `BleProvisioningService.scanDevices()`: espera reactiva al estado del adaptador Bluetooth (`FlutterBluePlus.adapterState` con timeout) en lugar de lectura sincrónica inmediata que fallaba cuando el Bluetooth ya estaba encendido.
-  * Verificado con `flutter test` (103/103 tests verdes) y `pytest` (54/54 tests verdes).
-* #### Spec 005 (Aprovisionamiento WiFi por Bluetooth y Gestión de Dispensadores) — **Completado con Éxito**
-  * T1 & T2: Backend implementado y verificado (`pytest` 54/54 verde).
-  * T3 & T4: Firmware ESP32 implementado con NVS, máquina de estados, servidor GATT BLE (`PDAM-Config-[MAC]`), apagado automático de BLE al conectar, restricción a 2.4GHz y sin emojis.
-  * T6 - T9: Frontend en Flutter (`features/dispensers/`) con Clean Architecture, GoRouter, servicio BLE (`flutter_blue_plus`), vistas con advertencia prominente de redes de 2.4GHz, persistencia Isar (Offline-First) y pruebas unitarias/widgets (103/103 tests verdes).
-  * T10: Verificación integral finalizada (54 pytest y 103 flutter test al 100% en verde).
+* #### Spec 007 (Sistema de Estimación de Alimento Restante Sin Sensor y Notificaciones In-App Reutilizables) — **Completado y Verificado al 100% (T1 a T9)**
+  * T1 & T2: Backend implementado con campo `current_food_grams`, validación de límite de 5kg y descuento automático. `pytest` pasando 58/58 en verde.
+  * T3: Entidad de dominio `DispenserFoodStatus` y funciones puras de conversión (g/kg con límite 5kg) y cálculo de raciones (`calculateRemainingRations`, `convertAndValidateRefill`, `applyDispensationDiscount`) con tests unitarios en verde.
+  * T4: Modelo Isar `LocalDispenser` actualizado con `currentFoodGrams` y `isOfflineCached`, con estrategia *Offline-First* en `DispensersRepositoryImpl`.
+  * T5: Componente reutilizable `InAppNotificationBanner` y barra de progreso minimalista `DispenserFoodProgressBar` con cambio a color de advertencia cuando < 20%.
+  * T6: `DispensersBloc` actualizado con eventos y manejadores de reabastecimiento (`RefillFoodEvent`) y descuento de stock.
+  * T7: Interfaz de usuario (`DeviceCardWidget`, modales de reabastecimiento con selección g/kg y validación de 5kg, "más detalles" de raciones y banner no invasivo de sincronización local).
+  * `flutter test` pasando 108/108 tests en verde.
 
 ## Decisiones (y por qué)
-- Modularización de esquemas Pydantic en `api/app/schemas/dispenser.py` y campo `pending_wifi_reset` en modelo ORM.
-- Uso de `flutter_blue_plus` en Flutter por su robustez y mantenimiento activo.
-- Advertencia técnica prominente en UI sobre la incompatibilidad del ESP32 con redes de 5GHz.
+* Uso de Isar y arquitectura Offline-First para persistencia local de stock de alimento.
+* Notificaciones in-app locales y modulares en lugar de servicios push externos (cumpliendo RNF-3).
+* Validación matemática estricta de 5,000 g (5 kg) en reabastecimientos.
 
 ## Aprendizajes y errores a evitar
-- El ESP32 opera estrictamente en 2.4GHz; la app y el firmware deben advertir y restringir acorde a esta limitación de hardware.
-- Cumplimiento riguroso de la regla "sin emojis" en código y comentarios.
+* Ejecutar build_runner siempre que se modifiquen modelos de Isar (`LocalDispenser`).
+* Mantener textos en español y diseño Material 3 acorde a la constitución del proyecto.
 
 ## Próximos pasos
-- Spec 005 totalmente finalizada y probada. Preparado para siguientes requerimientos del sistema.
+* T8 (Pruebas unitarias y de widgets en Flutter adicionales) y T9 (Verificación integral).

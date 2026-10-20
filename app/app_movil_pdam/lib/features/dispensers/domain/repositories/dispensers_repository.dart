@@ -4,6 +4,8 @@ import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_devic
 abstract class DispensersRepository {
   Future<List<DispenserEntity>> getLocalDispensers();
   Future<void> saveLocalDispenser(DispenserEntity dispenser);
+  Future<void> refillFood(String dispenserId, double grams);
+  Future<void> discountFood(String dispenserId, double grams);
   Stream<List<ScannedDevice>> scanBleDispensers();
   Future<void> connectAndProvisionBle({
     required String deviceId,

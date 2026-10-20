@@ -27,6 +27,16 @@ class MockDispensersRepository implements DispensersRepository {
   }
 
   @override
+  Future<void> refillFood(String dispenserId, double grams) async {
+    if (shouldFail) throw Exception('Error al reabastecer');
+  }
+
+  @override
+  Future<void> discountFood(String dispenserId, double grams) async {
+    if (shouldFail) throw Exception('Error al descontar');
+  }
+
+  @override
   Stream<List<ScannedDevice>> scanBleDispensers() async* {
     if (shouldFail) {
       throw Exception('Error de escaneo');
@@ -74,6 +84,7 @@ void main() {
               name: 'Dispensador 1',
               isConnected: true,
               wifiSsid: 'HomeWiFi',
+              isOfflineCached: false,
             ),
           ],
         ),
@@ -91,6 +102,7 @@ void main() {
                 name: 'Dispensador 1',
                 isConnected: true,
                 wifiSsid: 'HomeWiFi',
+                isOfflineCached: false,
               ),
             ],
           ),

@@ -16,6 +16,9 @@ class LocalDispenser {
   late bool isActive;
   late bool pendingDispensing;
 
+  double currentFoodGrams = 5000.0;
+  bool isOfflineCached = false;
+
   late DateTime updatedAt;
   late bool isSynced;
 }

@@ -49,6 +49,7 @@ class Dispenser(Base):
     is_active = Column(Boolean, default=True)
     pending_dispensing = Column(Boolean, default=False, nullable=False)
     pending_wifi_reset = Column(Boolean, default=False, nullable=False)
+    current_food_grams = Column(Float, default=5000.0, nullable=False)
 
     pet_id = Column(
         Integer,

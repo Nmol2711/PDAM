@@ -55,7 +55,8 @@ def create_new_dispenser(
         mac_address=new_dispenser.mac_address,
         mac_normalized=mac_normalizada,
         pet_id=new_dispenser.pet_id,
-        is_active=True
+        is_active=True,
+        current_food_grams=5000.0
     )
 
     try:
@@ -160,6 +161,13 @@ def update_dispenser(
         dispenser_db.is_active = dispenser_update.is_active
     if dispenser_update.pending_dispensing is not None:
         dispenser_db.pending_dispensing = dispenser_update.pending_dispensing
+    if dispenser_update.current_food_grams is not None:
+        if dispenser_update.current_food_grams < 0 or dispenser_update.current_food_grams > 5000.0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El stock de alimento debe estar entre 0 y 5000 gramos."
+            )
+        dispenser_db.current_food_grams = dispenser_update.current_food_grams
 
     try:
         db.commit()
@@ -211,8 +219,10 @@ def check_pending_task(db: Session, mac_address: str, test:bool = False) -> dict
             return {"serve": False, "amount": 0}
             
         if not test:
-            # 3. Si todo está correcto, bajamos la bandera y confirmamos la orden
+            # 3. Si todo está correcto, bajamos la bandera, descontamos stock y confirmamos la orden
             dispenser_db.pending_dispensing = False
+            new_stock = dispenser_db.current_food_grams - schedule.amount
+            dispenser_db.current_food_grams = 0.0 if new_stock < 0 else new_stock
             db.commit()
         
         return {
@@ -221,6 +231,37 @@ def check_pending_task(db: Session, mac_address: str, test:bool = False) -> dict
         }
 
     return {"serve": False, "amount": 0}
+
+def refill_dispenser(
+    db: Session,
+    dispenser_id: int,
+    refill_data: schemas.DispenserRefillRequest
+) -> schemas.Dispenser:
+    dispenser_db = db.query(models.Dispenser).filter(models.Dispenser.id == dispenser_id).first()
+    if not dispenser_db:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún dispensador con el ID {dispenser_id}."
+        )
+    
+    grams = refill_data.amount * 1000.0 if refill_data.unit.lower() in ("kg", "kilogramos", "kilogramo") else refill_data.amount
+    if grams <= 0 or grams > 5000.0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cantidad de alimento debe ser mayor a 0 y no superar los 5000 gramos (5 kg)."
+        )
+    
+    dispenser_db.current_food_grams = grams
+    try:
+        db.commit()
+        db.refresh(dispenser_db)
+        return schemas.Dispenser.model_validate(dispenser_db)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error interno al reabastecer el dispensador: {str(e)}"
+        )
 
 def delete_dispenser(db:Session, pet_id:int) -> bool:
 

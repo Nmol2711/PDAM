@@ -5,6 +5,7 @@ import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_devic
 import 'package:app_movil_pdam/features/dispensers/domain/repositories/dispensers_repository.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_event.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_state.dart';
+import 'package:app_movil_pdam/features/dispensers/domain/entities/dispenser_food_status.dart';
 
 class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
   final DispensersRepository repository;
@@ -16,6 +17,8 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     on<StopScanBleEvent>(_onStopScanBle);
     on<ConnectAndProvisionEvent>(_onConnectAndProvision);
     on<ResetWifiEvent>(_onResetWifi);
+    on<RefillFoodEvent>(_onRefillFood);
+    on<DiscountFoodEvent>(_onDiscountFood);
     on<_ScanResultUpdatedEvent>(_onScanResultUpdated);
     on<_ScanErrorEvent>(_onScanError);
   }
@@ -89,9 +92,11 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
           name: 'Dispensador ${event.deviceId.substring(event.deviceId.length > 5 ? event.deviceId.length - 5 : 0)}',
           isConnected: true,
           wifiSsid: event.ssid,
+          currentFoodGrams: 5000.0,
         ),
       );
       emit(ProvisioningSuccessState());
+      add(LoadDispensersEvent());
     } catch (e) {
       emit(DispensersErrorState(message: 'Error al aprovisionar: ${e.toString()}'));
     }
@@ -106,6 +111,33 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
       add(LoadDispensersEvent());
     } catch (e) {
       emit(DispensersErrorState(message: 'Error al resetear WiFi: ${e.toString()}'));
+    }
+  }
+
+  Future<void> _onRefillFood(
+    RefillFoodEvent event,
+    Emitter<DispensersState> emit,
+  ) async {
+    try {
+      final grams = convertAndValidateRefill(event.amount, event.unit);
+      await repository.refillFood(event.dispenserId, grams);
+      add(LoadDispensersEvent());
+    } catch (e) {
+      emit(DispensersErrorState(message: e.toString().replaceAll('Exception: ', '')));
+      add(LoadDispensersEvent());
+    }
+  }
+
+  Future<void> _onDiscountFood(
+    DiscountFoodEvent event,
+    Emitter<DispensersState> emit,
+  ) async {
+    try {
+      await repository.discountFood(event.dispenserId, event.dispensedGrams);
+      add(LoadDispensersEvent());
+    } catch (e) {
+      emit(DispensersErrorState(message: e.toString().replaceAll('Exception: ', '')));
+      add(LoadDispensersEvent());
     }
   }
 

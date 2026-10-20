@@ -54,6 +54,7 @@ from app.schemas.dispenser import (
     DispenserCreate,
     DispenserUpdate,
     Dispenser,
+    DispenserRefillRequest,
     DispenserWiFiResetRequest,
     DispenserWiFiResetResponse,
 )

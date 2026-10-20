@@ -5,7 +5,7 @@ from app.core.security import verify_secret_key_qr
 from app.db.database import get_db
 from app.api.deps import CurrentUser
 
-from app.schemas.schemas import DispenserCreate, User, Dispenser, DispenserUpdate, DispenserAssociation, DispenserWiFiResetResponse
+from app.schemas.schemas import DispenserCreate, User, Dispenser, DispenserUpdate, DispenserAssociation, DispenserWiFiResetResponse, DispenserRefillRequest
 
 from app.services import pet_service, dispenser_service
 from app.models import models
@@ -125,3 +125,24 @@ def reset_dispenser_wifi(
         user_id=current_user.id
     )
     return dispenser_service.reset_wifi_credentials(db=db, dispenser_id=id)
+
+
+@router.post("/{dispenser_id}/refill", response_model=Dispenser)
+def refill_dispenser_endpoint(
+    current_user: CurrentUser,
+    dispenser_id: int,
+    refill_request: DispenserRefillRequest,
+    db: Session = Depends(get_db)
+):
+    dispenser = db.query(models.Dispenser).filter(models.Dispenser.id == dispenser_id).first()
+    if not dispenser:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No se encontró ningún dispensador con el ID {dispenser_id}."
+        )
+    pet_service.obtener_mascota_por_id(
+        db=db,
+        pet_id=dispenser.pet_id,
+        user_id=current_user.id
+    )
+    return dispenser_service.refill_dispenser(db=db, dispenser_id=dispenser_id, refill_data=refill_request)

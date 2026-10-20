@@ -36,3 +36,31 @@ class ResetWifiEvent extends DispensersEvent {
   @override
   List<Object?> get props => [dispenserId];
 }
+
+class RefillFoodEvent extends DispensersEvent {
+  final String dispenserId;
+  final double amount;
+  final String unit;
+
+  const RefillFoodEvent({
+    required this.dispenserId,
+    required this.amount,
+    required this.unit,
+  });
+
+  @override
+  List<Object?> get props => [dispenserId, amount, unit];
+}
+
+class DiscountFoodEvent extends DispensersEvent {
+  final String dispenserId;
+  final double dispensedGrams;
+
+  const DiscountFoodEvent({
+    required this.dispenserId,
+    required this.dispensedGrams,
+  });
+
+  @override
+  List<Object?> get props => [dispenserId, dispensedGrams];
+}

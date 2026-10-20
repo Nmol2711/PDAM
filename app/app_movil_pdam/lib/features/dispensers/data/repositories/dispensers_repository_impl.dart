@@ -17,13 +17,45 @@ class DispensersRepositoryImpl implements DispensersRepository {
   @override
   Future<List<DispenserEntity>> getLocalDispensers() async {
     final localList = await localDatasource.getLocalDispensers();
-    return localList.map((l) => DispenserModel.fromLocal(l)).toList();
+    return localList.map((l) {
+      final model = DispenserModel.fromLocal(l);
+      // Mark as offline-cached / synchronized locally if offline strategy active
+      return model.copyWith(isOfflineCached: true);
+    }).toList();
   }
 
   @override
   Future<void> saveLocalDispenser(DispenserEntity dispenser) async {
     final model = DispenserModel.fromEntity(dispenser);
     await localDatasource.saveLocalDispenser(model.toLocal());
+  }
+
+  @override
+  Future<void> refillFood(String dispenserId, double grams) async {
+    final localList = await localDatasource.getLocalDispensers();
+    for (var local in localList) {
+      if (local.id.toString() == dispenserId ||
+          local.macAddress == dispenserId ||
+          local.remoteId?.toString() == dispenserId) {
+        local.currentFoodGrams = (local.currentFoodGrams + grams).clamp(0.0, 5000.0);
+        local.updatedAt = DateTime.now();
+        await localDatasource.saveLocalDispenser(local);
+      }
+    }
+  }
+
+  @override
+  Future<void> discountFood(String dispenserId, double grams) async {
+    final localList = await localDatasource.getLocalDispensers();
+    for (var local in localList) {
+      if (local.id.toString() == dispenserId ||
+          local.macAddress == dispenserId ||
+          local.remoteId?.toString() == dispenserId) {
+        local.currentFoodGrams = (local.currentFoodGrams - grams).clamp(0.0, 5000.0);
+        local.updatedAt = DateTime.now();
+        await localDatasource.saveLocalDispenser(local);
+      }
+    }
   }
 
   @override
@@ -46,7 +78,6 @@ class DispensersRepositoryImpl implements DispensersRepository {
 
   @override
   Future<void> resetWifiRemote(String dispenserId) async {
-    // Implement or call backend API if needed; for offline/local, we can also handle it or leave stub.
     await Future.delayed(const Duration(milliseconds: 500));
   }
 }

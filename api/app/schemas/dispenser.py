@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 class DispenserBase(BaseModel):
@@ -22,11 +22,20 @@ class DispenserUpdate(BaseModel):
     mac_address: Optional[str] = None
     is_active: Optional[bool] = None
     pending_dispensing: Optional[bool] = None
+    current_food_grams: Optional[float] = None
 
 class Dispenser(DispenserBase):
     id: int
     is_active: bool
     pending_dispensing: bool
+    current_food_grams: float = 5000.0
+
+    class Config:
+        from_attributes = True
+
+class DispenserRefillRequest(BaseModel):
+    amount: float = Field(..., gt=0)
+    unit: str = Field(default="g")
 
     class Config:
         from_attributes = True

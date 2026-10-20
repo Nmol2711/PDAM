@@ -8,6 +8,8 @@ class DispenserModel extends DispenserEntity {
     required super.name,
     super.isConnected,
     super.wifiSsid,
+    super.currentFoodGrams,
+    super.isOfflineCached,
   });
 
   factory DispenserModel.fromLocal(LocalDispenser local) {
@@ -17,6 +19,8 @@ class DispenserModel extends DispenserEntity {
       name: 'Dispensador ${local.macAddress}',
       isConnected: local.isActive,
       wifiSsid: null,
+      currentFoodGrams: local.currentFoodGrams,
+      isOfflineCached: local.isOfflineCached,
     );
   }
 
@@ -26,6 +30,8 @@ class DispenserModel extends DispenserEntity {
       ..macAddress = macAddress
       ..isActive = isConnected
       ..pendingDispensing = false
+      ..currentFoodGrams = currentFoodGrams
+      ..isOfflineCached = isOfflineCached
       ..updatedAt = DateTime.now()
       ..isSynced = true;
     return local;
@@ -38,6 +44,8 @@ class DispenserModel extends DispenserEntity {
       name: entity.name,
       isConnected: entity.isConnected,
       wifiSsid: entity.wifiSsid,
+      currentFoodGrams: entity.currentFoodGrams,
+      isOfflineCached: entity.isOfflineCached,
     );
   }
 }
