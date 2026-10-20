@@ -3,6 +3,9 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
+* #### Spec 006 (Interfaz de Dispositivos, Visualización de Dispensadores Vinculados y Gestión de Credenciales WiFi) — **Completado, Robustecido y Verificado con Éxito**
+  * Mejora en `BleProvisioningService.scanDevices()`: espera reactiva al estado del adaptador Bluetooth (`FlutterBluePlus.adapterState` con timeout) en lugar de lectura sincrónica inmediata que fallaba cuando el Bluetooth ya estaba encendido.
+  * Verificado con `flutter test` (103/103 tests verdes) y `pytest` (54/54 tests verdes).
 * #### Spec 005 (Aprovisionamiento WiFi por Bluetooth y Gestión de Dispensadores) — **Completado con Éxito**
   * T1 & T2: Backend implementado y verificado (`pytest` 54/54 verde).
   * T3 & T4: Firmware ESP32 implementado con NVS, máquina de estados, servidor GATT BLE (`PDAM-Config-[MAC]`), apagado automático de BLE al conectar, restricción a 2.4GHz y sin emojis.

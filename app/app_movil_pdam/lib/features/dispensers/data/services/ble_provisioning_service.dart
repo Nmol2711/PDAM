@@ -25,24 +25,37 @@ class BleProvisioningService {
       throw Exception('Bluetooth no es soportado en este dispositivo.');
     }
 
+    // Request runtime permissions for BLE scanning and connection FIRST
+    await _requestPermissions();
+
     // Check if bluetooth is on, try to turn on or throw descriptive error
-    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+    BluetoothAdapterState currentState = FlutterBluePlus.adapterStateNow;
+    if (currentState != BluetoothAdapterState.on) {
+      try {
+        currentState = await FlutterBluePlus.adapterState
+            .timeout(const Duration(seconds: 2))
+            .firstWhere((state) => state == BluetoothAdapterState.on)
+            .catchError((_) => FlutterBluePlus.adapterStateNow);
+      } catch (_) {}
+    }
+
+    if (currentState != BluetoothAdapterState.on) {
       try {
         if (Platform.isAndroid) {
           await FlutterBluePlus.turnOn();
+          currentState = await FlutterBluePlus.adapterState
+              .timeout(const Duration(seconds: 3))
+              .firstWhere((state) => state == BluetoothAdapterState.on)
+              .catchError((_) => FlutterBluePlus.adapterStateNow);
         }
       } catch (_) {
         throw Exception('El Bluetooth está desactivado. Por favor, actívalo en la configuración de tu teléfono para buscar dispensadores.');
       }
-      // Wait briefly for adapter to turn on
-      await Future.delayed(const Duration(seconds: 1));
-      if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
-        throw Exception('El Bluetooth está desactivado. Por favor, enciende el Bluetooth para continuar.');
-      }
     }
 
-    // Request runtime permissions for BLE scanning and connection
-    await _requestPermissions();
+    if (currentState != BluetoothAdapterState.on) {
+      throw Exception('El Bluetooth está desactivado. Por favor, enciende el Bluetooth para continuar.');
+    }
 
     // Start scanning
     await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));

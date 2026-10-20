@@ -13,15 +13,28 @@ class BleScanPage extends StatefulWidget {
 }
 
 class _BleScanPageState extends State<BleScanPage> {
+  late DispensersBloc _dispensersBloc;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _dispensersBloc = context.read<DispensersBloc>();
+  }
+
   @override
   void initState() {
     super.initState();
-    context.read<DispensersBloc>().add(StartScanBleEvent());
+    // Use stored reference or context safely in initState
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _dispensersBloc.add(StartScanBleEvent());
+      }
+    });
   }
 
   @override
   void dispose() {
-    context.read<DispensersBloc>().add(StopScanBleEvent());
+    _dispensersBloc.add(StopScanBleEvent());
     super.dispose();
   }
 

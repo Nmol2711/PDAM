@@ -14,7 +14,7 @@ class MainNavigationShell extends StatelessWidget {
         final isWideScreen = constraints.maxWidth >= 600;
 
         if (isWideScreen) {
-          const titles = ['Inicio', 'Mascotas', 'Historial', 'Dispensadores'];
+          const titles = ['Inicio', 'Mascotas', 'Historial', 'Dispositivos'];
           final currentTitle = titles[navigationShell.currentIndex];
 
           return Scaffold(
@@ -60,7 +60,7 @@ class MainNavigationShell extends StatelessWidget {
                 NavigationDrawerDestination(
                   icon: Icon(Icons.router_outlined),
                   selectedIcon: Icon(Icons.router),
-                  label: Text('Dispensadores'),
+                  label: Text('Dispositivos'),
                 ),
               ],
             ),
@@ -99,7 +99,7 @@ class MainNavigationShell extends StatelessWidget {
               BottomNavigationBarItem(
                 icon: Icon(Icons.router_outlined),
                 activeIcon: Icon(Icons.router),
-                label: 'Dispensadores',
+                label: 'Dispositivos',
               ),
             ],
           ),
