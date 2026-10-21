@@ -3,7 +3,7 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-* #### Spec 007 (Sistema de Estimación de Alimento Restante Sin Sensor y Notificaciones In-App Reutilizables) — **Completado y Verificado al 100% (T1 a T9)**
+* #### Spec 007 (Sistema de Estimación de Alimento Restante Sin Sensor y Notificaciones In-App Reutilizables) — **Completado y Refinado al 100%**
   * T1 & T2: Backend implementado con campo `current_food_grams`, validación de límite de 5kg y descuento automático. `pytest` pasando 58/58 en verde.
   * T3: Entidad de dominio `DispenserFoodStatus` y funciones puras de conversión (g/kg con límite 5kg) y cálculo de raciones (`calculateRemainingRations`, `convertAndValidateRefill`, `applyDispensationDiscount`) con tests unitarios en verde.
   * T4: Modelo Isar `LocalDispenser` actualizado con `currentFoodGrams` y `isOfflineCached`, con estrategia *Offline-First* en `DispensersRepositoryImpl`.
