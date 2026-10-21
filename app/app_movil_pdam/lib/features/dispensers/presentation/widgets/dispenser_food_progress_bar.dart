@@ -37,7 +37,9 @@ class DispenserFoodProgressBar extends StatelessWidget {
               ),
             ),
             Text(
-              '${currentFoodGrams.toStringAsFixed(0)} g (${percentage.toStringAsFixed(0)}%)',
+              currentFoodGrams >= 1000
+                  ? '${(currentFoodGrams / 1000).toStringAsFixed(1)} kg / ${(maxCapacityGrams / 1000).toStringAsFixed(0)} kg (${percentage.toStringAsFixed(0)}%)'
+                  : '${currentFoodGrams.toStringAsFixed(0)} g / ${maxCapacityGrams.toStringAsFixed(0)} g (${percentage.toStringAsFixed(0)}%)',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,

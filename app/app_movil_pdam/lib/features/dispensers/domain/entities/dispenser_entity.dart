@@ -6,6 +6,7 @@ class DispenserEntity {
   final String? wifiSsid;
   final double currentFoodGrams;
   final bool isOfflineCached;
+  final int? petId;
 
   const DispenserEntity({
     required this.id,
@@ -15,6 +16,7 @@ class DispenserEntity {
     this.wifiSsid,
     this.currentFoodGrams = 5000.0,
     this.isOfflineCached = false,
+    this.petId,
   });
 
   DispenserEntity copyWith({
@@ -25,6 +27,7 @@ class DispenserEntity {
     String? wifiSsid,
     double? currentFoodGrams,
     bool? isOfflineCached,
+    int? petId,
   }) {
     return DispenserEntity(
       id: id ?? this.id,
@@ -34,6 +37,7 @@ class DispenserEntity {
       wifiSsid: wifiSsid ?? this.wifiSsid,
       currentFoodGrams: currentFoodGrams ?? this.currentFoodGrams,
       isOfflineCached: isOfflineCached ?? this.isOfflineCached,
+      petId: petId ?? this.petId,
     );
   }
 }

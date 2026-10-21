@@ -10,6 +10,7 @@ class DispenserModel extends DispenserEntity {
     super.wifiSsid,
     super.currentFoodGrams,
     super.isOfflineCached,
+    super.petId,
   });
 
   factory DispenserModel.fromLocal(LocalDispenser local) {
@@ -21,12 +22,14 @@ class DispenserModel extends DispenserEntity {
       wifiSsid: null,
       currentFoodGrams: local.currentFoodGrams,
       isOfflineCached: local.isOfflineCached,
+      petId: local.petRemoteId,
     );
   }
 
   LocalDispenser toLocal() {
     final local = LocalDispenser()
       ..remoteId = int.tryParse(id)
+      ..petRemoteId = petId
       ..macAddress = macAddress
       ..isActive = isConnected
       ..pendingDispensing = false
@@ -46,6 +49,7 @@ class DispenserModel extends DispenserEntity {
       wifiSsid: entity.wifiSsid,
       currentFoodGrams: entity.currentFoodGrams,
       isOfflineCached: entity.isOfflineCached,
+      petId: entity.petId,
     );
   }
 }

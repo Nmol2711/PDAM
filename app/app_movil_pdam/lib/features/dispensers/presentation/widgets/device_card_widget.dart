@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:app_movil_pdam/core/theme/app_colors.dart';
+import 'package:app_movil_pdam/core/di/injection_container.dart';
 import 'package:app_movil_pdam/features/dispensers/domain/entities/dispenser_entity.dart';
 import 'package:app_movil_pdam/features/dispensers/domain/entities/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/widgets/dispenser_food_progress_bar.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_event.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/in_app_notification_banner.dart';
+import 'package:app_movil_pdam/features/pets/data/datasource/local/local_pet_datasource.dart';
+import 'package:app_movil_pdam/features/pets/data/datasource/local/local_schedule_datasource.dart';
+import 'package:app_movil_pdam/features/pets/domain/entity/schedule.dart';
 
 class DeviceCardWidget extends StatelessWidget {
   final DispenserEntity dispenser;
@@ -118,92 +122,126 @@ class DeviceCardWidget extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder: (context) => FutureBuilder<Map<String, dynamic>>(
+        future: _loadPetAndSchedules(),
+        builder: (context, snapshot) {
+          final petName = snapshot.data?['petName'] as String? ?? 'Sin mascota vinculada';
+          final schedules = snapshot.data?['schedules'] as List<Schedule>? ?? [];
+          final remainingRations = calculateRemainingRations(dispenser.currentFoodGrams, schedules);
+          final rationsText = schedules.isEmpty && dispenser.currentFoodGrams > 0
+              ? '${(dispenser.currentFoodGrams / 50).floor()} raciones (estimadas)'
+              : '$remainingRations raciones';
+
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Detalles de Alimento',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Detalles de Alimento',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.pop(context),
+                const Divider(),
+                const SizedBox(height: 8),
+                Text('Dispositivo: ${dispenser.name}'),
+                Text('MAC: ${dispenser.macAddress}'),
+                Text('Mascota vinculada: $petName', style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                DispenserFoodProgressBar(currentFoodGrams: dispenser.currentFoodGrams),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.restaurant_rounded,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 28,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Estimación de Suministro',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'La cantidad actual durará aproximadamente para $rationsText.',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white
+                                    : AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _showRefillDialog(context);
+                    },
+                    child: const Text('Reabastecer Depósito'),
+                  ),
                 ),
               ],
             ),
-            const Divider(),
-            const SizedBox(height: 8),
-            Text('Dispositivo: ${dispenser.name}'),
-            Text('MAC: ${dispenser.macAddress}'),
-            const SizedBox(height: 12),
-            DispenserFoodProgressBar(currentFoodGrams: dispenser.currentFoodGrams),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.restaurant_rounded,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Estimación de Suministro',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'La cantidad actual durará aproximadamente para ${(dispenser.currentFoodGrams / 50).floor()} raciones.',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.white
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _showRefillDialog(context);
-                },
-                child: const Text('Reabastecer Depósito'),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
+  }
+
+  Future<Map<String, dynamic>> _loadPetAndSchedules() async {
+    try {
+      final petDatasource = sl<LocalPetDatasource>();
+      final scheduleDatasource = sl<LocalScheduleDatasource>();
+      
+      final pets = await petDatasource.getLocalPets();
+      final pet = pets.where((p) => p.id == dispenser.petId || (dispenser.petId != null && p.remoteId == dispenser.petId)).firstOrNull;
+      
+      final petName = pet?.name ?? 'Sin mascota vinculada';
+      final petRemoteId = pet?.remoteId ?? pet?.id;
+
+      List<Schedule> schedules = [];
+      if (petRemoteId != null) {
+        schedules = await scheduleDatasource.getLocalSchedules(petId: petRemoteId);
+      }
+      return {'petName': petName, 'schedules': schedules};
+    } catch (_) {
+      return {'petName': 'Sin mascota vinculada', 'schedules': <Schedule>[]};
+    }
   }
 
   @override
