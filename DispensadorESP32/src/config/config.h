@@ -9,7 +9,7 @@
 #define CHARACTERISTIC_UUID_PASS   "1eb67500-8e45-4df9-bffd-a3e973e87c0e"
 
 // Configuración de la API
-const char* const BASE_URL = "http://10.22.168.8:8000/dispenserscheck-taks/";
+const char* const BASE_URL = "http://10.22.168.8:8000/dispensers/check-taks/";
 
 // Configuración del Hardware (ServoMotor MG966R en Pin 4)
 const int servoPin = 4;

@@ -140,6 +140,9 @@ void runBleProvisioning(String &outSsid, String &outPass) {
   Serial.println("Credenciales recibidas con exito. Guardando en NVS...");
   saveStoredCredentials(outSsid, outPass);
 
-  Serial.println("Apagando radio BLE inmediatamente tras guardar credenciales...");
+  Serial.println("Esperando 2 segundos para completar respuesta GATT BLE...");
+  delay(2000);
+
+  Serial.println("Apagando radio BLE tras guardar credenciales...");
   BLEDevice::deinit(true);
 }
