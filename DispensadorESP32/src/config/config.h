@@ -5,8 +5,8 @@
 
 // UUIDs para el servicio BLE de aprovisionamiento (RF-05, RF-06)
 #define SERVICE_UUID               "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHARACTERISTIC_UUID_SSID   "beb5483e-36e1-4688-b7f5-ea07361b26a8"
-#define CHARACTERISTIC_UUID_PASS   "1b2f0c83-6f1a-49be-938bb1262744"
+#define CHARACTERISTIC_UUID_SSID   "beb5483e-36e1-4688-b7f5-ea07361b26a6"
+#define CHARACTERISTIC_UUID_PASS   "1eb67500-8e45-4df9-bffd-a3e973e87c0e"
 
 // Configuración de la API
 const char* const BASE_URL = "http://10.22.168.8:8000/dispenserscheck-taks/";
