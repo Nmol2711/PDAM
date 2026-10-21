@@ -229,14 +229,14 @@ class DeviceCardWidget extends StatelessWidget {
       final scheduleDatasource = sl<LocalScheduleDatasource>();
       
       final pets = await petDatasource.getLocalPets();
-      final pet = pets.where((p) => p.id == dispenser.petId || (dispenser.petId != null && p.remoteId == dispenser.petId)).firstOrNull;
+      final pet = pets.where((p) => dispenser.petId != null && p.id == dispenser.petId).firstOrNull;
       
       final petName = pet?.name ?? 'Sin mascota vinculada';
-      final petRemoteId = pet?.remoteId ?? pet?.id;
+      final petId = pet?.id;
 
       List<Schedule> schedules = [];
-      if (petRemoteId != null) {
-        schedules = await scheduleDatasource.getLocalSchedules(petId: petRemoteId);
+      if (petId != null) {
+        schedules = await scheduleDatasource.getLocalSchedules(petId: petId);
       }
       return {'petName': petName, 'schedules': schedules};
     } catch (_) {
