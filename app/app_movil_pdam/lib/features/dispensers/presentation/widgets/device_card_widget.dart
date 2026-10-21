@@ -29,49 +29,52 @@ class DeviceCardWidget extends StatelessWidget {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('Reabastecer Alimento'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Dispositivo: ${dispenser.name}'),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Cantidad',
-                  hintText: selectedUnit == 'g' ? 'Ej. 1000' : 'Ej. 1.5',
-                  border: const OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Dispositivo: ${dispenser.name}'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Cantidad',
+                    hintText: selectedUnit == 'g' ? 'Ej. 1000' : 'Ej. 1.5',
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('Unidad: '),
-                  const SizedBox(width: 12),
-                  ChoiceChip(
-                    label: const Text('Gramos (g)'),
-                    selected: selectedUnit == 'g',
-                    onSelected: (selected) {
-                      if (selected) setState(() => selectedUnit = 'g');
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Kilogramos (kg)'),
-                    selected: selectedUnit == 'kg',
-                    onSelected: (selected) {
-                      if (selected) setState(() => selectedUnit = 'kg');
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Límite máximo: 5 kg (5000 g)',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 4.0,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const Text('Unidad: '),
+                    ChoiceChip(
+                      label: const Text('Gramos (g)'),
+                      selected: selectedUnit == 'g',
+                      onSelected: (selected) {
+                        if (selected) setState(() => selectedUnit = 'g');
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Kilogramos (kg)'),
+                      selected: selectedUnit == 'kg',
+                      onSelected: (selected) {
+                        if (selected) setState(() => selectedUnit = 'kg');
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Límite máximo: 5 kg (5000 g)',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -143,16 +146,48 @@ class DeviceCardWidget extends StatelessWidget {
             const SizedBox(height: 12),
             DispenserFoodProgressBar(currentFoodGrams: dispenser.currentFoodGrams),
             const SizedBox(height: 16),
-            const Text(
-              'Información de Estimación:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              '• El stock se calcula restando el gramaje consumido por dispensación o sumando el reabastecimiento manual.\n'
-              '• Límite máximo del depósito: 5,000 g (5 kg).\n'
-              '• Alerta de umbral crítico activada cuando el stock es inferior al 20% (< 1,000 g).',
-              style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.restaurant_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Estimación de Suministro',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'La cantidad actual durará aproximadamente para ${(dispenser.currentFoodGrams / 50).floor()} raciones.',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             SizedBox(
