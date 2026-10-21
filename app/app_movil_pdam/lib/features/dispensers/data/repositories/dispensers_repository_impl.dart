@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/constant/api_constants.dart';
+import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/features/dispensers/data/datasources/dispensers_local_datasource.dart';
 import 'package:app_movil_pdam/features/dispensers/data/models/dispenser_model.dart';
 import 'package:app_movil_pdam/features/dispensers/data/services/ble_provisioning_service.dart';
@@ -8,10 +10,12 @@ import 'package:app_movil_pdam/features/dispensers/domain/repositories/dispenser
 class DispensersRepositoryImpl implements DispensersRepository {
   final DispensersLocalDatasource localDatasource;
   final BleProvisioningService bleService;
+  final DioClient dioClient;
 
   DispensersRepositoryImpl({
     required this.localDatasource,
     required this.bleService,
+    required this.dioClient,
   });
 
   @override
@@ -74,6 +78,10 @@ class DispensersRepositoryImpl implements DispensersRepository {
 
   @override
   Future<void> resetWifiRemote(String dispenserId) async {
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      await dioClient.dio.post('${ApiConstants.dispenser}$dispenserId/reset-wifi');
+    } catch (e) {
+      throw Exception('Error al solicitar reseteo de WiFi: ${e.toString()}');
+    }
   }
 }
