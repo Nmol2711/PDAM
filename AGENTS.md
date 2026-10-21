@@ -166,11 +166,15 @@ Sistema encargado de dispensadar alimento seco para mascotas (Perros y Gatos). P
 * **Frontend (App Móvil):**
 
   * **Iniciar aplicación:** `cd app/app_movil_pdam && flutter run --debug --host-vmservice-port=8888`
+  * **Analizar el código:** `cd app/app_movil_pdam $$ flutter analyze`
   * **Correr tests:** `cd app/app_movil_pdam && flutter test`
 
 * **Hardware (ESP32):**
 
-  * **Compilación / Pruebas:** `cd arduino/sketch_jul3a && pio test` (o compilación en Arduino IDE)
+  * **Compilación:** `cd DispensadorESP32 && pio run`
+  * **Carga el código a la placa:** `cd DispensadorESP32 && pio run --target upload`
+  * **Abrir Monitor Serial:** `cd DispensadorESP32 && pio device monitor`
+  * **Limpiar archivos de inicialización previa:** `cd DispensadorESP32 && pio run -t clean`
 
 ## Datos
 
@@ -280,3 +284,4 @@ Para asegurar la integridad de nutrientes esenciales (evitando desequilibrios po
 - Correr todos los test y asegurarse que pasen correctamente.
 - Al implementar un modulo funcional se debe preguntar si la interfaz si funciona correctamente antes de darlo por terminado.
 - Al comprobar que todo este bien subir los cambios al repositorio solo si este se a proporcionado o configurado previamente.
+- Correr el el Frontend `flutter analyze` para asegurar no tener errores de sintaxis.
