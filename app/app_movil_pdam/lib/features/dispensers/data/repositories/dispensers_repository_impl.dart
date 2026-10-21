@@ -17,11 +17,7 @@ class DispensersRepositoryImpl implements DispensersRepository {
   @override
   Future<List<DispenserEntity>> getLocalDispensers() async {
     final localList = await localDatasource.getLocalDispensers();
-    return localList.map((l) {
-      final model = DispenserModel.fromLocal(l);
-      // Mark as offline-cached / synchronized locally if offline strategy active
-      return model.copyWith(isOfflineCached: true);
-    }).toList();
+    return localList.map((l) => DispenserModel.fromLocal(l)).toList();
   }
 
   @override
@@ -37,7 +33,7 @@ class DispensersRepositoryImpl implements DispensersRepository {
       if (local.id.toString() == dispenserId ||
           local.macAddress == dispenserId ||
           local.remoteId?.toString() == dispenserId) {
-        local.currentFoodGrams = (local.currentFoodGrams + grams).clamp(0.0, 5000.0);
+        local.currentFoodGrams = grams.clamp(0.0, 5000.0);
         local.updatedAt = DateTime.now();
         await localDatasource.saveLocalDispenser(local);
       }
