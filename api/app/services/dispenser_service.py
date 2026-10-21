@@ -205,6 +205,13 @@ def check_pending_task(db: Session, mac_address: str, test:bool = False) -> dict
     if not dispenser_db.is_active:
         return {"serve": False, "amount": 0}
 
+    # Comprobar si hay orden pendiente de reseteo de WiFi
+    if dispenser_db.pending_wifi_reset:
+        if not test:
+            dispenser_db.pending_wifi_reset = False
+            db.commit()
+        return {"serve": False, "amount": 0, "reset_wifi": True}
+
     # 2. Si la app o el cron activaron la bandera pendiente...
     if dispenser_db.pending_dispensing:
         

@@ -30,7 +30,8 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     emit(DispensersLoading());
     try {
       final dispensers = await repository.getLocalDispensers();
-      emit(DispensersLoaded(dispensers: dispensers));
+      final filteredDispensers = dispensers.where((d) => d.petId != null).toList();
+      emit(DispensersLoaded(dispensers: filteredDispensers));
     } catch (e) {
       emit(DispensersErrorState(message: e.toString()));
     }

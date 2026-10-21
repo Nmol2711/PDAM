@@ -1,4 +1,5 @@
 #include "api_service.h"
+#include <Preferences.h>
 
 void checkDispenserAction(const String &serverUrl) {
   HTTPClient http;
@@ -17,9 +18,18 @@ void checkDispenserAction(const String &serverUrl) {
     DeserializationError error = deserializeJson(doc, payload);
     
     if (!error) {
-      bool serve = doc["serve"];
+      bool serve = doc["serve"] | false;
+      bool resetWifi = doc["reset_wifi"] | false;
       
-      if (serve) {
+      if (resetWifi) {
+        Serial.println("Orden recibida: [reset_wifi = true]. Borrando credenciales NVS y reiniciando en modo BLE.");
+        Preferences preferences;
+        preferences.begin("pdam_wifi", false);
+        preferences.clear();
+        preferences.end();
+        delay(500);
+        ESP.restart();
+      } else if (serve) {
         Serial.println("Orden confirmada: [serve = true]. Iniciando dispensacion.");
         dispensarAlimento();
       } else {
