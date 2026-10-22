@@ -139,6 +139,7 @@ void main() {
       );
 
       bloc.add(StartScanBleEvent());
+      await Future.delayed(const Duration(milliseconds: 600));
       await pumpEventQueue();
       await bloc.close();
     });

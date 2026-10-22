@@ -13,16 +13,20 @@ class BleProvisioningService {
 
   StreamSubscription<List<ScanResult>>? _scanSubscription;
 
+  static const Duration scanCooldown = Duration(milliseconds: 800);
+
   Future<void> stopScan() async {
     try {
       await _scanSubscription?.cancel();
       _scanSubscription = null;
       if (FlutterBluePlus.isScanningNow) {
         await FlutterBluePlus.stopScan();
+        await Future.delayed(scanCooldown);
       }
     } catch (_) {
       try {
         await FlutterBluePlus.stopScan();
+        await Future.delayed(scanCooldown);
       } catch (_) {}
     }
   }
@@ -36,9 +40,13 @@ class BleProvisioningService {
   }
 
   Stream<List<ScannedDevice>> scanDevices() async* {
-    // Note: stopScan() is called by the caller (BLoC) to manage subscription lifecycle.
-    // The generator starts directly; the finally block below will stop hardware when stream ends.
-    await Future.delayed(const Duration(milliseconds: 200));
+    // Ensure any previous scan is fully stopped and respected cooldown
+    try {
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+        await Future.delayed(scanCooldown);
+      }
+    } catch (_) {}
 
     // Check if bluetooth is supported
     if (await FlutterBluePlus.isSupported == false) {

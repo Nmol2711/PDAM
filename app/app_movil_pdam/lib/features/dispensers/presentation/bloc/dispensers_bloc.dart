@@ -44,8 +44,9 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     // 1. Cancel and clean the previous subscription completely
     await _scanSubscription?.cancel();
     _scanSubscription = null;
-    // 2. Stop the hardware scan
+    // 2. Stop the hardware scan and wait for adapter cooldown
     await repository.stopBleScan();
+    await Future.delayed(const Duration(milliseconds: 500));
     // 3. Create new subscription to restart scanning
     _scanSubscription = repository.scanBleDispensers().listen(
       (devices) {
