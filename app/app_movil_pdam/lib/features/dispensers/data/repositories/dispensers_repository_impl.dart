@@ -27,8 +27,8 @@ class DispensersRepositoryImpl implements DispensersRepository {
     final list = <DispenserModel>[];
     for (var l in localList) {
       if (l.petRemoteId == null) continue;
-      final deviceId = l.remoteId?.toString() ?? l.id.toString();
-      final mac = l.macAddress;
+      final deviceId = (l.remoteId?.toString() ?? l.id.toString()).toUpperCase();
+      final mac = l.macAddress.toUpperCase();
       String? ssid;
 
       final resultSsid = await storageService.getString('wifi_ssid_$mac');
@@ -63,8 +63,8 @@ class DispensersRepositoryImpl implements DispensersRepository {
     final model = DispenserModel.fromEntity(dispenser);
     await localDatasource.saveLocalDispenser(model.toLocal());
     if (dispenser.wifiSsid != null && dispenser.wifiSsid!.isNotEmpty) {
-      await storageService.saveString('wifi_ssid_${dispenser.macAddress}', dispenser.wifiSsid!);
-      await storageService.saveString('wifi_ssid_${dispenser.id}', dispenser.wifiSsid!);
+      await storageService.saveString('wifi_ssid_${dispenser.macAddress.toUpperCase()}', dispenser.wifiSsid!);
+      await storageService.saveString('wifi_ssid_${dispenser.id.toUpperCase()}', dispenser.wifiSsid!);
     }
   }
 
