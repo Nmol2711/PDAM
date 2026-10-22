@@ -39,6 +39,10 @@ class BleProvisioningService {
     // Cancel prior subscription and stop active scan before starting new one
     await stopScan();
 
+    // Ensure any previous scan is fully stopped
+    await stopScan();
+    await Future.delayed(const Duration(milliseconds: 200));
+
     // Check if bluetooth is supported
     if (await FlutterBluePlus.isSupported == false) {
       throw Exception('Bluetooth no es soportado en este dispositivo.');
@@ -76,8 +80,22 @@ class BleProvisioningService {
       throw Exception('El Bluetooth está desactivado. Por favor, enciende el Bluetooth para continuar.');
     }
 
-    // Start scanning
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+    // Start scanning with robust error handling for already scanning state
+    try {
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+    } catch (e) {
+      try {
+        await FlutterBluePlus.stopScan();
+        await Future.delayed(const Duration(milliseconds: 300));
+        await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+      } catch (_) {
+        // If startScan fails again, proceed to listen to scanResults in case scan is already active
+      }
+    }
 
     try {
       await for (final scanResults in FlutterBluePlus.scanResults) {
