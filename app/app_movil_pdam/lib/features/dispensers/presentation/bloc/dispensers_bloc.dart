@@ -30,10 +30,9 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     emit(DispensersLoading());
     try {
       final dispensers = await repository.getLocalDispensers();
-      final filteredDispensers = dispensers.where((d) => d.petId != null).toList();
-      emit(DispensersLoaded(dispensers: filteredDispensers));
+      emit(DispensersLoaded(dispensers: dispensers));
     } catch (e) {
-      emit(DispensersErrorState(message: e.toString()));
+      emit(DispensersErrorState(message: 'Error al cargar los dispositivos: ${e.toString()}'));
     }
   }
 

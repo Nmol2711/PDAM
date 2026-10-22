@@ -3,19 +3,8 @@
 Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo que ya no aporte.
 
 ## Estado actual
-* #### Spec 008 (Migración Arduino PlatformIO ESP32) — **Completado y Verificado**
-  * Migración exitosa del sketch monolítico a estructura modular PlatformIO (`config`, `drivers`, `services`, `tasks`, `main.cpp`).
-  * Compilación exitosa en PlatformIO (`pio run`) con partición `huge_app.csv`.
-  * Código original de Arduino preservado intacto en `arduino/sketch_jul3a/sketch_jul3a.ino` como respaldo.
-
-## Decisiones (y por qué)
-* Uso de Isar y arquitectura Offline-First.
-* Estructuración modular en PlatformIO para ESP32 desacoplando config, drivers y services.
-* Validación matemática estricta de 5,000 g (5 kg) en reabastecimientos.
-
-## Aprendizajes y errores a evitar
-* Ejecutar build_runner al modificar modelos Isar.
-* Mantener textos en español y diseño Material 3.
-
-## Próximos pasos
-* Ejecución y validación de la tarea T5 (spec 008).
+* #### Spec 009 (Corrección y Validación de Credenciales WiFi y Sincronización en App y ESP32) — **Completado y Verificado**
+  * T1 & T2 implementadas: Integración de `flutter_secure_storage` en repositorio de dispensadores y corrección de estado/sincronización en app móvil (RF-01, RNF-02, RNF-03).
+  * T3 & T4 implementadas: Validación de conectividad HTTP al endpoint raíz `/` exigiendo status `200` en el ESP32, con integración en la máquina de estados y rollback a BLE (RF-02).
+  * T5 implementada: Limpieza automática de almacenamiento NVS de credenciales obsoletas al detectar nuevo flasheo en el ESP32 (RF-03).
+  * T6, T7 & T8 ejecutadas: 108/108 pruebas unitarias y de widgets de Flutter aprobadas (`flutter test`), compilación limpia de firmware en PlatformIO (`pio run`), análisis estático sin errores y auditoría global aprobada por @reviewer.

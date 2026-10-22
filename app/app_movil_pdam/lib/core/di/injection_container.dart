@@ -307,6 +307,7 @@ Future<void> setup() async {
       localDatasource: sl<DispensersLocalDatasource>(),
       bleService: sl<BleProvisioningService>(),
       dioClient: sl<DioClient>(),
+      storageService: sl<StorageService>(),
     ),
   );
   sl.registerLazySingleton(

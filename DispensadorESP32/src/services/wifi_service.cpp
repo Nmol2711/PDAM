@@ -35,6 +35,34 @@ String getGlobalMacAddress() {
   return String(macStr);
 }
 
+void checkAndWipeNVSOnFirstBoot() {
+  Preferences systemPrefs;
+  systemPrefs.begin("pdam_system", false);
+  
+  String storedBuild = systemPrefs.getString("build_stamp", "");
+  String currentBuild = String(__DATE__) + " " + String(__TIME__);
+  
+  Serial.print("Build guardado en NVS: ");
+  Serial.println(storedBuild);
+  Serial.print("Build actual de compilacion: ");
+  Serial.println(currentBuild);
+
+  if (storedBuild != currentBuild) {
+    Serial.println("Detectado nuevo flasheo o primer arranque. Limpiando NVS de credenciales WiFi...");
+    Preferences wifiPrefs;
+    wifiPrefs.begin("pdam_wifi", false);
+    wifiPrefs.clear();
+    wifiPrefs.end();
+    
+    systemPrefs.putString("build_stamp", currentBuild);
+    Serial.println("NVS limpiado y build_stamp actualizado correctamente.");
+  } else {
+    Serial.println("Misma version de firmware detectada. Preservando credenciales NVS.");
+  }
+  
+  systemPrefs.end();
+}
+
 bool getStoredCredentials(String &ssid, String &pass) {
   Preferences preferences;
   preferences.begin("pdam_wifi", true);
@@ -84,6 +112,47 @@ void disconnectWiFi() {
 
 bool isWiFiConnected() {
   return (WiFi.status() == WL_CONNECTED);
+}
+
+bool validateServerConnectivity(const String &serverHostOrUrl) {
+  HTTPClient http;
+  String endpoint;
+  
+  if (serverHostOrUrl.startsWith("http://") || serverHostOrUrl.startsWith("https://")) {
+    int thirdSlash = serverHostOrUrl.indexOf('/', 8);
+    if (thirdSlash != -1) {
+      endpoint = serverHostOrUrl.substring(0, thirdSlash + 1);
+    } else {
+      endpoint = serverHostOrUrl;
+      if (!endpoint.endsWith("/")) {
+        endpoint += "/";
+      }
+    }
+  } else {
+    endpoint = String("http://") + serverHostOrUrl;
+    if (!endpoint.endsWith("/")) {
+      endpoint += "/";
+    }
+  }
+
+  Serial.print("Validando conectividad HTTP con servidor en: ");
+  Serial.println(endpoint);
+
+  http.begin(endpoint);
+  http.setTimeout(4000);
+  int httpCode = http.GET();
+  http.end();
+
+  Serial.print("Codigo de respuesta HTTP para root (/): ");
+  Serial.println(httpCode);
+
+  if (httpCode == 200) {
+    Serial.println("Validación HTTP exitosa (Status 200). Conectividad aprobada.");
+    return true;
+  } else {
+    Serial.println("Error: El servidor no respondió con Status 200.");
+    return false;
+  }
 }
 
 void runBleProvisioning(String &outSsid, String &outPass) {

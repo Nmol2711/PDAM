@@ -48,8 +48,15 @@ void runDispenserTask() {
         Serial.print("Direccion IP asignada al ESP32: ");
         Serial.println(WiFi.localIP());
         
-        checkDispenserAction(serverUrl);
-        currentState = STATE_NORMAL;
+        if (validateServerConnectivity(serverUrl)) {
+          Serial.println("Validación HTTP exitosa (Status 200). Entrando en estado normal.");
+          checkDispenserAction(serverUrl);
+          currentState = STATE_NORMAL;
+        } else {
+          Serial.println("Error: El servidor no respondió con Status 200 tras conectar al WiFi. Rollback a aprovisionamiento BLE.");
+          WiFi.disconnect();
+          currentState = STATE_BLE_PROVISIONING;
+        }
       } else {
         Serial.println("Error: Fallo la conexion WiFi con las credenciales actuales.");
         currentState = STATE_BLE_PROVISIONING;
@@ -87,6 +94,13 @@ void runDispenserTask() {
 
           if (WiFi.status() == WL_CONNECTED) {
             Serial.println("Reconexion WiFi exitosa.");
+            if (validateServerConnectivity(serverUrl)) {
+              Serial.println("Validación HTTP de reconexión exitosa.");
+            } else {
+              Serial.println("Error: Servidor no disponible tras reconexión WiFi. Rollback a aprovisionamiento BLE...");
+              WiFi.disconnect();
+              currentState = STATE_BLE_PROVISIONING;
+            }
           } else {
             Serial.println("Reconexion WiFi fallida. Reabriendo modo de aprovisionamiento BLE...");
             currentState = STATE_BLE_PROVISIONING;

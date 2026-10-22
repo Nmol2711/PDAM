@@ -14,7 +14,10 @@ void setup() {
 
   Serial.println("\n--- PDAM: INICIALIZANDO DISPENSADOR INTELIGENTE (ESP32 - PlatformIO) ---");
 
-  // 1. Obtener la MAC por hardware eFuse
+  // 1. Verificar y limpiar NVS en caso de nuevo flasheo o primer arranque (RF-03)
+  checkAndWipeNVSOnFirstBoot();
+
+  // 2. Obtener la MAC por hardware eFuse
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
   char macStr[18];
@@ -29,7 +32,7 @@ void setup() {
   Serial.print("URL de consulta configurada: ");
   Serial.println(serverUrl);
 
-  // 2. Inicializar driver del servomotor
+  // 3. Inicializar driver del servomotor
   initServo();
 }
 
