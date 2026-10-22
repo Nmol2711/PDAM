@@ -30,8 +30,7 @@ void main() {
 
   tearDown(() async {
     try {
-      final isar = await IsarService.init(directory: tempDir.path);
-      await isar.close();
+      await IsarService.close();
     } catch (_) {}
     if (await tempDir.exists()) {
       await tempDir.delete(recursive: true);

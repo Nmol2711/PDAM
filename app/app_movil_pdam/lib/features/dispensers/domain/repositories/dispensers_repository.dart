@@ -7,6 +7,7 @@ abstract class DispensersRepository {
   Future<void> refillFood(String dispenserId, double grams);
   Future<void> discountFood(String dispenserId, double grams);
   Stream<List<ScannedDevice>> scanBleDispensers();
+  Future<void> stopBleScan();
   Future<void> connectAndProvisionBle({
     required String deviceId,
     required String ssid,

@@ -41,6 +41,7 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     Emitter<DispensersState> emit,
   ) async {
     emit(const BleScanningState(scannedDevices: []));
+    await repository.stopBleScan();
     await _scanSubscription?.cancel();
     _scanSubscription = repository.scanBleDispensers().listen(
       (devices) {
@@ -52,11 +53,12 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     );
   }
 
-  void _onStopScanBle(
+  Future<void> _onStopScanBle(
     StopScanBleEvent event,
     Emitter<DispensersState> emit,
-  ) {
-    _scanSubscription?.cancel();
+  ) async {
+    await repository.stopBleScan();
+    await _scanSubscription?.cancel();
     _scanSubscription = null;
   }
 

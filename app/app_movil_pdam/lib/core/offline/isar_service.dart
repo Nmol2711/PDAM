@@ -8,6 +8,7 @@ import 'package:app_movil_pdam/core/offline/models/local_dispenser.dart';
 
 class IsarService {
   static Isar? _isarInstance;
+  static String? _currentDirectory;
 
   static bool isIsarStorageFullException(Object exception) {
     final message = exception.toString().toLowerCase();
@@ -28,13 +29,30 @@ class IsarService {
         message.contains('bad state');
   }
 
-  static Future<Isar> init({String? directory}) async {
-    if (_isarInstance != null && _isarInstance!.isOpen) {
-      return _isarInstance!;
+  static Future<void> close() async {
+    _currentDirectory = null;
+    if (_isarInstance != null) {
+      try {
+        if (_isarInstance!.isOpen) {
+          await _isarInstance!.close();
+        }
+      } catch (_) {}
+      _isarInstance = null;
     }
+  }
+
+  static Future<Isar> init({String? directory}) async {
     final dir = directory != null ? Directory(directory) : await getApplicationDocumentsDirectory();
+    if (_isarInstance != null && _isarInstance!.isOpen) {
+      if (_currentDirectory != dir.path) {
+        await close();
+      } else {
+        return _isarInstance!;
+      }
+    }
     
     try {
+      _currentDirectory = dir.path;
       _isarInstance = await Isar.open(
         [LocalPetSchema, LocalScheduleSchema, LocalLogSchema, LocalDispenserSchema],
         directory: dir.path,
@@ -48,6 +66,7 @@ class IsarService {
             await dir.delete(recursive: true);
             await dir.create(recursive: true);
           }
+          _currentDirectory = dir.path;
           _isarInstance = await Isar.open(
             [LocalPetSchema, LocalScheduleSchema, LocalLogSchema, LocalDispenserSchema],
             directory: dir.path,

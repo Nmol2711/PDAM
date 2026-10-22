@@ -11,6 +11,22 @@ class BleProvisioningService {
   static const String ssidCharacteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a6";
   static const String passwordCharacteristicUuid = "1eb67500-8e45-4df9-bffd-a3e973e87c0e";
 
+  StreamSubscription<List<ScanResult>>? _scanSubscription;
+
+  Future<void> stopScan() async {
+    try {
+      await _scanSubscription?.cancel();
+      _scanSubscription = null;
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+      }
+    } catch (_) {
+      try {
+        await FlutterBluePlus.stopScan();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _requestPermissions() async {
     await [
       Permission.bluetoothScan,
@@ -20,6 +36,9 @@ class BleProvisioningService {
   }
 
   Stream<List<ScannedDevice>> scanDevices() async* {
+    // Cancel prior subscription and stop active scan before starting new one
+    await stopScan();
+
     // Check if bluetooth is supported
     if (await FlutterBluePlus.isSupported == false) {
       throw Exception('Bluetooth no es soportado en este dispositivo.');

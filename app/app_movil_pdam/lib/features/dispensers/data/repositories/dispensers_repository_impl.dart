@@ -26,6 +26,7 @@ class DispensersRepositoryImpl implements DispensersRepository {
     final localList = await localDatasource.getLocalDispensers();
     final list = <DispenserModel>[];
     for (var l in localList) {
+      if (l.petRemoteId == null) continue;
       final deviceId = l.remoteId?.toString() ?? l.id.toString();
       final mac = l.macAddress;
       String? ssid;
@@ -98,6 +99,11 @@ class DispensersRepositoryImpl implements DispensersRepository {
   @override
   Stream<List<ScannedDevice>> scanBleDispensers() {
     return bleService.scanDevices();
+  }
+
+  @override
+  Future<void> stopBleScan() async {
+    await bleService.stopScan();
   }
 
   @override

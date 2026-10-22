@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_device.dart';
+import 'package:app_movil_pdam/features/dispensers/domain/entities/dispenser_entity.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
 import 'package:app_movil_pdam/features/dispensers/presentation/views/wifi_provisioning_page.dart';
+import 'package:app_movil_pdam/features/dispensers/presentation/widgets/device_card_widget.dart';
 import 'dispensers_bloc_test.dart';
 
 void main() {
@@ -33,5 +35,49 @@ void main() {
     expect(find.text('Enviar Credenciales y Conectar'), findsOneWidget);
 
     dispensersBloc.close();
+  });
+
+  testWidgets('DeviceCardWidget displays configured WiFi SSID when wifiSsid is present (RF-04)', (WidgetTester tester) async {
+    final dispenser = const DispenserEntity(
+      id: '1',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      name: 'Dispensador 1',
+      isConnected: true,
+      wifiSsid: 'HomeWiFi',
+      currentFoodGrams: 5000.0,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DeviceCardWidget(dispenser: dispenser),
+        ),
+      ),
+    );
+
+    expect(find.text('Red: HomeWiFi'), findsOneWidget);
+    expect(find.text('Aún no se han proporcionado las credenciales de wifi'), findsNothing);
+  });
+
+  testWidgets('DeviceCardWidget displays unconfigured WiFi message when wifiSsid is null or empty', (WidgetTester tester) async {
+    final dispenser = const DispenserEntity(
+      id: '1',
+      macAddress: 'AA:BB:CC:DD:EE:FF',
+      name: 'Dispensador 1',
+      isConnected: true,
+      wifiSsid: null,
+      currentFoodGrams: 5000.0,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DeviceCardWidget(dispenser: dispenser),
+        ),
+      ),
+    );
+
+    expect(find.text('Aún no se han proporcionado las credenciales de wifi'), findsOneWidget);
+    expect(find.textContaining('Red:'), findsNothing);
   });
 }

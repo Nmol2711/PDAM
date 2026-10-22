@@ -51,6 +51,9 @@ class MockDispensersRepository implements DispensersRepository {
   }
 
   @override
+  Future<void> stopBleScan() async {}
+
+  @override
   Future<void> connectAndProvisionBle({
     required String deviceId,
     required String ssid,
