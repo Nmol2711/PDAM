@@ -41,8 +41,12 @@ class DispensersBloc extends Bloc<DispensersEvent, DispensersState> {
     Emitter<DispensersState> emit,
   ) async {
     emit(const BleScanningState(scannedDevices: []));
-    await repository.stopBleScan();
+    // 1. Cancel and clean the previous subscription completely
     await _scanSubscription?.cancel();
+    _scanSubscription = null;
+    // 2. Stop the hardware scan
+    await repository.stopBleScan();
+    // 3. Create new subscription to restart scanning
     _scanSubscription = repository.scanBleDispensers().listen(
       (devices) {
         add(_ScanResultUpdatedEvent(devices));

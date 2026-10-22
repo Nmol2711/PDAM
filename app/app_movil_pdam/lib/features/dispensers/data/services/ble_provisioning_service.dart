@@ -36,11 +36,8 @@ class BleProvisioningService {
   }
 
   Stream<List<ScannedDevice>> scanDevices() async* {
-    // Cancel prior subscription and stop active scan before starting new one
-    await stopScan();
-
-    // Ensure any previous scan is fully stopped
-    await stopScan();
+    // Note: stopScan() is called by the caller (BLoC) to manage subscription lifecycle.
+    // The generator starts directly; the finally block below will stop hardware when stream ends.
     await Future.delayed(const Duration(milliseconds: 200));
 
     // Check if bluetooth is supported
