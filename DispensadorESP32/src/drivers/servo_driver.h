@@ -8,8 +8,11 @@
 // Inicializa los temporizadores PWM y asocia el servomotor al pin configurado
 void initServo();
 
-// Acciona el servomotor para dispensar alimento (mueve a 0°, espera 10 segundos, detiene a 90°)
-void dispensarAlimento();
+// Arranca el servomotor en giro continuo (0°) para dispensar alimento
+void startServo();
+
+// Detiene el servomotor (90°); es idempotente
+void stopServo();
 
 // Establece un ángulo específico en el servomotor
 void setServoAngle(int angle);

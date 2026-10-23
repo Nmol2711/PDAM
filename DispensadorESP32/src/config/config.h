@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+#include "dispensing_utils.h"
+
 // UUIDs para el servicio BLE de aprovisionamiento (RF-05, RF-06)
 #define SERVICE_UUID               "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID_SSID   "beb5483e-36e1-4688-b7f5-ea07361b26a6"
@@ -13,6 +15,15 @@ const char* const BASE_URL = "http://192.168.1.58:8000/dispenserscheck-taks/";
 
 // Configuración del Hardware (ServoMotor MG966R en Pin 4)
 const int servoPin = 4;
+
+// Celda de carga de 5 kg con amplificador HX711 (D18 y D19)
+const int hx711SckPin = 18;
+const int hx711DtPin = 19;
+
+// Calibración manual antes de compilar: magnitud positiva en cuentas ADC por
+// gramo, ajustable con un peso patrón. El signo reproduce el clásico -7050.
+const float hx711CalibrationFactor = 7050.0f;
+const float hx711RawSign = -1.0f;
 
 // Temporizador no bloqueante
 const unsigned long CHECK_INTERVAL = 20000; // 20 segundos

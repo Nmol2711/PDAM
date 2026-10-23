@@ -5,7 +5,6 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "../config/config.h"
-#include "../drivers/servo_driver.h"
 
 // Consulta el endpoint de la API para verificar si se debe dispensar alimento
 void checkDispenserAction(const String &serverUrl);

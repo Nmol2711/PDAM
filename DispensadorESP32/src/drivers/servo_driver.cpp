@@ -3,6 +3,9 @@
 // Instancia global del servomotor MG966R
 static Servo myServo;
 
+// Indica si el servomotor se encuentra en giro continuo
+static bool servoEnGiro = false;
+
 void initServo() {
   Serial.println("Inicializando temporizadores PWM y servomotor MG966R...");
   
@@ -19,14 +22,21 @@ void initServo() {
   Serial.println("Servomotor inicializado y detenido en 90° en el Pin 4.");
 }
 
-void dispensarAlimento() {
-  Serial.println("Activando motor... El tornillo sin fin esta girando.");
-  
-  myServo.write(0); 
-  delay(10000); // 10 segundos de dispensación
-  myServo.write(90); // Detener
-  
-  Serial.println("Ciclo completado. Motor detenido con exito.");
+void startServo() {
+  myServo.write(0); // Giro continuo
+  servoEnGiro = true;
+  Serial.println("Servomotor en giro continuo (0°).");
+}
+
+void stopServo() {
+  myServo.write(90); // Detenido
+
+  // Solo registra el cambio si el servo estaba girando, para que la parada
+  // sea idempotente y no repita el mensaje en llamadas consecutivas.
+  if (servoEnGiro) {
+    servoEnGiro = false;
+    Serial.println("Servomotor detenido en 90°.");
+  }
 }
 
 void setServoAngle(int angle) {

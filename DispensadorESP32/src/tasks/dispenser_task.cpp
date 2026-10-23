@@ -1,4 +1,5 @@
 #include "dispenser_task.h"
+#include "../config/dispensing_utils.h"
 #include "../services/wifi_service.h"
 #include "../services/api_service.h"
 #include <WiFi.h>
@@ -6,7 +7,6 @@
 
 static DeviceState currentState = STATE_CHECK_NVS;
 static unsigned long lastCheckTime = 0;
-static const unsigned long checkInterval = 20000; // 20 segundos
 
 extern String serverUrl;
 
@@ -51,6 +51,9 @@ void runDispenserTask() {
         if (validateServerConnectivity(serverUrl)) {
           Serial.println("Validación HTTP exitosa (Status 200). Entrando en estado normal.");
           checkDispenserAction(serverUrl);
+          // La primera consulta ya se hizo: la siguiente sera 20 s despues de
+          // terminar este ciclo (RF-13).
+          lastCheckTime = millis();
           currentState = STATE_NORMAL;
         } else {
           Serial.println("Error: El servidor no respondió con Status 200 tras conectar al WiFi. Rollback a aprovisionamiento BLE.");
@@ -72,9 +75,7 @@ void runDispenserTask() {
     }
 
     case STATE_NORMAL: {
-      if (millis() - lastCheckTime >= checkInterval) {
-        lastCheckTime = millis();
-        
+      if (dispensing::isCheckDue(lastCheckTime, millis(), CHECK_INTERVAL)) {
         if (WiFi.status() == WL_CONNECTED) {
           checkDispenserAction(serverUrl);
         } else {
@@ -106,6 +107,9 @@ void runDispenserTask() {
             currentState = STATE_BLE_PROVISIONING;
           }
         }
+        // El temporizador se reinicia DESPUES de la consulta o del intento de
+        // reconexion: la siguiente consulta sera 20 s despues del fin (RF-13).
+        lastCheckTime = millis();
       }
       break;
     }
