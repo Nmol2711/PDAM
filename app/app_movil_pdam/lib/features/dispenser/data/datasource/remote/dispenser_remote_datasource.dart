@@ -104,7 +104,7 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
   Future<Map<String, dynamic>> checkPendingTask(String macAddress) async {
     try {
       final response = await _dioClient.dio.get(
-        '${ApiConstants.dispenser}dispenserscheck-taks/$macAddress',
+        '${ApiConstants.baseUrl}/dispenserscheck-taks/$macAddress',
       );
 
       return response.data;

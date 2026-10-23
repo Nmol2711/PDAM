@@ -22,9 +22,8 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 ## Pendientes honestos
 * Probar en hardware: WiFi real, NVS y GATT BLE del ESP32.
 * Warnings/infos preexistentes de `flutter analyze`; no se introdujeron nuevos.
-* Cambios de Spec 011 y BLE de Spec 010 sin commitear (working tree amplio).
 * `guided_schedule_form_view.dart` sigue usando `ScheduleBloc` + endpoint de auto-horarios, ya respaldado por el motor único.
-* Deuda: mismatch URL ESP32↔API (`config.h` usa `.../dispenserscheck-taks/`; ruta real `/dispensers/check-taks/{mac}`).
+* Deuda: la ruta backend real es `/dispenserscheck-taks/{mac}` (path sin `/` + prefijo `/dispensers`). El ESP32 (`config.h`) coincide; el datasource Flutter `checkPendingTask` se corrigió a esa ruta. Queda normalizar el typo `taks`→`tasks` y el `/` faltante.
 
 ## Reglas y deuda vigentes
 * Offline-First: logout **no** borra Isar; nunca `clearAllData()`.
