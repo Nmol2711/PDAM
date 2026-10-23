@@ -1,4 +1,3 @@
-import 'dart:math' as Math;
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/widgets/dispenser_notice_mapper.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/pets/domain/use_case/pet/pet_wsava_limit.dart';
 import 'package:app_movil_pdam/features/pets/presentation/views/edit_pet_view.dart';
 
 class PetDetailView extends StatefulWidget {
@@ -403,47 +403,6 @@ class _PetDetailViewState extends State<PetDetailView> {
     );
   }
 
-  double _calculateWsavaDailyGrams(Pet pet, double foodKcalPerKg) {
-    final hoy = DateTime.now();
-    final edadDias = hoy.difference(pet.birthDate).inDays;
-    final edadMeses = edadDias / 30.44;
-
-    final weight = pet.weight;
-    final rer = 70 * Math.pow(weight, 0.75);
-
-    final species = pet.species.name.toLowerCase();
-    final isNeutered = pet.reproductiveStatus;
-    final isGrowth = edadMeses < 12;
-
-    double factorMer = 1.6;
-    if (species.contains('canino') || species.contains('dog')) {
-      if (isGrowth) {
-        factorMer = edadMeses < 4 ? 3.0 : 2.0;
-      } else {
-        if (isNeutered) {
-          factorMer = 1.6;
-        } else {
-          factorMer = 1.8;
-        }
-      }
-    } else {
-      if (isGrowth) {
-        factorMer = 2.5;
-      } else {
-        if (isNeutered) {
-          factorMer = 1.2;
-        } else {
-          factorMer = 1.4;
-        }
-      }
-    }
-
-    final mer = rer * factorMer;
-    final dailyKcal = mer;
-    final dailyGrams = foodKcalPerKg > 0 ? (dailyKcal / foodKcalPerKg) * 1000 : 0.0;
-    return dailyGrams;
-  }
-
   void _showAddScheduleOptionsDialog(BuildContext context, List<Schedule> existingSchedules) {
     showModalBottomSheet(
       context: context,
@@ -566,66 +525,71 @@ class _PetDetailViewState extends State<PetDetailView> {
                     final existingTotal = existingSchedules.fold(0.0, (sum, s) => sum + s.amount);
                     final totalPlanned = existingTotal + newAmount;
                     
-                    final wsavaLimitGrams = _calculateWsavaDailyGrams(widget.pet, 3850.0);
-                    final excess = totalPlanned - wsavaLimitGrams;
+                    // El motor solo soporta canino/felino (RF-2). Para otras
+                    // especies no hay límite WSAVA y no se muestra ningún aviso.
+                    final wsavaLimitGrams = petWsavaDailyLimitGrams(widget.pet);
 
-                    if (excess > 50.0) {
-                      Navigator.pop(context);
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text("⚠️ Límite WSAVA Excedido"),
-                          content: Text(
-                            "No se puede crear este horario porque excede significativamente el límite diario recomendado por WSAVA para ${widget.pet.name}.\n\n"
-                            "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
-                            "• Total con este horario: ${totalPlanned.toStringAsFixed(0)}g\n\n"
-                            "Superar este límite puede causar sobrepeso y riesgos metabólicos.",
-                          ),
-                          actions: [
-                            FilledButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text("Entendido"),
-                            ),
-                          ],
-                        ),
-                      );
-                      return;
-                    }
+                    if (wsavaLimitGrams != null) {
+                      final excess = totalPlanned - wsavaLimitGrams;
 
-                    if (excess > 0.0) {
-                      Navigator.pop(context);
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text("⚠️ Advertencia Nutricional WSAVA"),
-                          content: Text(
-                            "Esta porción supera ligeramente la recomendación diaria recomendada por WSAVA.\n\n"
-                            "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
-                            "• Total planeado: ${totalPlanned.toStringAsFixed(0)}g\n\n"
-                            "¿Deseas continuar y registrar el horario de todas formas?",
+                      if (excess > 50.0) {
+                        Navigator.pop(context);
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text("⚠️ Límite WSAVA Excedido"),
+                            content: Text(
+                              "No se puede crear este horario porque excede significativamente el límite diario recomendado por WSAVA para ${widget.pet.name}.\n\n"
+                              "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
+                              "• Total con este horario: ${totalPlanned.toStringAsFixed(0)}g\n\n"
+                              "Superar este límite puede causar sobrepeso y riesgos metabólicos.",
+                            ),
+                            actions: [
+                              FilledButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text("Entendido"),
+                              ),
+                            ],
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text("Cancelar"),
+                        );
+                        return;
+                      }
+
+                      if (excess > 0.0) {
+                        Navigator.pop(context);
+                        showDialog(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text("⚠️ Advertencia Nutricional WSAVA"),
+                            content: Text(
+                              "Esta porción supera ligeramente la recomendación diaria recomendada por WSAVA.\n\n"
+                              "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
+                              "• Total planeado: ${totalPlanned.toStringAsFixed(0)}g\n\n"
+                              "¿Deseas continuar y registrar el horario de todas formas?",
                             ),
-                            FilledButton(
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                context.read<ScheduleBloc>().add(
-                                      ScheduleCreatePressed(
-                                        petId: petId,
-                                        time: timeController.text.trim(),
-                                        amount: newAmount,
-                                      ),
-                                    );
-                              },
-                              child: const Text("Continuar"),
-                            ),
-                          ],
-                        ),
-                      );
-                      return;
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx),
+                                child: const Text("Cancelar"),
+                              ),
+                              FilledButton(
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  context.read<ScheduleBloc>().add(
+                                        ScheduleCreatePressed(
+                                          petId: petId,
+                                          time: timeController.text.trim(),
+                                          amount: newAmount,
+                                        ),
+                                      );
+                                },
+                                child: const Text("Continuar"),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
                     }
 
                     Navigator.pop(context);

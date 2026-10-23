@@ -1,6 +1,6 @@
 # Spec 004 — Corrección de Pruebas y Entorno de Isar en Flutter
 
-Estado: aprobada
+Estado: implementada
 
 ## Contexto y objetivo
 Al ejecutar las pruebas unitarias e integración en la aplicación Flutter (`flutter test`), el motor de base de datos local Isar falla al no encontrar el binario nativo `libisar.so` en el directorio de ejecución de pruebas. Adicionalmente, el archivo `pubspec.yaml` declara una carpeta de activos `assets/icos/` que no existe en el sistema de ficheros, generando advertencias y errores de carga de activos durante el análisis y compilación.

@@ -4,6 +4,7 @@ import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/activate_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/associate_dispenser_uc.dart';
@@ -95,6 +96,34 @@ class _FakeDispenserRepository implements DispenserRepositories {
     int petId,
     String macAddress,
   ) async => Left(ServerFailures(mensajeDelServidor));
+
+  @override
+  Future<List<Dispenser>> getLocalDispensers() async => const <Dispenser>[];
+
+  @override
+  Future<void> saveLocalDispenser(Dispenser dispenser) async {}
+
+  @override
+  Future<void> refillFood(String dispenserId, double grams) async {}
+
+  @override
+  Future<void> discountFood(String dispenserId, double grams) async {}
+
+  @override
+  Stream<List<ScannedDevice>> scanBleDispensers() => const Stream.empty();
+
+  @override
+  Future<void> stopBleScan() async {}
+
+  @override
+  Future<void> connectAndProvisionBle({
+    required String deviceId,
+    required String ssid,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> resetWifiRemote(String dispenserId) async {}
 }
 
 /// Monta un `MaterialApp.router` con la vista de registro sobre una pantalla
@@ -106,6 +135,7 @@ _pumpVistaRegistro(WidgetTester tester) async {
   );
 
   final DispenserBloc bloc = DispenserBloc(
+    repository: repositorio,
     associateUseCase: AssociateDispenserUc(repository: repositorio),
     getDispenserByPetUseCase: GetDispenserByPetUc(repository: repositorio),
     activateUseCase: ActivateDispenserUc(repository: repositorio),

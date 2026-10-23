@@ -1,7 +1,7 @@
 ---
 description: SDD - revisa la spec como QA (clarificación) y valida la implementación RF por RF, sin modificar nada
 mode: subagent
-model: opencode/nemotron-3.5-lightning-free
+
 permissions:
 - action: edit
   resource: "*"

@@ -77,6 +77,9 @@ class DashboardView extends StatelessWidget {
                       ),
                       const SizedBox(height: 24),
 
+                      _buildNutritionEntry(context),
+                      const SizedBox(height: 24),
+
                       DashboardMetricsGrid(
                         totalPets: totalPets,
                         sterilizedPets: sterilizedPets,
@@ -109,6 +112,69 @@ class DashboardView extends StatelessWidget {
       return 'Hola, ${authState.user.email.split('@').first}';
     }
     return 'Hola';
+  }
+
+  /// Acceso visible a la calculadora nutricional (RF-6).
+  ///
+  /// La vista solo presenta y navega: el cálculo vive en `NutritionCubit`.
+  Widget _buildNutritionEntry(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final borderRadius = BorderRadius.circular(20);
+
+    return Material(
+      color: colors.primaryContainer,
+      borderRadius: borderRadius,
+      child: InkWell(
+        onTap: () => context.pushNamed('nutrition_calculator'),
+        borderRadius: borderRadius,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colors.primary,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.calculate_outlined,
+                  color: colors.onPrimary,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Calculadora Nutricional',
+                      style: TextStyle(
+                        color: colors.onPrimaryContainer,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Calcula la ración diaria de tu mascota según WSAVA',
+                      style: TextStyle(
+                        color: colors.onPrimaryContainer,
+                        fontSize: 12,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.onPrimaryContainer),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildQuickActions(BuildContext context) {

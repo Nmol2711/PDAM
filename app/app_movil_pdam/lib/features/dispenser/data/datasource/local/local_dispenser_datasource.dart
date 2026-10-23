@@ -2,13 +2,19 @@ import 'dart:developer' as developer;
 
 import 'package:app_movil_pdam/core/offline/isar_service.dart';
 import 'package:app_movil_pdam/core/offline/models/local_dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/data/models/dispenser_model.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:isar/isar.dart';
 
 abstract class LocalDispenserDatasource {
   Future<Dispenser?> getLocalDispenserByPet(int petId);
+  Future<List<Dispenser>> getLocalDispensers();
   Future<void> cacheDispenser(Dispenser dispenser);
-  Future<void> saveLocalDispenser(Dispenser dispenser, {bool isSynced = true, String? secretKeyQr});
+  Future<void> saveLocalDispenser(
+    Dispenser dispenser, {
+    bool isSynced = true,
+    String? secretKeyQr,
+  });
   Future<void> deleteLocalDispenser(int petId);
 }
 
@@ -20,6 +26,10 @@ bool isLegacyLocalOrphan({required int? remoteId, required bool isSynced}) {
   return remoteId == null && !isSynced;
 }
 
+/// Fuente de datos local única para los dos flujos del dispensador.
+///
+/// Conserva la purga de huérfanos del flujo QR/MAC y el upsert por MAC o
+/// `remoteId` que usaba el flujo BLE/WiFi.
 class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
   final String? testDirectory;
 
@@ -35,53 +45,61 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
     // La purga va ANTES de la lectura: si fuera después, el huérfano de esta
     // mascota ya se habría devuelto una vez (RF-19).
     await _purgeLegacyLocalOrphans(isar);
-    final local = await isar.localDispensers.filter().petRemoteIdEqualTo(petId).findFirst();
+    final local = await isar.localDispensers
+        .filter()
+        .petRemoteIdEqualTo(petId)
+        .findFirst();
     if (local == null) return null;
-    return Dispenser(
-      id: local.remoteId ?? local.id,
-      macAddress: local.macAddress,
-      pendingDispensing: local.pendingDispensing,
-      isActive: local.isActive,
+    return DispenserModel.fromLocal(local).copyWith(
       petId: local.petRemoteId ?? petId,
     );
   }
 
   @override
-  Future<void> cacheDispenser(Dispenser dispenser) async {
+  Future<List<Dispenser>> getLocalDispensers() async {
     final isar = await _getIsar();
-    await isar.writeTxn(() async {
-      final existing = await isar.localDispensers.filter().remoteIdEqualTo(dispenser.id).findFirst();
-      final local = existing ?? LocalDispenser();
-      local.remoteId = dispenser.id;
-      local.petRemoteId = dispenser.petId;
-      local.macAddress = dispenser.macAddress;
-      local.secretKeyQr = existing?.secretKeyQr ?? '';
-      local.isActive = dispenser.isActive;
-      local.pendingDispensing = dispenser.pendingDispensing;
-      local.updatedAt = DateTime.now();
-      local.isSynced = true;
-      await isar.localDispensers.put(local);
-    });
+    await _purgeLegacyLocalOrphans(isar);
+    final rows = await isar.localDispensers.where().findAll();
+    return rows.map(DispenserModel.fromLocal).toList(growable: false);
   }
 
   @override
-  Future<void> saveLocalDispenser(Dispenser dispenser, {bool isSynced = true, String? secretKeyQr}) async {
+  Future<void> cacheDispenser(Dispenser dispenser) async {
+    await saveLocalDispenser(dispenser);
+  }
+
+  @override
+  Future<void> saveLocalDispenser(
+    Dispenser dispenser, {
+    bool isSynced = true,
+    String? secretKeyQr,
+  }) async {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
-      final existing = await isar.localDispensers.filter().petRemoteIdEqualTo(dispenser.petId).findFirst();
+      // Upsert por MAC o por id remoto: evita duplicados cuando el mismo
+      // dispositivo llega desde el servidor o desde el aprovisionamiento BLE.
+      final existing = await isar.localDispensers
+          .filter()
+          .macAddressEqualTo(dispenser.macAddress)
+          .or()
+          .optional(
+            dispenser.id > 0,
+            (q) => q.remoteIdEqualTo(dispenser.id),
+          )
+          .findFirst();
+
       final local = existing ?? LocalDispenser();
-      local.remoteId = dispenser.id > 0 ? dispenser.id : null;
-      local.petRemoteId = dispenser.petId;
+      local.remoteId = dispenser.id > 0 ? dispenser.id : existing?.remoteId;
+      local.petRemoteId = dispenser.petId ?? existing?.petRemoteId;
       local.macAddress = dispenser.macAddress;
-      local.secretKeyQr = secretKeyQr ?? (existing?.secretKeyQr ?? '');
+      local.secretKeyQr =
+          secretKeyQr ?? (existing?.secretKeyQr ?? '');
       local.isActive = dispenser.isActive;
       local.pendingDispensing = dispenser.pendingDispensing;
+      local.currentFoodGrams = dispenser.currentFoodGrams;
+      local.isOfflineCached = dispenser.isOfflineCached;
       local.updatedAt = DateTime.now();
-      // El único camino de escritura es el éxito del servidor (RF-13, RF-15),
-      // así que un dispensador local siempre nace sincronizado. El parámetro
-      // `isSynced` se conserva por compatibilidad con las llamadas existentes
-      // y se ignora: ya no existe ningún registro pendiente de dispensador.
-      local.isSynced = true;
+      local.isSynced = isSynced;
       await isar.localDispensers.put(local);
     });
   }
@@ -90,7 +108,10 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
   Future<void> deleteLocalDispenser(int petId) async {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
-      final existing = await isar.localDispensers.filter().petRemoteIdEqualTo(petId).findFirst();
+      final existing = await isar.localDispensers
+          .filter()
+          .petRemoteIdEqualTo(petId)
+          .findFirst();
       if (existing != null) {
         await isar.localDispensers.delete(existing.id);
       }
@@ -99,9 +120,17 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
 
   /// Localiza los huérfanos heredados. Solo lectura, sin transacción de escritura.
   Future<List<LocalDispenser>> _findLegacyLocalOrphans(Isar isar) async {
-    final candidates = await isar.localDispensers.filter().remoteIdIsNull().findAll();
+    final candidates = await isar.localDispensers
+        .filter()
+        .remoteIdIsNull()
+        .findAll();
     return candidates
-        .where((row) => isLegacyLocalOrphan(remoteId: row.remoteId, isSynced: row.isSynced))
+        .where(
+          (row) => isLegacyLocalOrphan(
+            remoteId: row.remoteId,
+            isSynced: row.isSynced,
+          ),
+        )
         .toList(growable: false);
   }
 

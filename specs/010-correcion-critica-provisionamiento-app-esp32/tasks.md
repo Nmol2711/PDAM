@@ -12,3 +12,5 @@
   - Hecho cuando: `BleProvisioningService` cancela suscripciones previas, detiene escaneos activos y permite reintentar la búsqueda BLE sin reiniciar la aplicación.
 - [x] **T6. Validación Integral — Ejecución de pruebas unitarias, de widgets y análisis estático.** General
   - Hecho cuando: Se ejecutan `flutter test`, `flutter analyze` (cero errores) y `pio run`, pasando todas las validaciones correctamente.
+- [x] **T7. App Móvil — Implementación de Cooldown y reseteo robusto de adaptador BLE en servicio y BLoC.** RF-05
+  - Hecho cuando: `BleProvisioningService` implementa un retardo de cooldown (800ms) en `stopScan` y `scanDevices` para evitar bloqueos por rate limiting de Android OS y permitir reescaneos fluidos.

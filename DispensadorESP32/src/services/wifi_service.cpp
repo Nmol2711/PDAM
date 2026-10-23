@@ -1,4 +1,5 @@
 #include "wifi_service.h"
+#include "../config/provisioning_utils.h"
 
 // Variables locales para aprovisionamiento BLE
 static bool credentialsReceived = false;
@@ -19,7 +20,7 @@ class ProvisioningCallbacks : public BLECharacteristicCallbacks {
         Serial.println(receivedPass.length());
       }
       
-      if (receivedSsid.length() > 0 && receivedPass.length() > 0) {
+      if (areCredentialsComplete(receivedSsid.c_str(), receivedPass.c_str())) {
         credentialsReceived = true;
       }
     }
@@ -30,8 +31,7 @@ String getGlobalMacAddress() {
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
   char macStr[18];
-  snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X", 
-           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  formatMacAddress(mac, macStr, sizeof(macStr));
   return String(macStr);
 }
 
@@ -160,10 +160,7 @@ void runBleProvisioning(String &outSsid, String &outPass) {
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
   char bleName[30];
-  char macClean[13];
-  snprintf(macClean, sizeof(macClean), "%02X%02X%02X%02X%02X%02X", 
-           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  snprintf(bleName, sizeof(bleName), "PDAM-Config-%s", macClean);
+  buildBleDeviceName(mac, bleName, sizeof(bleName));
 
   BLEDevice::init(bleName);
   BLEServer *pServer = BLEDevice::createServer();

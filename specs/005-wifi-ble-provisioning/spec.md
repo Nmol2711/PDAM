@@ -1,6 +1,6 @@
 # Spec 005 — Aprovisionamiento WiFi por Bluetooth (BLE) para Dispensadores ESP32
 
-Estado: borrador
+Estado: implementada
 
 ## Contexto y objetivo
 
@@ -57,7 +57,7 @@ El objetivo de esta especificación es definir los requisitos funcionales, no fu
 ## Arquitectura de la solución
 
 1. **Frontend (Flutter + BLoC + GoRouter + Isar):**
-   - **`features/dispensers/`**: Nuevo módulo organizado en capas (`data`, `domain`, `presentation`).
+   - **`features/dispenser/`**: Nuevo módulo organizado en capas (`data`, `domain`, `presentation`).
    - **`presentation/`**: Vistas de listado de dispensadores, pantalla de escaneo BLE y formulario de aprovisionamiento WiFi, gestionadas mediante BLoC / Cubit.
    - **`data/services/ble_provisioning_service.dart`**: Wrapper sobre `flutter_blue_plus` para escaneo, conexión, descubrimiento de servicios GATT y escritura de características (SSID y Password).
    - **Navegación**: Integración en `GoRouter` añadiendo la pestaña/sección **"Dispensadores"**.
@@ -66,9 +66,8 @@ El objetivo de esta especificación es definir los requisitos funcionales, no fu
    - **`app/services/dispenser_service.py`** y endpoints asociados para registrar el estado del dispositivo y gestionar la orden de reseteo de credenciales WiFi (`reset-wifi`).
 
 3. **Hardware (ESP32):**
-   - **`src/services/ble_service.cpp` / `src/drivers/`**: Implementación de servidor GATT BLE con UUIDs específicos para configuración WiFi.
-   - **`src/services/wifi_service.cpp`**: Conexión WiFi limitada estrictamente a **2.4GHz**, manejo de reconexión y almacenamiento persistente en **NVS** (`Preferences.h`).
-   - **`main.cpp`**: Máquina de estados que inicializa BLE si no hay credenciales en NVS o si la conexión falla; apaga BLE al conectar exitosamente al WiFi.
+   - **`DispensadorESP32/src/services/wifi_service.cpp`**: Servidor GATT BLE con UUIDs específicos para configuración WiFi, conexión WiFi limitada estrictamente a **2.4GHz**, manejo de reconexión y almacenamiento persistente en **NVS** (`Preferences.h`). No existe un `ble_service.cpp` separado: el BLE vive en `wifi_service`.
+   - **`DispensadorESP32/src/main.cpp`** y **`src/tasks/dispenser_task.cpp`**: Máquina de estados que inicializa BLE si no hay credenciales en NVS o si la conexión falla; apaga BLE al conectar exitosamente al WiFi.
 
 ## Casos de prueba requeridos
 

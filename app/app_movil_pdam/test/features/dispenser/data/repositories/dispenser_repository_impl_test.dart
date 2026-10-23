@@ -5,10 +5,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
+import 'package:app_movil_pdam/core/services/storage_service.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_dispenser_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/repositories_impl/dispenser_repository_impl.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
+
+/// Almacenamiento seguro en memoria para no tocar `flutter_secure_storage`
+/// en las pruebas del repositorio.
+class _FakeStorageService implements StorageService {
+  final Map<String, String> _values = {};
+
+  @override
+  Future<Either<Failures, void>> deleteString(String key) async {
+    _values.remove(key);
+    return const Right(null);
+  }
+
+  @override
+  Future<Either<Failures, String?>> getString(String key) async {
+    return Right(_values[key]);
+  }
+
+  @override
+  Future<Either<Failures, void>> saveString(String key, String value) async {
+    _values[key] = value;
+    return const Right(null);
+  }
+}
 
 class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
   bool shouldThrow = false;
@@ -114,6 +139,11 @@ class MockLocalDispenserDatasource implements LocalDispenserDatasource {
   }
 
   @override
+  Future<List<Dispenser>> getLocalDispensers() async {
+    return savedDispenser == null ? <Dispenser>[] : <Dispenser>[savedDispenser!];
+  }
+
+  @override
   Future<Dispenser?> getLocalDispenserByPet(int petId) async {
     return localReturn ?? savedDispenser;
   }
@@ -161,10 +191,14 @@ void main() {
     remoteDatasource = MockDispenserRemoteDatasource();
     localDatasource = MockLocalDispenserDatasource();
     syncService = MockSyncService();
+    final storageService = _FakeStorageService();
     repository = DispenserRepositoryImpl(
       dispenserRemoteDatasource: remoteDatasource,
       localDispenserDatasource: localDatasource,
       syncService: syncService,
+      bleService: BleProvisioningService(),
+      dioClient: DioClient(storageService),
+      storageService: storageService,
     );
   });
 

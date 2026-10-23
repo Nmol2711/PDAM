@@ -1,25 +1,42 @@
+import 'package:app_movil_pdam/core/constant/api_constant.dart';
 import 'package:app_movil_pdam/core/error/api_exception.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
+import 'package:app_movil_pdam/core/services/storage_service.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_dispenser_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:dio/dio.dart';
 import 'package:dartz/dartz.dart';
 
+/// Implementación única del módulo: reúne el flujo QR/MAC y el flujo BLE/WiFi.
 class DispenserRepositoryImpl implements DispenserRepositories {
   final DispenserRemoteDatasource _dispenserRemoteDatasource;
   final LocalDispenserDatasource _localDispenserDatasource;
   final SyncService _syncService;
+  final BleProvisioningService _bleService;
+  final DioClient _dioClient;
+  final StorageService _storageService;
 
   DispenserRepositoryImpl({
     required DispenserRemoteDatasource dispenserRemoteDatasource,
     required LocalDispenserDatasource localDispenserDatasource,
     required SyncService syncService,
+    required BleProvisioningService bleService,
+    required DioClient dioClient,
+    required StorageService storageService,
   }) : _dispenserRemoteDatasource = dispenserRemoteDatasource,
        _localDispenserDatasource = localDispenserDatasource,
-       _syncService = syncService;
+       _syncService = syncService,
+       _bleService = bleService,
+       _dioClient = dioClient,
+       _storageService = storageService;
+
+  // --- Flujo QR / MAC ---
 
   /// Registra el dispensador. Solo es posible con conexión (RF-13, DO-3): es el
   /// servidor quien valida que la MAC sea única, así que mientras no acepte no se
@@ -69,7 +86,10 @@ class DispenserRepositoryImpl implements DispenserRepositories {
         petId,
         macAddress,
       );
-      await _localDispenserDatasource.saveLocalDispenser(result, isSynced: true);
+      await _localDispenserDatasource.saveLocalDispenser(
+        result,
+        isSynced: true,
+      );
       return Right(result);
     } catch (e) {
       return Left(_failureFrom(e));
@@ -99,7 +119,9 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       return Right(result);
     } catch (e) {
       try {
-        final local = await _localDispenserDatasource.getLocalDispenserByPet(petId);
+        final local = await _localDispenserDatasource.getLocalDispenserByPet(
+          petId,
+        );
         if (local != null) {
           return Right(local);
         }
@@ -164,6 +186,145 @@ class DispenserRepositoryImpl implements DispenserRepositories {
     } catch (e) {
       return Left(_failureFrom(e));
     }
+  }
+
+  // --- Flujo local / BLE / WiFi ---
+
+  @override
+  Future<List<Dispenser>> getLocalDispensers() async {
+    final localList = await _localDispenserDatasource.getLocalDispensers();
+    final result = <Dispenser>[];
+    for (final local in localList) {
+      // Solo se listan los dispensadores vinculados a una mascota.
+      if (local.petId == null) continue;
+      final deviceId = local.deviceId.toUpperCase();
+      final mac = local.macAddress.toUpperCase();
+
+      String? ssid = await _readSsid(mac);
+      ssid ??= await _readSsid(deviceId);
+
+      result.add(
+        local.copyWith(
+          macAddress: mac,
+          name: 'Dispensador $mac',
+          wifiSsid: ssid,
+        ),
+      );
+    }
+    return result;
+  }
+
+  @override
+  Future<void> saveLocalDispenser(Dispenser dispenser) async {
+    await _localDispenserDatasource.saveLocalDispenser(dispenser);
+    if (dispenser.wifiSsid != null && dispenser.wifiSsid!.isNotEmpty) {
+      await _storageService.saveString(
+        'wifi_ssid_${dispenser.macAddress.toUpperCase()}',
+        dispenser.wifiSsid!,
+      );
+      await _storageService.saveString(
+        'wifi_ssid_${dispenser.deviceId.toUpperCase()}',
+        dispenser.wifiSsid!,
+      );
+    }
+  }
+
+  @override
+  Future<void> refillFood(String dispenserId, double grams) async {
+    final localList = await _localDispenserDatasource.getLocalDispensers();
+    for (final local in localList) {
+      if (_matchesId(local, dispenserId)) {
+        await _localDispenserDatasource.saveLocalDispenser(
+          local.copyWith(
+            currentFoodGrams: grams.clamp(0.0, 5000.0).toDouble(),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Future<void> discountFood(String dispenserId, double grams) async {
+    final localList = await _localDispenserDatasource.getLocalDispensers();
+    for (final local in localList) {
+      if (_matchesId(local, dispenserId)) {
+        await _localDispenserDatasource.saveLocalDispenser(
+          local.copyWith(
+            currentFoodGrams: (local.currentFoodGrams - grams)
+                .clamp(0.0, 5000.0)
+                .toDouble(),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Stream<List<ScannedDevice>> scanBleDispensers() {
+    return _bleService.scanDevices();
+  }
+
+  @override
+  Future<void> stopBleScan() async {
+    await _bleService.stopScan();
+  }
+
+  @override
+  Future<void> connectAndProvisionBle({
+    required String deviceId,
+    required String ssid,
+    required String password,
+  }) async {
+    await _bleService.connectAndProvision(
+      deviceId: deviceId,
+      ssid: ssid,
+      password: password,
+    );
+    // RF-01 & RNF-02: guarda las credenciales WiFi de forma segura.
+    final resSsid = await _storageService.saveString(
+      'wifi_ssid_$deviceId',
+      ssid,
+    );
+    resSsid.fold(
+      (f) => throw Exception(
+        'Error al guardar SSID de forma segura: ${f.message}',
+      ),
+      (_) {},
+    );
+    final resPass = await _storageService.saveString(
+      'wifi_pass_$deviceId',
+      password,
+    );
+    resPass.fold(
+      (f) => throw Exception(
+        'Error al guardar contraseña de forma segura: ${f.message}',
+      ),
+      (_) {},
+    );
+  }
+
+  @override
+  Future<void> resetWifiRemote(String dispenserId) async {
+    try {
+      await _dioClient.dio.post(
+        '${ApiConstants.dispenser}$dispenserId/reset-wifi',
+      );
+    } catch (e) {
+      throw Exception('Error al solicitar reseteo de WiFi: ${e.toString()}');
+    }
+    await _storageService.deleteString('wifi_ssid_$dispenserId');
+    await _storageService.deleteString('wifi_pass_$dispenserId');
+  }
+
+  bool _matchesId(Dispenser local, String dispenserId) {
+    return local.id.toString() == dispenserId ||
+        local.macAddress == dispenserId ||
+        local.deviceId == dispenserId;
+  }
+
+  Future<String?> _readSsid(String key) async {
+    final result = await _storageService.getString('wifi_ssid_$key');
+    return result.fold((_) => null, (value) => value);
   }
 
   static const String _sinConexionAlRegistrar =

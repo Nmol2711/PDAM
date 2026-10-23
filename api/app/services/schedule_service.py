@@ -3,7 +3,8 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.models import models
-from app.schemas import schemas
+from app.schemas import nutrition_schemas, schemas
+from app.services import nutrition_service
 
 def obtener_mis_horarios(db: Session, user_id: int):
     # Ahora buscamos los horarios uniendo la tabla de mascotas
@@ -111,6 +112,32 @@ def verificar_horario_pet(db: Session, pet_id: int, user_id: int):
 
     return {"is_feeding_time": False, "amount": 0}
 
+# Sinónimos de especie aceptados por el motor nutricional. Se mantiene el mismo
+# criterio histórico del endpoint: canino/perro/dog y felino/gato/cat.
+_ESPECIES_MOTOR = {
+    "canino": "canino",
+    "perro": "canino",
+    "dog": "canino",
+    "felino": "felino",
+    "gato": "felino",
+    "cat": "felino",
+}
+
+
+def _resolver_especie_motor(species: str) -> str:
+    """Traduce la especie almacenada en la mascota a la forma canónica WSAVA."""
+    canonical = _ESPECIES_MOTOR.get((species or "").strip().lower())
+    if canonical is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Especie inválida para el cálculo nutricional. "
+                "Valores permitidos: canino/perro o felino/gato."
+            ),
+        )
+    return canonical
+
+
 def auto_generar_horarios_wsava(db: Session, pet_id: int, user_id: int, req: schemas.AutoScheduleRequest):
     mascota = db.query(models.Pet).filter(models.Pet.id == pet_id, models.Pet.user_id == user_id).first()
     if not mascota:
@@ -121,55 +148,57 @@ def auto_generar_horarios_wsava(db: Session, pet_id: int, user_id: int, req: sch
     edad_meses = edad_dias / 30.44
 
     weight = mascota.weight
-    rer = 70 * (weight ** 0.75)
+    species = _resolver_especie_motor(mascota.species)
+    life_stage = "crecimiento" if edad_meses < 12 else "adulto"
+    reproductive_status = "castrado" if mascota.reproductive_status else "entero"
 
-    species = mascota.species.lower()
-    is_neutered = mascota.reproductive_status
-    is_growth = edad_meses < 12
+    # El endpoint acepta los mismos sinónimos en español que el cálculo
+    # nutricional (bajo/medio/alto, normal/leve/moderada/marcada, ...) antes de
+    # llegar al motor, que solo entiende sus valores canónicos.
+    try:
+        mcs = nutrition_schemas.canonical_mcs(req.mcs)
+        activity_level = nutrition_schemas.canonical_activity_level(req.activity_level)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
-    factor_mer = 1.6
-    if "canino" in species or "dog" in species:
-        if is_growth:
-            factor_mer = 3.0 if edad_meses < 4 else 2.0
-        else:
-            if is_neutered:
-                factor_mer = 1.4 if req.activity_level == "low" else 1.6
-            else:
-                factor_mer = 1.8
-    elif "felino" in species or "cat" in species:
-        if is_growth:
-            factor_mer = 2.5
-        else:
-            if is_neutered:
-                factor_mer = 1.0 if req.activity_level == "low" else 1.2
-            else:
-                factor_mer = 1.4
+    # Única fuente de verdad nutricional (RNF-4): no se replica ninguna fórmula
+    # WSAVA aquí; el motor devuelve RER, MER y ración diaria en gramos.
+    try:
+        calculo = nutrition_service.calculate_nutrition(
+            species=species,
+            body_weight=weight,
+            caloric_density_kcal_per_kg=req.food_kcal_per_kg,
+            bcs=req.bcs,
+            mcs=mcs,
+            activity_level=activity_level,
+            reproductive_status=reproductive_status,
+            life_stage=life_stage,
+            meals_per_day=req.meals_per_day,
+            snacks_kcal=0.0,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
-    if req.bcs >= 7:
-        factor_mer *= 0.85
-    elif req.bcs <= 3:
-        factor_mer *= 1.15
-
-    # Ajuste adicional por MCS (Masa muscular)
-    if req.mcs == "moderate":
-        factor_mer *= 1.05
-    elif req.mcs == "marked":
-        factor_mer *= 1.10
-
-    mer = rer * factor_mer
-    daily_kcal = mer
-    daily_grams = (daily_kcal / req.food_kcal_per_kg) * 1000
+    rer = calculo["rer_kcal"]
+    mer = calculo["mer_kcal"]
+    daily_grams = calculo["daily_ration_grams"]
 
     # Requerimiento de agua (ml/día) según WSAVA (44 - 66 ml/kg)
     water_min_ml = weight * 44
     water_max_ml = weight * 66
 
     warnings = []
-    if req.mcs != "normal":
+    if mcs != "normal":
         warnings.append("Riesgo de Desequilibrio Metabólico detectado (MCS anormal). Se sugiere evaluación veterinaria.")
     if req.bcs >= 7 or req.bcs <= 3:
         warnings.append(f"Condición Corporal (BCS {req.bcs}/9) fuera del rango ideal (4-5). Se ajustó el requerimiento energético.")
-    if "canino" in species or "dog" in species:
+    if species == "canino":
         warnings.append("Nota: El MER en perros puede variar ±30% según metabolismo individual.")
     else:
         warnings.append("Nota: El MER en gatos puede variar ±50% según metabolismo individual.")

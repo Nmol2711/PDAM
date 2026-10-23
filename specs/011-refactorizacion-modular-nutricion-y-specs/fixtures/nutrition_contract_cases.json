@@ -1,0 +1,330 @@
+{
+  "description": "Contrato compartido del motor nutricional WSAVA (RF-4, Spec 011). Lo consumen api/tests/test_nutrition_contract.py y app/app_movil_pdam/test/features/nutrition/nutrition_contract_test.dart.",
+  "tolerance": 1e-06,
+  "cases": [
+    {
+      "id": "canino_adulto_castrado_medium_sin_snacks",
+      "description": "Canino adulto castrado, actividad media, BCS 5, MCS normal, sin snacks.",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 12.5,
+        "caloric_density_kcal_per_kg": 4000.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 465.3508909826865,
+        "mer_kcal": 744.5614255722985,
+        "variability_min_kcal": 521.1929979006089,
+        "variability_max_kcal": 967.9298532439881,
+        "snack_limit_kcal": 74.45614255722985,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 744.5614255722985,
+        "daily_ration_grams": 186.14035639307463,
+        "ration_per_meal_grams": 93.07017819653731
+      }
+    },
+    {
+      "id": "canino_adulto_entero_medium_sin_snacks",
+      "description": "Canino adulto entero, actividad media, BCS 5, MCS normal, sin snacks.",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 20.0,
+        "caloric_density_kcal_per_kg": 3600.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "entero",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 662.0191263022231,
+        "mer_kcal": 1191.6344273440016,
+        "variability_min_kcal": 834.144099140801,
+        "variability_max_kcal": 1549.124755547202,
+        "snack_limit_kcal": 119.16344273440016,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 1191.6344273440016,
+        "daily_ration_grams": 331.00956315111154,
+        "ration_per_meal_grams": 165.50478157555577
+      }
+    },
+    {
+      "id": "canino_adulto_castrado_actividad_baja",
+      "description": "Canino adulto castrado con actividad baja, BCS 5, MCS normal, sin snacks.",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 30.0,
+        "caloric_density_kcal_per_kg": 3500.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "low",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 897.3027134320915,
+        "mer_kcal": 1292.115907342212,
+        "variability_min_kcal": 904.4811351395483,
+        "variability_max_kcal": 1679.7506795448758,
+        "snack_limit_kcal": 129.2115907342212,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 1292.115907342212,
+        "daily_ration_grams": 369.1759735263463,
+        "ration_per_meal_grams": 184.58798676317315
+      }
+    },
+    {
+      "id": "canino_adulto_castrado_actividad_alta",
+      "description": "Canino adulto castrado con actividad alta, BCS 5, MCS normal, sin snacks.",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 15.0,
+        "caloric_density_kcal_per_kg": 3800.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "high",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 3
+      },
+      "expected": {
+        "rer_kcal": 533.5393855623455,
+        "mer_kcal": 1024.3956202797033,
+        "variability_min_kcal": 717.0769341957922,
+        "variability_max_kcal": 1331.7143063636142,
+        "snack_limit_kcal": 102.43956202797034,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 1024.3956202797033,
+        "daily_ration_grams": 269.57779481044827,
+        "ration_per_meal_grams": 89.85926493681609
+      }
+    },
+    {
+      "id": "felino_adulto_castrado_medium_sin_snacks",
+      "description": "Felino adulto castrado, actividad media, BCS 5, MCS normal: variabilidad +/-50%.",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "felino",
+        "body_weight": 4.5,
+        "caloric_density_kcal_per_kg": 4200.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 216.27555011024737,
+        "mer_kcal": 259.5306601322968,
+        "variability_min_kcal": 129.7653300661484,
+        "variability_max_kcal": 389.2959901984452,
+        "snack_limit_kcal": 25.953066013229684,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 259.5306601322968,
+        "daily_ration_grams": 61.793014317213526,
+        "ration_per_meal_grams": 30.896507158606763
+      }
+    },
+    {
+      "id": "canino_cachorro_crecimiento_sin_snacks",
+      "description": "Canino en crecimiento (cachorro), 4 comidas diarias, sin snacks.",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 8.0,
+        "caloric_density_kcal_per_kg": 4000.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "entero",
+        "life_stage": "crecimiento",
+        "meals_per_day": 4
+      },
+      "expected": {
+        "rer_kcal": 332.9779922007619,
+        "mer_kcal": 665.9559844015238,
+        "variability_min_kcal": 466.16918908106663,
+        "variability_max_kcal": 865.7427797219809,
+        "snack_limit_kcal": 66.59559844015239,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 665.9559844015238,
+        "daily_ration_grams": 166.48899610038094,
+        "ration_per_meal_grams": 41.622249025095236
+      }
+    },
+    {
+      "id": "canino_adulto_bcs_bajo_mcs_moderada",
+      "description": "Canino adulto con BCS bajo (3) y masa muscular moderada (ajustes 1.2 y 0.95).",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 10.0,
+        "caloric_density_kcal_per_kg": 3900.0,
+        "bcs": 3,
+        "mcs": "moderate",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 393.6389276332444,
+        "mer_kcal": 717.9974040030378,
+        "variability_min_kcal": 502.5981828021264,
+        "variability_max_kcal": 933.3966252039492,
+        "snack_limit_kcal": 71.79974040030378,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 717.9974040030378,
+        "daily_ration_grams": 184.1018984623174,
+        "ration_per_meal_grams": 92.0509492311587
+      }
+    },
+    {
+      "id": "canino_adulto_bcs_alto_mcs_marcada",
+      "description": "Canino adulto con BCS alto (8) y perdida muscular marcada (ajustes 0.8 y 0.9).",
+      "input": {
+        "snacks_kcal": 0.0,
+        "species": "canino",
+        "body_weight": 25.0,
+        "caloric_density_kcal_per_kg": 3200.0,
+        "bcs": 8,
+        "mcs": "marked",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 782.6237921249265,
+        "mer_kcal": 901.5826085279156,
+        "variability_min_kcal": 631.1078259695408,
+        "variability_max_kcal": 1172.0573910862902,
+        "snack_limit_kcal": 90.15826085279156,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 901.5826085279156,
+        "daily_ration_grams": 281.7445651649736,
+        "ration_per_meal_grams": 140.8722825824868
+      }
+    },
+    {
+      "id": "canino_adulto_snacks_bajo_limite",
+      "description": "Canino adulto castrado con snacks por debajo del 10% del MER (sin alerta).",
+      "input": {
+        "snacks_kcal": 30.0,
+        "species": "canino",
+        "body_weight": 18.0,
+        "caloric_density_kcal_per_kg": 4100.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 611.7196323512275,
+        "mer_kcal": 978.7514117619639,
+        "variability_min_kcal": 685.1259882333748,
+        "variability_max_kcal": 1272.3768352905531,
+        "snack_limit_kcal": 97.8751411761964,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 948.7514117619639,
+        "daily_ration_grams": 231.40278335657658,
+        "ration_per_meal_grams": 115.70139167828829
+      }
+    },
+    {
+      "id": "canino_adulto_snacks_sobre_limite",
+      "description": "Canino adulto castrado con snacks por encima del 10% del MER (alerta y recalculo).",
+      "input": {
+        "snacks_kcal": 200.0,
+        "species": "canino",
+        "body_weight": 18.0,
+        "caloric_density_kcal_per_kg": 4100.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 611.7196323512275,
+        "mer_kcal": 978.7514117619639,
+        "variability_min_kcal": 685.1259882333748,
+        "variability_max_kcal": 1272.3768352905531,
+        "snack_limit_kcal": 97.8751411761964,
+        "exceeds_snack_limit": true,
+        "final_ration_kcal": 778.7514117619639,
+        "daily_ration_grams": 189.93936872243023,
+        "ration_per_meal_grams": 94.96968436121512
+      }
+    },
+    {
+      "id": "felino_adulto_snacks_sobre_limite",
+      "description": "Felino adulto castrado con snacks por encima del 10% del MER (alerta y recalculo).",
+      "input": {
+        "snacks_kcal": 80.0,
+        "species": "felino",
+        "body_weight": 5.0,
+        "caloric_density_kcal_per_kg": 4000.0,
+        "bcs": 6,
+        "mcs": "mild",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 3
+      },
+      "expected": {
+        "rer_kcal": 234.0591067417477,
+        "mer_kcal": 280.87092809009727,
+        "variability_min_kcal": 140.43546404504863,
+        "variability_max_kcal": 421.30639213514587,
+        "snack_limit_kcal": 28.08709280900973,
+        "exceeds_snack_limit": true,
+        "final_ration_kcal": 200.87092809009727,
+        "daily_ration_grams": 50.21773202252432,
+        "ration_per_meal_grams": 16.739244007508105
+      }
+    },
+    {
+      "id": "canino_adulto_snacks_en_el_limite",
+      "description": "Canino adulto castrado con snacks exactamente en el 10% del MER (no excede el limite).",
+      "input": {
+        "snacks_kcal": 97.8751411761964,
+        "species": "canino",
+        "body_weight": 18.0,
+        "caloric_density_kcal_per_kg": 4100.0,
+        "bcs": 5,
+        "mcs": "normal",
+        "activity_level": "medium",
+        "reproductive_status": "castrado",
+        "life_stage": "adulto",
+        "meals_per_day": 2
+      },
+      "expected": {
+        "rer_kcal": 611.7196323512275,
+        "mer_kcal": 978.7514117619639,
+        "variability_min_kcal": 685.1259882333748,
+        "variability_max_kcal": 1272.3768352905531,
+        "snack_limit_kcal": 97.8751411761964,
+        "exceeds_snack_limit": false,
+        "final_ration_kcal": 880.8762705857675,
+        "daily_ration_grams": 214.84787087457747,
+        "ration_per_meal_grams": 107.42393543728873
+      }
+    }
+  ]
+}

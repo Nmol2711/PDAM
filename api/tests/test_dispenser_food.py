@@ -55,6 +55,10 @@ class TestDispenserFoodEstimation(unittest.TestCase):
         dispenser_mock.id = 1
         dispenser_mock.pet_id = 1
         dispenser_mock.is_active = True
+        # El servicio consulta primero la orden de reseteo de WiFi (RF de la Spec 005).
+        # En un MagicMock cualquier atributo no definido es verdadero, así que debe
+        # declararse explícitamente como falso para simular un dispensador real.
+        dispenser_mock.pending_wifi_reset = False
         dispenser_mock.pending_dispensing = True
         dispenser_mock.current_food_grams = 1000.0
 

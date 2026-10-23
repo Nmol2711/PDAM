@@ -57,11 +57,9 @@ import 'package:app_movil_pdam/features/logs/domain/repository/log_repositories.
 import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
-import 'package:app_movil_pdam/features/dispensers/data/datasources/dispensers_local_datasource.dart';
-import 'package:app_movil_pdam/features/dispensers/data/services/ble_provisioning_service.dart';
-import 'package:app_movil_pdam/features/dispensers/data/repositories/dispensers_repository_impl.dart';
-import 'package:app_movil_pdam/features/dispensers/domain/repositories/dispensers_repository.dart';
-import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
+import 'package:app_movil_pdam/features/nutrition/domain/usecases/calculate_nutrition_usecase.dart';
+import 'package:app_movil_pdam/features/nutrition/presentation/bloc/nutrition_cubit.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get_it/get_it.dart';
 
@@ -150,11 +148,18 @@ Future<void> setup() async {
     ),
   );
 
+  sl.registerLazySingleton<BleProvisioningService>(
+    () => BleProvisioningService(),
+  );
+
   sl.registerLazySingleton<DispenserRepositories>(
     () => DispenserRepositoryImpl(
       dispenserRemoteDatasource: sl<DispenserRemoteDatasource>(),
       localDispenserDatasource: sl<LocalDispenserDatasource>(),
       syncService: sl<SyncService>(),
+      bleService: sl<BleProvisioningService>(),
+      dioClient: sl<DioClient>(),
+      storageService: sl<StorageService>(),
     ),
   );
 
@@ -250,8 +255,12 @@ Future<void> setup() async {
     () => UpdateDispenserMacUc(repository: sl<DispenserRepositories>()),
   );
 
+  // Nutrición (motor WSAVA, Spec 011)
+  sl.registerLazySingleton(() => const CalculateNutritionUsecase());
+
   sl.registerLazySingleton(
     () => DispenserBloc(
+      repository: sl<DispenserRepositories>(),
       associateUseCase: sl<AssociateDispenserUc>(),
       getDispenserByPetUseCase: sl<GetDispenserByPetUc>(),
       activateUseCase: sl<ActivateDispenserUc>(),
@@ -295,23 +304,10 @@ Future<void> setup() async {
     () => LogBloc(getLogsUc: sl<GetLogsUc>()),
   );
 
-  // Feature Dispensers (BLE Provisioning)
-  sl.registerLazySingleton<DispensersLocalDatasource>(
-    () => DispensersLocalDatasource(),
-  );
-  sl.registerLazySingleton<BleProvisioningService>(
-    () => BleProvisioningService(),
-  );
-  sl.registerLazySingleton<DispensersRepository>(
-    () => DispensersRepositoryImpl(
-      localDatasource: sl<DispensersLocalDatasource>(),
-      bleService: sl<BleProvisioningService>(),
-      dioClient: sl<DioClient>(),
-      storageService: sl<StorageService>(),
+  sl.registerFactory(
+    () => NutritionCubit(
+      calculateNutritionUsecase: sl<CalculateNutritionUsecase>(),
     ),
-  );
-  sl.registerLazySingleton(
-    () => DispensersBloc(repository: sl<DispensersRepository>()),
   );
 
   sl.registerFactory(

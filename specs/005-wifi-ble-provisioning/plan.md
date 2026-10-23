@@ -5,15 +5,15 @@
 La implementación del aprovisionamiento WiFi por BLE abarca tres capas principales del sistema PDAM, respetando estrictamente la Clean Architecture, el enfoque Offline-First y las directrices de `docs/constitution.md` y `AGENTS.md`:
 
 1. **Backend (FastAPI + SQLite):**
-   - **Componentes afectados:** `api/app/services/dispenser_service.py`, `api/app/routers/dispenser.py` (o equivalente), modelos ORM y esquemas Pydantic.
+   - **Componentes afectados:** `api/app/services/dispenser_service.py`, `api/app/api/endpoints/dispenser.py`, modelos ORM y esquemas Pydantic (`api/app/schemas/dispenser.py`).
    - **Responsabilidad:** Gestionar el registro de dispensadores y exponer un endpoint seguro (`/api/v1/dispensers/{id}/reset-wifi`) para solicitar el reseteo de credenciales en la NVS del dispositivo y forzar su reinicio en modo aprovisionamiento BLE.
 
 2. **Hardware (ESP32 / PlatformIO):**
-   - **Componentes afectados:** `arduino/sketch_jul3a/src/services/wifi_service.cpp`, `arduino/sketch_jul3a/src/services/ble_service.cpp`, `arduino/sketch_jul3a/src/main.cpp`.
+   - **Componentes afectados:** `DispensadorESP32/src/services/wifi_service.cpp` (WiFi 2.4GHz, NVS y servidor GATT BLE), `DispensadorESP32/src/tasks/dispenser_task.cpp` (máquina de estados) y `DispensadorESP32/src/main.cpp`.
    - **Responsabilidad:** Gestionar la conectividad WiFi estrictamente en **2.4GHz**, almacenar credenciales en la memoria no volátil (**NVS** vía `Preferences.h`), exponer un servidor GATT BLE (`PDAM-Config-[MAC]`) para recibir SSID y Password, y apagar el radio Bluetooth una vez establecida la conexión WiFi exitosa.
 
 3. **Frontend (Flutter + BLoC + GoRouter + Isar):**
-   - **Componentes afectados:** `app/app_movil_pdam/lib/features/dispensers/` (Clean Architecture: `domain`, `data`, `presentation`), integración en `GoRouter`, y almacenamiento local con Isar (`Offline-First`).
+   - **Componentes afectados:** `app/app_movil_pdam/lib/features/dispenser/` (Clean Architecture: `domain`, `data`, `presentation`), integración en `GoRouter`, y almacenamiento local con Isar (`Offline-First`).
    - **Responsabilidad:** Proveer una sección dedicada "Dispensadores" en la navegación principal, verificar el estado del Bluetooth (`FlutterBluePlus.adapterStateNow`), escanear dispositivos BLE cercanos con filtrado robusto por prefijo `PDAM-Config-*`, permitir la cancelación del escaneo en tiempo real (`FlutterBluePlus.stopScan()`), mostrar advertencias técnicas sobre la limitación de redes de **2.4GHz**, enviar credenciales mediante características GATT, y reflejar el estado de conexión.
 
 ---
@@ -31,9 +31,9 @@ La implementación del aprovisionamiento WiFi por BLE abarca tres capas principa
 - **Servidor GATT BLE:** Inicialización del servicio BLE con UUIDs definidos, emisión de beacons con prefijo `PDAM-Config-[MAC]`, recepción de características de SSID y Password, y desactivación automática del radio BLE al conectar con éxito al WiFi.
 
 ### Fase 3: Frontend (Flutter)
-- **Estructura Clean Architecture (`features/dispensers/`):**
-  - `domain/entities/dispenser.dart`, `domain/repositories/dispenser_repository.dart`, `domain/usecases/`
-  - `data/models/dispenser_model.dart`, `data/datasources/dispenser_local_datasource_isar.dart`, `data/datasources/dispenser_remote_datasource.dart`, `data/repositories/dispenser_repository_impl.dart`, `data/services/ble_provisioning_service.dart` (incluyendo verificación de estado de Bluetooth con `FlutterBluePlus.adapterStateNow`, filtrado robusto por prefijo `PDAM-Config-*`, y control de cancelación mediante `FlutterBluePlus.stopScan()`).
+- **Estructura Clean Architecture (`features/dispenser/`):**
+  - `domain/entity/dispenser.dart`, `domain/repository/dispenser_repositories.dart`, `domain/use_case/`
+  - `data/models/dispenser_model.dart`, `data/datasource/local/local_dispenser_datasource.dart`, `data/datasource/remote/dispenser_remote_datasource.dart`, `data/repositories_impl/dispenser_repository_impl.dart`, `data/services/ble_provisioning_service.dart` (incluyendo verificación de estado de Bluetooth con `FlutterBluePlus.adapterStateNow`, filtrado robusto por prefijo `PDAM-Config-*`, y control de cancelación mediante `FlutterBluePlus.stopScan()`).
   - `presentation/bloc/dispenser_bloc.dart`, `presentation/views/dispensers_page.dart`, `presentation/views/ble_scan_page.dart` (con botón de parada/cancelación en tiempo real), `presentation/views/wifi_provisioning_page.dart`
 - **Integración GoRouter:** Añadir la ruta `/dispensers` y sus subrutas en la navegación principal.
 - **Offline-First con Isar:** Persistencia local de dispensadores registrados para disponibilidad sin conexión.

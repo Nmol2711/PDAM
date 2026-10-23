@@ -15,10 +15,11 @@ import 'package:app_movil_pdam/features/auth/presentation/views/register_view.da
 import 'package:app_movil_pdam/features/logs/presentation/views/logs_view.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/views/dashboard_view.dart';
 import 'package:app_movil_pdam/features/home/presentation/views/home_view.dart';
-import 'package:app_movil_pdam/features/dispensers/domain/entities/scanned_device.dart';
-import 'package:app_movil_pdam/features/dispensers/presentation/views/dispensers_page.dart';
-import 'package:app_movil_pdam/features/dispensers/presentation/views/ble_scan_page.dart';
-import 'package:app_movil_pdam/features/dispensers/presentation/views/wifi_provisioning_page.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/views/dispensers_page.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/views/ble_scan_page.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/views/wifi_provisioning_page.dart';
+import 'package:app_movil_pdam/features/nutrition/presentation/views/nutrition_calculator_view.dart';
 
 // Importamos el Bloc y el puente que creamos
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
@@ -83,6 +84,11 @@ class AppRouter {
 
           return GuidedScheduleFormView(pet: pet);
         },
+      ),
+      GoRoute(
+        path: '/nutrition-calculator',
+        name: 'nutrition_calculator',
+        builder: (context, state) => const NutritionCalculatorView(),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {

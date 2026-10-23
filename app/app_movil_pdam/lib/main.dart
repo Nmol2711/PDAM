@@ -7,8 +7,7 @@ import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bl
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
-import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_bloc.dart';
-import 'package:app_movil_pdam/features/dispensers/presentation/bloc/dispensers_event.dart';
+import 'package:app_movil_pdam/features/nutrition/presentation/bloc/nutrition_cubit.dart';
 import 'package:app_movil_pdam/utils/app_bloc_observer.dart';
 import 'package:flutter/material.dart';
 
@@ -39,11 +38,12 @@ class MainApp extends StatelessWidget {
         BlocProvider<PetBloc>(create: (context) => di.sl<PetBloc>()),
         BlocProvider<ScheduleBloc>(create: (context) => di.sl<ScheduleBloc>()),
         BlocProvider<DispenserBloc>(
-          create: (context) => di.sl<DispenserBloc>(),
+          create: (context) =>
+              di.sl<DispenserBloc>()..add(LoadDispensersEvent()),
         ),
         BlocProvider<LogBloc>(create: (context) => di.sl<LogBloc>()),
-        BlocProvider<DispensersBloc>(
-          create: (context) => di.sl<DispensersBloc>()..add(LoadDispensersEvent()),
+        BlocProvider<NutritionCubit>(
+          create: (context) => di.sl<NutritionCubit>(),
         ),
         BlocProvider<ThemeCubit>(create: (context) => di.sl<ThemeCubit>()),
       ],

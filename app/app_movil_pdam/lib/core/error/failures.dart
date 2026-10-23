@@ -53,3 +53,9 @@ class InvalidMacFormatFailures extends Failures {
 class ConnectivityRequiredFailures extends Failures {
   ConnectivityRequiredFailures(super.message);
 }
+
+/// Fallo de validación del motor nutricional WSAVA (RF-1, RF-2). La capa de
+/// dominio lo crea con el mensaje descriptivo en español correspondiente.
+class NutritionValidationFailures extends Failures {
+  NutritionValidationFailures(super.message);
+}
