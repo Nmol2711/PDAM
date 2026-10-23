@@ -17,6 +17,10 @@ class Dispenser extends Equatable {
   final double currentFoodGrams;
   final bool isOfflineCached;
 
+  /// Delta de alimento agregado sin conexión que aún debe enviarse al servidor.
+  /// Es un dato local de sincronización; el servidor no lo devuelve.
+  final double pendingRefillGrams;
+
   const Dispenser({
     required this.id,
     required this.macAddress,
@@ -27,6 +31,7 @@ class Dispenser extends Equatable {
     this.wifiSsid,
     this.currentFoodGrams = 5000.0,
     this.isOfflineCached = false,
+    this.pendingRefillGrams = 0.0,
   });
 
   /// Alias de compatibilidad con las vistas del flujo BLE, que hablan de
@@ -48,6 +53,7 @@ class Dispenser extends Equatable {
     wifiSsid,
     currentFoodGrams,
     isOfflineCached,
+    pendingRefillGrams,
   ];
 
   Dispenser copyWith({
@@ -60,6 +66,7 @@ class Dispenser extends Equatable {
     String? wifiSsid,
     double? currentFoodGrams,
     bool? isOfflineCached,
+    double? pendingRefillGrams,
   }) {
     return Dispenser(
       id: id ?? this.id,
@@ -71,6 +78,7 @@ class Dispenser extends Equatable {
       wifiSsid: wifiSsid ?? this.wifiSsid,
       currentFoodGrams: currentFoodGrams ?? this.currentFoodGrams,
       isOfflineCached: isOfflineCached ?? this.isOfflineCached,
+      pendingRefillGrams: pendingRefillGrams ?? this.pendingRefillGrams,
     );
   }
 }

@@ -79,6 +79,90 @@ void main() {
       retrieved = await datasource.getLocalDispenserByPet(2);
       expect(retrieved, isNull);
     });
+
+    test('getRemoteIdByDeviceId resuelve por MAC y por id remoto', () async {
+      await datasource.saveLocalDispenser(
+        Dispenser(
+          id: 7,
+          macAddress: 'aa:bb:cc:dd:ee:ff',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 3,
+        ),
+      );
+
+      expect(await datasource.getRemoteIdByDeviceId('AA:BB:CC:DD:EE:FF'), 7);
+      expect(await datasource.getRemoteIdByDeviceId('7'), 7);
+      expect(await datasource.getRemoteIdByDeviceId('99'), isNull);
+    });
+
+    test('guarda, conserva y limpia pendingRefillGrams (RNF-7)', () async {
+      await datasource.saveLocalDispenser(
+        Dispenser(
+          id: 7,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 1,
+          currentFoodGrams: 1200.0,
+        ),
+        pendingRefillGrams: 200.0,
+      );
+
+      var saved = await datasource.getLocalDispenserByPet(1);
+      expect(saved?.pendingRefillGrams, 200.0);
+
+      // Un refresco normal (sin pasar el pendiente) no debe borrarlo.
+      await datasource.saveLocalDispenser(
+        Dispenser(
+          id: 7,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 1,
+          currentFoodGrams: 1180.0,
+        ),
+      );
+      saved = await datasource.getLocalDispenserByPet(1);
+      expect(saved?.pendingRefillGrams, 200.0);
+      expect(saved?.currentFoodGrams, 1180.0);
+
+      // Tras sincronizar se limpia con 0.
+      await datasource.saveLocalDispenser(
+        Dispenser(
+          id: 7,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 1,
+          currentFoodGrams: 1380.0,
+        ),
+        pendingRefillGrams: 0.0,
+      );
+      saved = await datasource.getLocalDispenserByPet(1);
+      expect(saved?.pendingRefillGrams, 0.0);
+    });
+
+    test('pendingRefillGrams sobrevive al cierre y reapertura de Isar (RNF-7)', () async {
+      await datasource.saveLocalDispenser(
+        Dispenser(
+          id: 9,
+          macAddress: 'DD:BB:CC:DD:EE:FF',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 4,
+          currentFoodGrams: 1500.0,
+        ),
+        pendingRefillGrams: 500.0,
+      );
+
+      await IsarService.close();
+      final reopened = LocalDispenserDatasourceImpl(testDirectory: tempDir.path);
+      final saved = await reopened.getLocalDispenserByPet(4);
+
+      expect(saved?.pendingRefillGrams, 500.0);
+      expect(saved?.currentFoodGrams, 1500.0);
+    });
   });
 
   group('Limpieza de huérfanos', () {

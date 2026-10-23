@@ -33,6 +33,10 @@ class _BleScanPageState extends State<BleScanPage> {
   @override
   void dispose() {
     _dispensersBloc.add(StopScanBleEvent());
+    // Al volver de la pantalla de escaneo el BLoC seguía en BleScanningState y
+    // la lista caía en el botón "Cargar Dispensadores" (RF-9). Se restaura la
+    // lista para que el usuario vea sus dispositivos al regresar.
+    _dispensersBloc.add(LoadDispensersEvent());
     super.dispose();
   }
 

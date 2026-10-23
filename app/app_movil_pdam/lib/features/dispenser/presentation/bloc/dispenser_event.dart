@@ -56,6 +56,10 @@ class QrCodeDetectedEvent extends DispenserEvent {
 
 class LoadDispensersEvent extends DispenserEvent {}
 
+/// Actualiza el stock consultando el servidor sin mostrar la pantalla de carga
+/// (RF-4). Si falla, conserva la caché local (RF-10).
+class RefreshDispensersEvent extends DispenserEvent {}
+
 class StartScanBleEvent extends DispenserEvent {}
 
 class StopScanBleEvent extends DispenserEvent {}

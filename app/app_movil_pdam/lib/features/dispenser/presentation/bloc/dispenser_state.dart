@@ -30,10 +30,22 @@ class DispenserLoaded extends DispenserState {
 class DispenserListLoaded extends DispenserState {
   final List<Dispenser> dispensers;
 
-  const DispenserListLoaded({required this.dispensers});
+  /// Marca un reabastecimiento exitoso para que la vista muestre el aviso una
+  /// sola vez. Los refrescos silenciosos la dejan en `false`.
+  final bool refillSuccess;
+
+  /// Marca un rechazo por capacidad para mostrar el único aviso de límite una
+  /// sola vez (RF-8, RF-13).
+  final bool refillLimitExceeded;
+
+  const DispenserListLoaded({
+    required this.dispensers,
+    this.refillSuccess = false,
+    this.refillLimitExceeded = false,
+  });
 
   @override
-  List<Object?> get props => [dispensers];
+  List<Object?> get props => [dispensers, refillSuccess, refillLimitExceeded];
 }
 
 class DispenserToggled extends DispenserState {

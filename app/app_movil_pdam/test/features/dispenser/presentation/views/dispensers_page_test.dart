@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/views/dispensers_page.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/widgets/device_card_widget.dart';
@@ -20,6 +21,8 @@ void main() {
   Future<DispenserBloc> pumpPage(
     WidgetTester tester, {
     required MockDispenserRepository repository,
+    Duration? refreshInterval,
+    bool tickerEnabled = true,
   }) async {
     final bloc = buildDispenserBloc(repository);
     addTearDown(bloc.close);
@@ -31,7 +34,10 @@ void main() {
           path: '/dispensers',
           builder: (context, state) => BlocProvider<DispenserBloc>.value(
             value: bloc,
-            child: const DispensersPage(),
+            child: TickerMode(
+              enabled: tickerEnabled,
+              child: DispensersPage(refreshInterval: refreshInterval),
+            ),
           ),
           routes: <RouteBase>[
             GoRoute(
@@ -84,8 +90,154 @@ void main() {
 
     expect(find.byType(DeviceCardWidget), findsOneWidget);
     expect(find.text('Dispensador Sala'), findsOneWidget);
-    expect(find.text('Red: HomeWiFi'), findsOneWidget);
+    expect(find.textContaining('Red:'), findsNothing);
+    expect(find.text('Estado de WiFi:'), findsNothing);
+    expect(find.text('Resetear WiFi'), findsOneWidget);
+    expect(find.textContaining('5.000 g'), findsOneWidget);
+    expect(find.textContaining('de 5 kg'), findsOneWidget);
     expect(find.text('No hay dispositivos vinculados'), findsNothing);
+  });
+
+  testWidgets('deslizar hacia abajo refresca el stock desde el repositorio (RF-5)', (
+    tester,
+  ) async {
+    final repository = MockDispenserRepository(
+      mockDispensers: const [
+        Dispenser(
+          id: 1,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          name: 'Dispensador Sala',
+          isActive: true,
+          petId: 1,
+        ),
+      ],
+    );
+    await pumpPage(tester, repository: repository);
+
+    await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(repository.refreshCalls, greaterThan(0));
+  });
+
+  testWidgets('el sondeo no consulta si la pestaña no está visible (RNF-1)', (
+    tester,
+  ) async {
+    final repository = MockDispenserRepository(
+      mockDispensers: const [
+        Dispenser(
+          id: 1,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          name: 'Dispensador Sala',
+          isActive: true,
+          petId: 1,
+        ),
+      ],
+    );
+    await pumpPage(
+      tester,
+      repository: repository,
+      refreshInterval: const Duration(milliseconds: 100),
+      tickerEnabled: false,
+    );
+
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(repository.refreshCalls, 0);
+  });
+
+  testWidgets('muestra el aviso de reabastecimiento exitoso una sola vez (RF-7)', (
+    tester,
+  ) async {
+    final bloc = await pumpPage(
+      tester,
+      repository: MockDispenserRepository(
+        mockDispensers: const [
+          Dispenser(
+            id: 1,
+            macAddress: 'AA:BB:CC:DD:EE:FF',
+            name: 'Dispensador Sala',
+            isActive: true,
+            petId: 1,
+            currentFoodGrams: 1500.0,
+          ),
+        ],
+      ),
+    );
+
+    bloc.add(
+      const RefillFoodEvent(dispenserId: '1', amount: 500.0, unit: 'g'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('Reabastecimiento con éxito'), findsOneWidget);
+  });
+
+  testWidgets('muestra el aviso de límite cuando el servidor rechaza (RF-8)', (
+    tester,
+  ) async {
+    final bloc = await pumpPage(
+      tester,
+      repository: MockDispenserRepository(
+        mockDispensers: const [
+          Dispenser(
+            id: 1,
+            macAddress: 'AA:BB:CC:DD:EE:FF',
+            name: 'Dispensador Sala',
+            isActive: true,
+            petId: 1,
+            currentFoodGrams: 4900.0,
+          ),
+        ],
+        refillError: const RefillLimitException(),
+      ),
+    );
+
+    bloc.add(
+      const RefillFoodEvent(dispenserId: '1', amount: 500.0, unit: 'g'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(
+      find.text('El reabastecimiento supera el límite de 5 kg'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('el diálogo rechaza el exceso sin modificar ni cerrar (RF-8)', (
+    tester,
+  ) async {
+    await pumpPage(
+      tester,
+      repository: MockDispenserRepository(
+        mockDispensers: const [
+          Dispenser(
+            id: 1,
+            macAddress: 'AA:BB:CC:DD:EE:FF',
+            name: 'Dispensador Sala',
+            isActive: true,
+            petId: 1,
+            currentFoodGrams: 4900.0,
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.text('Reabastecer'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '500');
+    await tester.tap(find.text('Confirmar'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('El reabastecimiento supera el límite de 5 kg'),
+      findsOneWidget,
+    );
+    expect(find.text('Reabastecer Alimento'), findsOneWidget);
   });
 
   testWidgets('el botón del AppBar navega al escaneo BLE', (tester) async {

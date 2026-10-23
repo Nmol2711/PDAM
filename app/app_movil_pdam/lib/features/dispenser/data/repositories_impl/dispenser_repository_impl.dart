@@ -8,6 +8,7 @@ import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_di
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:dio/dio.dart';
@@ -214,6 +215,74 @@ class DispenserRepositoryImpl implements DispenserRepositories {
     return result;
   }
 
+  /// Refresco silencioso del stock (RF-4, RF-10). El servidor es la fuente de
+  /// verdad: se consulta dispensador por mascota y se sobrescribe la caché.
+  /// Antes de consultar se intenta sincronizar el reabastecimiento pendiente
+  /// (RF-12); cualquier fallo individual conserva el dato local.
+  @override
+  Future<void> refreshDispensers() async {
+    if (!await _syncService.hasConnection()) {
+      return;
+    }
+
+    final localList = await _localDispenserDatasource.getLocalDispensers();
+    for (final local in localList) {
+      final petId = local.petId;
+      if (petId == null) continue;
+      final pending = local.pendingRefillGrams;
+
+      if (pending > 0) {
+        final remoteId = await _localDispenserDatasource
+            .getRemoteIdByDeviceId(local.deviceId);
+        if (remoteId != null) {
+          try {
+            final updated = await _dispenserRemoteDatasource.refillDispenser(
+              remoteId,
+              pending,
+              'g',
+            );
+            await _localDispenserDatasource.saveLocalDispenser(
+              updated,
+              pendingRefillGrams: 0.0,
+            );
+          } catch (e) {
+            final apiError = _apiExceptionOrNull(e);
+            if (apiError?.code == _codeRefillExceedsCapacity) {
+              // Carrera de stock: el servidor no admite el delta pendiente.
+              // Se reconcilia con su stock real y se descarta el pendiente.
+              await _reconcileWithServer(petId);
+            }
+            // Otro fallo (red/servidor): se conserva el pendiente y el stock.
+          }
+          // No se hace un GET adicional: la respuesta del refill ya es
+          // autoritativa, o bien se conserva la vista optimista local.
+          continue;
+        }
+      }
+
+      try {
+        final remote = await _dispenserRemoteDatasource.getDispenserByPet(
+          petId,
+        );
+        await _localDispenserDatasource.cacheDispenser(remote);
+      } catch (_) {
+        // Sin conexión o error puntual: se mantiene el stock local.
+      }
+    }
+  }
+
+  Future<void> _reconcileWithServer(int petId) async {
+    try {
+      final remote = await _dispenserRemoteDatasource.getDispenserByPet(petId);
+      await _localDispenserDatasource.saveLocalDispenser(
+        remote,
+        pendingRefillGrams: 0.0,
+      );
+    } catch (_) {
+      // No se pudo reconciliar; el pendiente se reintentará en el próximo ciclo.
+    }
+  }
+
   @override
   Future<void> saveLocalDispenser(Dispenser dispenser) async {
     await _localDispenserDatasource.saveLocalDispenser(dispenser);
@@ -229,18 +298,80 @@ class DispenserRepositoryImpl implements DispenserRepositories {
     }
   }
 
+  /// Reabastece respetando la capacidad del depósito (RF-7, RF-8) y
+  /// funcionando sin conexión (RF-11). El servidor es autoritativo cuando hay
+  /// red; si no, se aplica el stock local y se guarda el delta pendiente.
   @override
   Future<void> refillFood(String dispenserId, double grams) async {
     final localList = await _localDispenserDatasource.getLocalDispensers();
-    for (final local in localList) {
-      if (_matchesId(local, dispenserId)) {
-        await _localDispenserDatasource.saveLocalDispenser(
-          local.copyWith(
-            currentFoodGrams: grams.clamp(0.0, 5000.0).toDouble(),
-          ),
-        );
+    final local = localList
+        .where((dispenser) => _matchesId(dispenser, dispenserId))
+        .firstOrNull;
+
+    final hasConnection = await _syncService.hasConnection();
+    final remoteId = await _localDispenserDatasource.getRemoteIdByDeviceId(
+      dispenserId,
+    );
+
+    if (local == null) {
+      if (!hasConnection || remoteId == null) {
+        throw Exception(_dispensadorSinRegistroRemoto);
       }
+      final updated = await _dispenserRemoteDatasource.refillDispenser(
+        remoteId,
+        grams,
+        'g',
+      );
+      await _localDispenserDatasource.saveLocalDispenser(
+        updated,
+        pendingRefillGrams: 0.0,
+      );
+      return;
     }
+
+    // Valida contra el stock local; lanza RefillLimitException si la suma
+    // supera 5000 g, sin tocar Isar (RF-8).
+    final newStock = applyRefill(local.currentFoodGrams, grams);
+    final pending = local.pendingRefillGrams + grams;
+
+    if (!hasConnection || remoteId == null) {
+      await _savePendingRefill(local, newStock, pending);
+      return;
+    }
+
+    try {
+      final updated = await _dispenserRemoteDatasource.refillDispenser(
+        remoteId,
+        pending,
+        'g',
+      );
+      await _localDispenserDatasource.saveLocalDispenser(
+        updated,
+        pendingRefillGrams: 0.0,
+      );
+    } catch (e) {
+      final apiError = _apiExceptionOrNull(e);
+      if (apiError?.code == _codeRefillExceedsCapacity) {
+        throw const RefillLimitException();
+      }
+      // Un fallo no relacionado con el límite se trata como offline: se
+      // conserva el stock local y el delta pendiente (RF-11, RF-13).
+      await _savePendingRefill(local, newStock, pending);
+    }
+  }
+
+  Future<void> _savePendingRefill(
+    Dispenser local,
+    double newStock,
+    double pending,
+  ) async {
+    await _localDispenserDatasource.saveLocalDispenser(
+      local.copyWith(
+        currentFoodGrams: newStock,
+        pendingRefillGrams: pending,
+      ),
+      pendingRefillGrams: pending,
+    );
   }
 
   @override
@@ -337,6 +468,10 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       'No hay conexión con el servidor para desactivar el dispensador';
   static const String _sinConexionAlEliminar =
       'No hay conexión con el servidor para eliminar el dispensador';
+  static const String _codeRefillExceedsCapacity =
+      'refill_exceeds_capacity';
+  static const String _dispensadorSinRegistroRemoto =
+      'El dispensador no está registrado en el servidor. Configúralo desde la app antes de reabastecer.';
   static const String _falloDeRed =
       'No se pudo completar la operación porque no hay conexión con el servidor';
 

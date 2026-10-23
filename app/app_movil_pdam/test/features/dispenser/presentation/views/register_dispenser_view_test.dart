@@ -101,6 +101,9 @@ class _FakeDispenserRepository implements DispenserRepositories {
   Future<List<Dispenser>> getLocalDispensers() async => const <Dispenser>[];
 
   @override
+  Future<void> refreshDispensers() async {}
+
+  @override
   Future<void> saveLocalDispenser(Dispenser dispenser) async {}
 
   @override

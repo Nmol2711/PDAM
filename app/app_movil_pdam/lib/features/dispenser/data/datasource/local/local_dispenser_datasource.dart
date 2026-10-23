@@ -14,8 +14,10 @@ abstract class LocalDispenserDatasource {
     Dispenser dispenser, {
     bool isSynced = true,
     String? secretKeyQr,
+    double? pendingRefillGrams,
   });
   Future<void> deleteLocalDispenser(int petId);
+  Future<int?> getRemoteIdByDeviceId(String deviceId);
 }
 
 /// Predicado puro de huérfano heredado (RF-18, RF-19): un registro creado por
@@ -73,6 +75,7 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
     Dispenser dispenser, {
     bool isSynced = true,
     String? secretKeyQr,
+    double? pendingRefillGrams,
   }) async {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
@@ -98,10 +101,31 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
       local.pendingDispensing = dispenser.pendingDispensing;
       local.currentFoodGrams = dispenser.currentFoodGrams;
       local.isOfflineCached = dispenser.isOfflineCached;
+      // `null` conserva el pendiente previo (un refresco normal no debe
+      // borrarlo); `0` lo limpia tras una sincronización exitosa.
+      local.pendingRefillGrams = pendingRefillGrams ??
+          existing?.pendingRefillGrams ??
+          dispenser.pendingRefillGrams;
       local.updatedAt = DateTime.now();
       local.isSynced = isSynced;
       await isar.localDispensers.put(local);
     });
+  }
+
+  @override
+  Future<int?> getRemoteIdByDeviceId(String deviceId) async {
+    final isar = await _getIsar();
+    final normalized = deviceId.toUpperCase();
+    final asInt = int.tryParse(deviceId);
+    final rows = await isar.localDispensers.where().findAll();
+    for (final row in rows) {
+      final matchesMac = row.macAddress.toUpperCase() == normalized;
+      final matchesRemote = asInt != null && row.remoteId == asInt;
+      if (matchesMac || matchesRemote) {
+        return row.remoteId;
+      }
+    }
+    return null;
   }
 
   @override

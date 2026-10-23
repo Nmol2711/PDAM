@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dartz/dartz.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app_movil_pdam/core/error/api_exception.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
@@ -11,6 +12,7 @@ import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispens
 import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_dispenser_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/repositories_impl/dispenser_repository_impl.dart';
 import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 
 /// Almacenamiento seguro en memoria para no tocar `flutter_secure_storage`
 /// en las pruebas del repositorio.
@@ -39,6 +41,12 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
   bool shouldThrow = false;
   Object? throwObject;
   Dispenser? mockDispenser;
+
+  int? refillDispenserId;
+  double? refillAmount;
+  String? refillUnit;
+  Dispenser? refillResult;
+  Object? refillThrowObject;
 
   @override
   Future<Dispenser> associateDispenser(String macAddress, int petId, String secretKeyQr) async {
@@ -92,6 +100,39 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
   Future<bool> deleteDispenserByPet(int petId) async => true;
 
   @override
+  Future<Dispenser> refillDispenser(
+    int dispenserId,
+    double amount,
+    String unit,
+  ) async {
+    if (refillThrowObject != null) {
+      throw refillThrowObject!;
+    }
+    if (shouldThrow) {
+      if (throwObject != null) {
+        throw throwObject!;
+      }
+      throw DioException(
+        requestOptions: RequestOptions(path: '/dispenser/$dispenserId/refill'),
+        message: 'Connection failed',
+        type: DioExceptionType.connectionError,
+      );
+    }
+    refillDispenserId = dispenserId;
+    refillAmount = amount;
+    refillUnit = unit;
+    return refillResult ??
+        Dispenser(
+          id: dispenserId,
+          macAddress: 'AA:BB:CC:DD:EE:FF',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 1,
+          currentFoodGrams: amount,
+        );
+  }
+
+  @override
   Future<Dispenser> getDispenserByPet(int petId) async {
     if (shouldThrow) {
       if (throwObject != null) {
@@ -126,11 +167,14 @@ class MockLocalDispenserDatasource implements LocalDispenserDatasource {
   Dispenser? savedDispenser;
   bool savedSynced = true;
   String? savedSecret;
+  double? savedPendingRefillGrams;
   Dispenser? localReturn;
+  int? remoteId;
+  int saveCount = 0;
 
   @override
   Future<void> cacheDispenser(Dispenser dispenser) async {
-    savedDispenser = dispenser;
+    await saveLocalDispenser(dispenser);
   }
 
   @override
@@ -149,11 +193,24 @@ class MockLocalDispenserDatasource implements LocalDispenserDatasource {
   }
 
   @override
-  Future<void> saveLocalDispenser(Dispenser dispenser, {bool isSynced = true, String? secretKeyQr}) async {
-    savedDispenser = dispenser;
+  Future<void> saveLocalDispenser(
+    Dispenser dispenser, {
+    bool isSynced = true,
+    String? secretKeyQr,
+    double? pendingRefillGrams,
+  }) async {
+    final resolvedPending = pendingRefillGrams ??
+        savedDispenser?.pendingRefillGrams ??
+        dispenser.pendingRefillGrams;
+    savedDispenser = dispenser.copyWith(pendingRefillGrams: resolvedPending);
+    savedPendingRefillGrams = resolvedPending;
     savedSynced = isSynced;
     savedSecret = secretKeyQr;
+    saveCount++;
   }
+
+  @override
+  Future<int?> getRemoteIdByDeviceId(String deviceId) async => remoteId;
 }
 
 class MockSyncService implements SyncService {
@@ -335,6 +392,310 @@ void main() {
       expect(result.isLeft(), true);
       result.fold((l) => expect(l, isA<ConnectivityRequiredFailures>()), (r) => fail('fail'));
       expect(localDatasource.savedDispenser, isNotNull);
+    });
+  });
+
+  group('refreshDispensers', () {
+    test('online actualiza el stock local con la respuesta del servidor (RF-4)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.savedDispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+      remoteDatasource.mockDispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 800.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 800.0);
+    });
+
+    test('offline conserva el stock local sin consultar (RF-10)', () async {
+      syncService.setHasConnection(false);
+      localDatasource.savedDispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1000.0);
+      expect(remoteDatasource.refillDispenserId, isNull);
+    });
+
+    test('si la consulta falla conserva el stock local', () async {
+      syncService.setHasConnection(true);
+      remoteDatasource.shouldThrow = true;
+      localDatasource.savedDispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1000.0);
+    });
+
+    test('envía el reabastecimiento pendiente y limpia el delta (RF-12)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+        pendingRefillGrams: 500.0,
+      );
+      remoteDatasource.refillResult = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1500.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(remoteDatasource.refillDispenserId, 7);
+      expect(remoteDatasource.refillAmount, 500.0);
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1500.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+    });
+
+    test('si el servidor rechaza el pendiente reconcilia y lo limpia (RF-12)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 4900.0,
+        pendingRefillGrams: 500.0,
+      );
+      remoteDatasource.refillThrowObject = const ApiException(
+        code: 'refill_exceeds_capacity',
+        message: 'El reabastecimiento supera el límite de 5 kg',
+        status: 400,
+      );
+      remoteDatasource.mockDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 4950.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 4950.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+    });
+
+    test('si falla la red conserva el delta pendiente (RF-12)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1500.0,
+        pendingRefillGrams: 500.0,
+      );
+      remoteDatasource.shouldThrow = true;
+
+      await repository.refreshDispensers();
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1500.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+    });
+  });
+
+  group('refillFood', () {
+    test('online suma en el servidor y limpia el pendiente (RF-7)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+      remoteDatasource.refillResult = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1500.0,
+      );
+
+      await repository.refillFood('7', 500.0);
+
+      expect(remoteDatasource.refillDispenserId, 7);
+      expect(remoteDatasource.refillAmount, 500.0);
+      expect(remoteDatasource.refillUnit, 'g');
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1500.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+    });
+
+    test('online envía también el pendiente acumulado (RF-12)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+        pendingRefillGrams: 500.0,
+      );
+      remoteDatasource.refillResult = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 2000.0,
+      );
+
+      await repository.refillFood('7', 500.0);
+
+      expect(remoteDatasource.refillAmount, 1000.0);
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 2000.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+    });
+
+    test('offline aplica el stock local y deja el delta pendiente (RF-11)', () async {
+      syncService.setHasConnection(false);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refillFood('7', 500.0);
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1500.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+      expect(remoteDatasource.refillDispenserId, isNull);
+    });
+
+    test('offline rechaza si la suma supera la capacidad (RF-8)', () async {
+      syncService.setHasConnection(false);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 4900.0,
+      );
+
+      await expectLater(
+        repository.refillFood('7', 200.0),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 4900.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+    });
+
+    test('sin identificador remoto guarda local y deja pendiente (RF-11)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = null;
+      localDatasource.savedDispenser = Dispenser(
+        id: 0,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refillFood('AA:BB:CC:DD:EE:FF', 500.0);
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1500.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+      expect(remoteDatasource.refillDispenserId, isNull);
+    });
+
+    test('si el servidor rechaza por límite lanza RefillLimitException (RF-8)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+      remoteDatasource.refillThrowObject = const ApiException(
+        code: 'refill_exceeds_capacity',
+        message: 'El reabastecimiento supera el límite de 5 kg',
+        status: 400,
+      );
+
+      await expectLater(
+        repository.refillFood('7', 500.0),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1000.0);
+    });
+
+    test('un fallo no-límite se guarda como pendiente y no lanza (RF-11, RF-13)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+      remoteDatasource.shouldThrow = true;
+
+      await repository.refillFood('7', 500.0);
+
+      expect(localDatasource.savedDispenser?.currentFoodGrams, 1500.0);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+    });
+
+    test('rechaza cantidad cero o negativa con RefillLimitException (RF-8)', () async {
+      syncService.setHasConnection(false);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await expectLater(
+        repository.refillFood('7', 0.0),
+        throwsA(isA<RefillLimitException>()),
+      );
+      await expectLater(
+        repository.refillFood('7', -10.0),
+        throwsA(isA<RefillLimitException>()),
+      );
     });
   });
 }

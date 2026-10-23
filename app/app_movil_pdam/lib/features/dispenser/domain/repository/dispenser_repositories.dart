@@ -36,6 +36,11 @@ abstract class DispenserRepositories {
 
   // --- Flujo local / BLE / WiFi ---
   Future<List<Dispenser>> getLocalDispensers();
+
+  /// Consulta el stock del servidor para cada dispensador vinculado a una
+  /// mascota y actualiza la caché local. Si no hay conexión o una consulta
+  /// falla, conserva el dato local de ese dispensador (RF-4, RF-10).
+  Future<void> refreshDispensers();
   Future<void> saveLocalDispenser(Dispenser dispenser);
   Future<void> refillFood(String dispenserId, double grams);
   Future<void> discountFood(String dispenserId, double grams);

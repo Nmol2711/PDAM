@@ -21,12 +21,16 @@ class DispenserFoodProgressBar extends StatelessWidget {
     final percentage = status.percentageRemaining;
     final isCritical = status.isCritical;
     final progressColor = isCritical ? AppColors.warning : AppColors.primaryGreen;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 2,
           children: [
             const Text(
               'Alimento restante:',
@@ -37,13 +41,13 @@ class DispenserFoodProgressBar extends StatelessWidget {
               ),
             ),
             Text(
-              currentFoodGrams >= 1000
-                  ? '${(currentFoodGrams / 1000).toStringAsFixed(1)} kg / ${(maxCapacityGrams / 1000).toStringAsFixed(0)} kg (${percentage.toStringAsFixed(0)}%)'
-                  : '${currentFoodGrams.toStringAsFixed(0)} g / ${maxCapacityGrams.toStringAsFixed(0)} g (${percentage.toStringAsFixed(0)}%)',
+              formatFoodProgressLabel(currentFoodGrams, maxCapacityGrams),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: isCritical ? AppColors.warning : AppColors.textPrimary,
+                color: isCritical
+                    ? AppColors.warning
+                    : (isDark ? Colors.white : AppColors.textPrimary),
               ),
             ),
           ],

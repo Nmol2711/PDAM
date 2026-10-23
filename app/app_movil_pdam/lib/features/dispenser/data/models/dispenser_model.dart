@@ -16,6 +16,7 @@ class DispenserModel extends Dispenser {
     super.wifiSsid,
     super.currentFoodGrams,
     super.isOfflineCached,
+    super.pendingRefillGrams,
   });
 
   factory DispenserModel.fromJson(Map<String, dynamic> json) {
@@ -27,6 +28,7 @@ class DispenserModel extends Dispenser {
       petId: json['pet_id'] as int?,
       name: json['name'] as String? ?? '',
       currentFoodGrams: (json['current_food_grams'] as num?)?.toDouble() ?? 5000.0,
+      pendingRefillGrams: 0.0,
     );
   }
 
@@ -41,6 +43,7 @@ class DispenserModel extends Dispenser {
       name: 'Dispensador $mac',
       currentFoodGrams: local.currentFoodGrams,
       isOfflineCached: local.isOfflineCached,
+      pendingRefillGrams: local.pendingRefillGrams,
     );
   }
 
@@ -53,6 +56,7 @@ class DispenserModel extends Dispenser {
       ..pendingDispensing = pendingDispensing
       ..currentFoodGrams = currentFoodGrams
       ..isOfflineCached = isOfflineCached
+      ..pendingRefillGrams = pendingRefillGrams
       ..updatedAt = DateTime.now()
       ..isSynced = true;
     return local;

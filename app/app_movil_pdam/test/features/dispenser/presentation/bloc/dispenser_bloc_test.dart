@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/activate_dispenser_uc.dart';
@@ -17,6 +18,9 @@ class MockDispenserRepository implements DispenserRepositories {
   final bool failActivate;
   final bool failDeactivate;
   final bool failDelete;
+  final bool failRefill;
+  final Object? refillError;
+  int refreshCalls = 0;
 
   MockDispenserRepository({
     this.mockDispensers = const [],
@@ -24,6 +28,8 @@ class MockDispenserRepository implements DispenserRepositories {
     this.failActivate = false,
     this.failDeactivate = false,
     this.failDelete = false,
+    this.failRefill = false,
+    this.refillError,
   });
 
   @override
@@ -33,13 +39,20 @@ class MockDispenserRepository implements DispenserRepositories {
   }
 
   @override
+  Future<void> refreshDispensers() async {
+    refreshCalls++;
+    if (shouldFail) throw Exception('Error al refrescar');
+  }
+
+  @override
   Future<void> saveLocalDispenser(Dispenser dispenser) async {
     if (shouldFail) throw Exception('Error al guardar');
   }
 
   @override
   Future<void> refillFood(String dispenserId, double grams) async {
-    if (shouldFail) throw Exception('Error al reabastecer');
+    if (refillError != null) throw refillError!;
+    if (failRefill || shouldFail) throw Exception('Error al reabastecer');
   }
 
   @override
@@ -431,6 +444,118 @@ void main() {
       await pumpEventQueue();
 
       expect(bloc.state, isA<DispenserFailure>());
+      await bloc.close();
+    });
+
+    test('RefreshDispensersEvent actualiza la lista sin emitir loading (RF-4)', () async {
+      const dispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        name: 'Dispensador 1',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 800.0,
+      );
+      final repository = MockDispenserRepository(
+        mockDispensers: const [dispenser],
+      );
+      final bloc = buildDispenserBloc(repository);
+      final emitted = <DispenserState>[];
+      final subscription = bloc.stream.listen(emitted.add);
+
+      bloc.add(RefreshDispensersEvent());
+      await pumpEventQueue();
+
+      expect(emitted.whereType<DispenserListLoading>(), isEmpty);
+      expect(bloc.state, isA<DispenserListLoaded>());
+      expect(
+        (bloc.state as DispenserListLoaded).dispensers.single.currentFoodGrams,
+        800.0,
+      );
+
+      await subscription.cancel();
+      await bloc.close();
+    });
+
+    test('RefillFoodEvent exitoso emite la lista con refillSuccess (RF-7)', () async {
+      const dispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        name: 'Dispensador 1',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1500.0,
+      );
+      final repository = MockDispenserRepository(
+        mockDispensers: const [dispenser],
+      );
+      final bloc = buildDispenserBloc(repository);
+
+      bloc.add(
+        const RefillFoodEvent(
+          dispenserId: '1',
+          amount: 500.0,
+          unit: 'g',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(bloc.state, isA<DispenserListLoaded>());
+      final state = bloc.state as DispenserListLoaded;
+      expect(state.refillSuccess, isTrue);
+      expect(state.dispensers.single.currentFoodGrams, 1500.0);
+      await bloc.close();
+    });
+
+    test('RefillFoodEvent por límite emite refillLimitExceeded (RF-8)', () async {
+      const dispenser = Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        name: 'Dispensador 1',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 4900.0,
+      );
+      final repository = MockDispenserRepository(
+        mockDispensers: const [dispenser],
+        refillError: const RefillLimitException(),
+      );
+      final bloc = buildDispenserBloc(repository);
+
+      bloc.add(
+        const RefillFoodEvent(
+          dispenserId: '1',
+          amount: 500.0,
+          unit: 'g',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(bloc.state, isA<DispenserListLoaded>());
+      final state = bloc.state as DispenserListLoaded;
+      expect(state.refillLimitExceeded, isTrue);
+      expect(state.refillSuccess, isFalse);
+      await bloc.close();
+    });
+
+    test('RefillFoodEvent fallido no emite error genérico (RF-13)', () async {
+      final repository = MockDispenserRepository(failRefill: true);
+      final bloc = buildDispenserBloc(repository);
+
+      bloc.add(
+        const RefillFoodEvent(
+          dispenserId: '1',
+          amount: 500.0,
+          unit: 'g',
+        ),
+      );
+      await pumpEventQueue();
+
+      expect(bloc.state, isA<DispenserListLoaded>());
+      final state = bloc.state as DispenserListLoaded;
+      expect(state.refillSuccess, isFalse);
+      expect(state.refillLimitExceeded, isFalse);
+      expect(bloc.state, isNot(isA<DispenserErrorState>()));
       await bloc.close();
     });
   });

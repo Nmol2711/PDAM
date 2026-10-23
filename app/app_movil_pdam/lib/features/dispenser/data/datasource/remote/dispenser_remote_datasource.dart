@@ -21,6 +21,10 @@ abstract class DispenserRemoteDatasource {
   /// valida formato y unicidad por forma normalizada, así que un conflicto
   /// llega como `ApiException` con `code` `mac_in_use` o `mac_invalid_format`.
   Future<Dispenser> updateDispenserMac(int dispenserId, int petId, String macAddress);
+
+  /// Suma alimento al stock del dispensador en el servidor (RF-7). El servidor
+  /// aplica el tope de capacidad y devuelve el estado actualizado.
+  Future<Dispenser> refillDispenser(int dispenserId, double amount, String unit);
 }
 
 class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
@@ -169,6 +173,26 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
       throw _apiExceptionFrom(
         e,
         staticMessage: 'Error con el servidor al cambiar la dirección del dispensador',
+      );
+    }
+  }
+
+  @override
+  Future<Dispenser> refillDispenser(
+    int dispenserId,
+    double amount,
+    String unit,
+  ) async {
+    try {
+      final response = await _dioClient.dio.post(
+        '${ApiConstants.dispenser}$dispenserId/refill',
+        data: {'amount': amount, 'unit': unit},
+      );
+      return DispenserModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _apiExceptionFrom(
+        e,
+        staticMessage: 'Error con el servidor al reabastecer el dispensador',
       );
     }
   }

@@ -37,7 +37,7 @@ void main() {
     dispensersBloc.close();
   });
 
-  testWidgets('DeviceCardWidget displays configured WiFi SSID when wifiSsid is present (RF-04)', (WidgetTester tester) async {
+  testWidgets('DeviceCardWidget oculta conexión y estado de WiFi pero conserva el reset (RF-1, RF-2)', (WidgetTester tester) async {
     const dispenser = Dispenser(
       id: 1,
       macAddress: 'AA:BB:CC:DD:EE:FF',
@@ -50,16 +50,20 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: DeviceCardWidget(dispenser: dispenser),
+          body: DeviceCardWidget(dispenser: dispenser, onResetWifi: () {}),
         ),
       ),
     );
 
-    expect(find.text('Red: HomeWiFi'), findsOneWidget);
+    expect(find.text('Estado de WiFi:'), findsNothing);
+    expect(find.textContaining('Red:'), findsNothing);
     expect(find.text('Aún no se han proporcionado las credenciales de wifi'), findsNothing);
+    expect(find.text('Conectado'), findsNothing);
+    expect(find.text('Desconectado'), findsNothing);
+    expect(find.text('Resetear WiFi'), findsOneWidget);
   });
 
-  testWidgets('DeviceCardWidget displays unconfigured WiFi message when wifiSsid is null or empty', (WidgetTester tester) async {
+  testWidgets('DeviceCardWidget no muestra el reset si no se proporciona (RF-1)', (WidgetTester tester) async {
     const dispenser = Dispenser(
       id: 1,
       macAddress: 'AA:BB:CC:DD:EE:FF',
@@ -76,7 +80,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Aún no se han proporcionado las credenciales de wifi'), findsOneWidget);
-    expect(find.textContaining('Red:'), findsNothing);
+    expect(find.text('Resetear WiFi'), findsNothing);
+    expect(find.text('Estado de WiFi:'), findsNothing);
   });
 }

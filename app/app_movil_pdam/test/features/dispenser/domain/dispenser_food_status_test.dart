@@ -22,10 +22,62 @@ void main() {
       expect(convertAndValidateRefill(2.5, 'kg'), 2500.0);
       expect(convertAndValidateRefill(5.0, 'kg'), 5000.0);
 
-      expect(() => convertAndValidateRefill(0, 'g'), throwsArgumentError);
-      expect(() => convertAndValidateRefill(-100, 'g'), throwsArgumentError);
-      expect(() => convertAndValidateRefill(5.1, 'kg'), throwsArgumentError);
-      expect(() => convertAndValidateRefill(5001.0, 'g'), throwsArgumentError);
+      expect(
+        () => convertAndValidateRefill(0, 'g'),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(
+        () => convertAndValidateRefill(-100, 'g'),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(
+        () => convertAndValidateRefill(5.1, 'kg'),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(
+        () => convertAndValidateRefill(5001.0, 'g'),
+        throwsA(isA<RefillLimitException>()),
+      );
+    });
+
+    test('applyRefill suma y rechaza si supera el límite (RF-7, RF-8)', () {
+      expect(applyRefill(1000.0, 500.0), 1500.0);
+      expect(applyRefill(1000.0, 4000.0), 5000.0);
+      expect(applyRefill(0.0, 100.0), 100.0);
+      expect(
+        () => applyRefill(4900.0, 200.0),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(
+        () => applyRefill(200.0, 5000.0),
+        throwsA(isA<RefillLimitException>()),
+      );
+      expect(
+        () => applyRefill(1000.0, 0.0),
+        throwsA(isA<RefillLimitException>()),
+      );
+    });
+
+    test('RefillLimitException expone el mensaje visible (RF-13)', () {
+      expect(
+        const RefillLimitException().toString(),
+        'El reabastecimiento supera el límite de 5 kg',
+      );
+    });
+
+    test('formatGrams usa separador de miles (RF-3)', () {
+      expect(formatGrams(0), '0 g');
+      expect(formatGrams(850), '850 g');
+      expect(formatGrams(1500), '1.500 g');
+      expect(formatGrams(5000), '5.000 g');
+    });
+
+    test('formatKilograms usa coma decimal y muestra ambas unidades (RF-3)', () {
+      expect(formatKilograms(5000), '5 kg');
+      expect(formatKilograms(1500), '1,5 kg');
+      expect(formatKilograms(850), '0,85 kg');
+      expect(formatFoodProgressLabel(1500, 5000), '1,5 kg (1.500 g) de 5 kg · 30%');
+      expect(formatFoodProgressLabel(850, 5000), '0,85 kg (850 g) de 5 kg · 17%');
     });
 
     test('calculateRemainingRations calculates rations based on schedules (RF-7)', () {

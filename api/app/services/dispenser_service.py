@@ -16,6 +16,11 @@ from app.services.mac_service import (
 )
 
 
+CAPACIDAD_MAXIMA_GRAMOS = 5000.0
+CODE_REFILL_EXCEEDS_CAPACITY = "refill_exceeds_capacity"
+MENSAJE_REFILL_EXCEEDS_CAPACITY = "El reabastecimiento supera el límite de 5 kg"
+
+
 def _detalle(codigo: str, mensaje: str) -> dict:
     """Contrato de error de DO-5 y AC-4: `detail` es un objeto clasificable.
 
@@ -252,13 +257,24 @@ def refill_dispenser(
         )
     
     grams = refill_data.amount * 1000.0 if refill_data.unit.lower() in ("kg", "kilogramos", "kilogramo") else refill_data.amount
-    if grams <= 0 or grams > 5000.0:
+    stock_actual = max(0.0, dispenser_db.current_food_grams or 0.0)
+    # El reabastecimiento es aditivo, pero nunca puede superar la capacidad del
+    # depósito. Si el resultado excede 5000 g se rechaza sin modificar la fila
+    # (RF-7, RF-8); ya no se recorta la cantidad en silencio.
+    if (
+        grams <= 0
+        or grams > CAPACIDAD_MAXIMA_GRAMOS
+        or stock_actual + grams > CAPACIDAD_MAXIMA_GRAMOS + 1e-9
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La cantidad de alimento debe ser mayor a 0 y no superar los 5000 gramos (5 kg)."
+            detail=_detalle(
+                CODE_REFILL_EXCEEDS_CAPACITY,
+                MENSAJE_REFILL_EXCEEDS_CAPACITY,
+            ),
         )
-    
-    dispenser_db.current_food_grams = grams
+
+    dispenser_db.current_food_grams = stock_actual + grams
     try:
         db.commit()
         db.refresh(dispenser_db)

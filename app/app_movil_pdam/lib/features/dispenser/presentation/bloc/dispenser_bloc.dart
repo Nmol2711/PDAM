@@ -48,6 +48,7 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
     on<QrCodeDetectedEvent>(_onQrDetected);
 
     on<LoadDispensersEvent>(_onLoadDispensers);
+    on<RefreshDispensersEvent>(_onRefreshDispensers);
     on<StartScanBleEvent>(_onStartScanBle);
     on<StopScanBleEvent>(_onStopScanBle);
     on<ConnectAndProvisionEvent>(_onConnectAndProvision);
@@ -239,6 +240,39 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
     }
   }
 
+  /// Refresco silencioso (RF-4, RF-10): actualiza el stock desde el servidor y
+  /// vuelve a emitir la lista sin pasar por [DispenserListLoading]. No pisa los
+  /// estados de escaneo, aprovisionamiento ni el detalle de una mascota.
+  Future<void> _onRefreshDispensers(
+    RefreshDispensersEvent event,
+    Emitter<DispenserState> emit,
+  ) async {
+    try {
+      await repository.refreshDispensers();
+    } catch (_) {
+      // Silencioso: la lista local sigue siendo válida.
+    }
+
+    final List<Dispenser> dispensers;
+    try {
+      dispensers = await repository.getLocalDispensers();
+    } catch (_) {
+      return;
+    }
+
+    if (isClosed || !_canEmitListState()) return;
+    emit(DispenserListLoaded(dispensers: dispensers));
+  }
+
+  bool _canEmitListState() {
+    final current = state;
+    return current is DispenserInitial ||
+        current is DispenserListLoading ||
+        current is DispenserListLoaded ||
+        current is DispenserEmpty ||
+        current is DispenserErrorState;
+  }
+
   Future<void> _onStartScanBle(
     StartScanBleEvent event,
     Emitter<DispenserState> emit,
@@ -334,14 +368,30 @@ class DispenserBloc extends Bloc<DispenserEvent, DispenserState> {
     try {
       final grams = convertAndValidateRefill(event.amount, event.unit);
       await repository.refillFood(event.dispenserId, grams);
-      add(LoadDispensersEvent());
-    } catch (e) {
+      final dispensers = await repository.getLocalDispensers();
+      if (isClosed) return;
       emit(
-        DispenserErrorState(
-          message: e.toString().replaceAll('Exception: ', ''),
+        DispenserListLoaded(
+          dispensers: dispensers,
+          refillSuccess: true,
         ),
       );
-      add(LoadDispensersEvent());
+    } on RefillLimitException {
+      final dispensers = await repository.getLocalDispensers();
+      if (isClosed) return;
+      emit(
+        DispenserListLoaded(
+          dispensers: dispensers,
+          refillLimitExceeded: true,
+        ),
+      );
+    } catch (_) {
+      // El reabastecimiento solo muestra límite o éxito (RF-13). Cualquier
+      // fallo inesperado se resuelve en silencio y se reintenta al refrescar.
+      final dispensers = await repository.getLocalDispensers();
+      if (isClosed) return;
+      emit(DispenserListLoaded(dispensers: dispensers));
+      add(RefreshDispensersEvent());
     }
   }
 

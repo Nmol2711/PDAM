@@ -25,7 +25,9 @@ class DeviceCardWidget extends StatelessWidget {
 
   void _showRefillDialog(BuildContext context) {
     final amountController = TextEditingController();
+    final bloc = context.read<DispenserBloc>();
     String selectedUnit = 'g';
+    String? limitMessage;
 
     showDialog(
       context: context,
@@ -43,7 +45,7 @@ class DeviceCardWidget extends StatelessWidget {
                   controller: amountController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
-                    labelText: 'Cantidad',
+                    labelText: 'Cantidad a agregar',
                     hintText: selectedUnit == 'g' ? 'Ej. 1000' : 'Ej. 1.5',
                     border: const OutlineInputBorder(),
                   ),
@@ -73,9 +75,20 @@ class DeviceCardWidget extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Límite máximo: 5 kg (5000 g)',
+                  'Capacidad del depósito: 5 kg (5000 g). '
+                  'La cantidad se suma al stock y no puede superar el máximo.',
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
+                if (limitMessage != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    limitMessage!,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.warning,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -88,23 +101,21 @@ class DeviceCardWidget extends StatelessWidget {
               onPressed: () {
                 final val = double.tryParse(amountController.text.trim()) ?? 0.0;
                 try {
-                  convertAndValidateRefill(val, selectedUnit);
-                  Navigator.of(dialogContext).pop();
-                  context.read<DispenserBloc>().add(
-                        RefillFoodEvent(
-                          dispenserId: dispenser.deviceId,
-                          amount: val,
-                          unit: selectedUnit,
-                        ),
-                      );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Reabastecimiento registrado con éxito')),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
-                  );
+                  final grams = convertAndValidateRefill(val, selectedUnit);
+                  applyRefill(dispenser.currentFoodGrams, grams);
+                } on RefillLimitException catch (e) {
+                  setState(() => limitMessage = e.toString());
+                  return;
                 }
+                setState(() => limitMessage = null);
+                Navigator.of(dialogContext).pop();
+                bloc.add(
+                  RefillFoodEvent(
+                    dispenserId: dispenser.deviceId,
+                    amount: val,
+                    unit: selectedUnit,
+                  ),
+                );
               },
               child: const Text('Confirmar'),
             ),
@@ -284,17 +295,12 @@ class DeviceCardWidget extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: (dispenser.isConnected
-                                        ? AppColors.success
-                                        : AppColors.textSecondary)
-                                    .withOpacity(0.12),
+                                color: AppColors.primaryGreen.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              child: Icon(
+                              child: const Icon(
                                 Icons.router_rounded,
-                                color: dispenser.isConnected
-                                    ? AppColors.success
-                                    : AppColors.textSecondary,
+                                color: AppColors.primaryGreen,
                                 size: 28,
                               ),
                             ),
@@ -323,48 +329,6 @@ class DeviceCardWidget extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: (dispenser.isConnected
-                                  ? AppColors.success
-                                  : AppColors.warning)
-                              .withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: dispenser.isConnected
-                                    ? AppColors.success
-                                    : AppColors.warning,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              dispenser.isConnected
-                                  ? 'Conectado'
-                                  : 'Desconectado',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: dispenser.isConnected
-                                    ? AppColors.success
-                                    : AppColors.warning,
                               ),
                             ),
                           ],
@@ -413,77 +377,34 @@ class DeviceCardWidget extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Divider(height: 1),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Estado de WiFi:',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            if (dispenser.wifiSsid == null ||
-                                dispenser.wifiSsid!.isEmpty ||
-                                dispenser.wifiSsid == 'No configurado')
-                              const Text(
-                                'Aún no se han proporcionado las credenciales de wifi',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.warning,
-                                ),
-                              )
-                            else
-                              Text(
-                                'Red: ${dispenser.wifiSsid}',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark
-                                      ? Colors.white70
-                                      : AppColors.textPrimary,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
+                  if (onResetWifi != null) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: OutlinedButton.icon(
+                        onPressed: onResetWifi,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.warning,
+                          side: const BorderSide(color: AppColors.warning),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                        icon: const Icon(Icons.wifi_off_rounded, size: 16),
+                        label: const Text(
+                          'Resetear WiFi',
+                          style: TextStyle(fontSize: 12),
                         ),
                       ),
-                      if (onResetWifi != null) ...[
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: onResetWifi,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.warning,
-                            side: const BorderSide(color: AppColors.warning),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                          ),
-                          icon: const Icon(Icons.wifi_off_rounded, size: 16),
-                          label: const Text(
-                            'Resetear WiFi',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ],
               ),
             ),
