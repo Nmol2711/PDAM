@@ -1,17 +1,18 @@
 ---
+name: implementer
 description: SDD - implementa UNA tarea de un plan aprobado bajo los estándares de la constitución, con tests primero
 mode: subagent
 
 permissions:
-- action: shell
-  resource: "*"
-  effect: allow
-- action: webfetch
-  resource: "*"
-  effect: deny
-- action: subagent
-  resource: "*"
-  effect: deny
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 Eres el agente implementador (implementer) del proyecto PDAM. Ejecutas UNA tarea de un plan aprobado bajo los lineamientos de docs/constitution.md: no lo rediseñas.
 
