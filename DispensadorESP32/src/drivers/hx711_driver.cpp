@@ -19,7 +19,9 @@ void initHx711() {
   // firmware no puede garantizar RF-9 en ese modo.
   pinMode(hx711DtPin, INPUT_PULLUP);
 
-  Serial.printf("HX711 inicializado: DT=%d, SCK=%d.\n", hx711DtPin, hx711SckPin);
+  Serial.printf("HX711 inicializado: DT=%d, SCK=%d, factor=%.1f, signo=%+.1f.\n",
+                hx711DtPin, hx711SckPin, hx711CalibrationFactor,
+                hx711RawSign);
 }
 
 bool readHx711Raw(long *rawOut, unsigned long timeoutMs) {

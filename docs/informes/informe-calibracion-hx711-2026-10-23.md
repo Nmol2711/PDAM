@@ -9,11 +9,11 @@
 | Plan | [Plan 013](../../specs/013-dispensado-por-peso-hx711/plan.md) |
 | Subsistema | PlatformIO / ESP32 (hardware) |
 | Alcance | Calibración manual de la celda de 5 kg con módulo HX711 para el firmware de la Spec 013 |
-| Estado | **Procedimiento no ejecutado** |
-| Motivo | El hardware no está armado; no hay montaje mecánico, celda cableada ni peso patrón disponible |
+| Estado | **Medición parcial con peso patrón; procedimiento completo no ejecutado** |
+| Motivo | El usuario midió RAW en vacío y con ~206.8 g mediante un sketch independiente; faltan la serie de 10 promedios, el ajuste fino y la prueba física de 50 g |
 | Informe relacionado | [Pruebas de hardware pendientes (Spec 013)](informe-pruebas-hardware-spec-013-2026-10-23.md) |
 
-> El factor actual `7050.0f` y el signo `-1.0f` son **placeholder**. No sirven para validar exactitud ni para aprobar la prueba física de 50 g. Este informe no contiene mediciones reales: describe el procedimiento y deja las tablas para completar cuando el hardware esté disponible.
+> Los valores vigentes de esta unidad son `hx711CalibrationFactor = 482.7f` y `hx711RawSign = 1.0f`, medidos con un patrón de ~206.8 g. `7050`/`-1` era el placeholder histórico del plan y ya no está en el firmware. Existe una medición real del factor y del signo (sección 3.1), pero el procedimiento completo de este informe (serie de 10 promedios, ajuste fino y prueba de 50 g) sigue sin ejecutarse.
 
 ---
 
@@ -47,21 +47,48 @@ Por eso:
 
 ## 3. Dónde se configura
 
-La calibración se edita en [`DispensadorESP32/src/config/config.h`](../../DispensadorESP32/src/config/config.h), en el bloque "Calibración manual" (líneas 23–26 en el estado actual):
+La calibración se edita en [`DispensadorESP32/src/config/config.h`](../../DispensadorESP32/src/config/config.h), en el bloque de calibración (líneas 23–28 en el estado actual):
 
 ```cpp
-// Calibración manual antes de compilar: magnitud positiva en cuentas ADC por
-// gramo, ajustable con un peso patrón. El signo reproduce el clásico -7050.
-const float hx711CalibrationFactor = 7050.0f;
-const float hx711RawSign = -1.0f;
+// Calibración medida con un peso patrón de ~206.8 g: con la bandeja vacía el
+// RAW es 160658 y con el peso es 260500, es decir, unas 482.7 cuentas ADC por
+// gramo. El signo es +1.0f porque el RAW aumenta al añadir peso. Si se cambia
+// la celda o el montaje, recalcular el factor con un peso conocido.
+const float hx711CalibrationFactor = 482.7f;
+const float hx711RawSign = 1.0f;
 ```
 
 | Parámetro | Tipo | Regla |
 |---|---|---|
-| `hx711CalibrationFactor` | `float` | Debe ser finito y mayor que cero; se expresa en cuentas ADC por gramo. |
-| `hx711RawSign` | `float` | Debe ser `+1.0f` o `-1.0f`; corrige el sentido del raw y debe dejar los gramos absolutos en 0–5000 g con incremento positivo. |
+| `hx711CalibrationFactor` | `float` | Debe ser finito y mayor que cero; se expresa en cuentas ADC por gramo. Valor vigente de esta unidad: `482.7f`. |
+| `hx711RawSign` | `float` | Debe ser `+1.0f` o `-1.0f`; corrige el sentido del raw y debe dejar los gramos absolutos en 0–5000 g con incremento positivo. Valor vigente de esta unidad: `+1.0f`. |
 
 No cambiar `hx711SckPin` ni `hx711DtPin` sin cambiar también el cableado. En el estado actual son SCK en GPIO18 y DT/DOUT en GPIO19.
+
+### 3.1 Medición real de esta unidad
+
+Medición del usuario con un sketch independiente sobre esta celda y este montaje, antes de flashear el firmware corregido:
+
+| Medición | RAW / valor |
+|---|---|
+| Bandeja vacía | ≈ 160658 |
+| Con ~206.8 g sobre la bandeja | ≈ 260500 |
+| Diferencia | ≈ 99842 |
+| Factor | ≈ 482.7 cuentas/g |
+| Signo | `+1` (el RAW sube al cargar) |
+
+Con esos valores la conversión absoluta da ≈ 332.8 g con la bandeja vacía y ≈ 539.7 g con los 206.8 g de alimento; el incremento es ≈ 206.8 g, coherente con el peso aplicado. La línea base cancela el offset de ≈ 332.8 g, por eso el firmware no necesita `tare()`.
+
+Es una medición puntual, no la serie de 10 promedios de la sección 6.3: falta confirmar estabilidad, ajuste fino y la prueba de 50 g antes de registrar el cierre en la sección 10.
+
+#### Verificación en placa (2026-10-24)
+
+Con el firmware corregido flasheado, la línea base medida durante la ventana de verificación fue **≈ 333.1 g** con la bandeja en reposo. Es coherente con el cálculo `160658 / 482.7 ≈ 332.83 g`, así que el factor y el signo quedan confirmados en reposo: la conversión cae dentro de 0–5000 g y el firmware ya no descarta las lecturas.
+
+Lo que esta comprobación **no** demuestra:
+
+- No valida la exactitud con alimento real ni el ajuste fino de la sección 4.3; para eso hacen falta la verificación con peso patrón de la sección 6.6 y la prueba de 50 g con báscula externa.
+- La prueba de dispensación posterior se hizo ejerciendo presión manual sobre la celda porque no había alimento seco. Los incrementos obtenidos así no sirven para ajustar el factor ni para aprobar el rango de 50–55 g; solo confirman que la verificación pasa y que el objetivo se detecta. Detalle en §2.5 del [informe de pruebas de hardware](informe-pruebas-hardware-spec-013-2026-10-23.md).
 
 ---
 
@@ -115,7 +142,7 @@ factor_nuevo = factor_actual * (gramos_medidos / gramos_reales)
 - Si mide **bajo**, el cociente es menor que 1 y el factor baja.
 - Si mide **alto**, el cociente es mayor que 1 y el factor sube.
 
-Ejemplo: factor actual `7050`, peso real `500 g` y el cálculo del firmware da `450 g`.
+Ejemplo ilustrativo (no es el factor vigente): factor de partida `7050`, peso real `500 g` y el cálculo del firmware da `450 g`.
 
 ```text
 factor_nuevo = 7050 * (450 / 500) = 6345
@@ -127,7 +154,7 @@ Si en cambio diera `550 g`:
 factor_nuevo = 7050 * (550 / 500) = 7755
 ```
 
-El ajuste fino se hace con datos reales, no con el placeholder. Si el resultado se aleja mucho del valor esperado, repetir la toma de raw y revisar el montaje antes de seguir iterando.
+El ajuste fino se hace con datos reales, no con valores de ejemplo. Si el resultado se aleja mucho del valor esperado, repetir la toma de raw y revisar el montaje antes de seguir iterando.
 
 ---
 
@@ -336,7 +363,7 @@ Ningún signo cumple las dos condiciones. No es un problema de signo: el offset 
 ### 6.5 Editar y flashear el firmware
 
 1. Abrir [`DispensadorESP32/src/config/config.h`](../../DispensadorESP32/src/config/config.h).
-2. Reemplazar el placeholder de `hx711CalibrationFactor` por el factor calculado.
+2. Sustituir el valor vigente de `hx711CalibrationFactor` por el factor calculado.
 3. Ajustar `hx711RawSign` a `+1.0f` o `-1.0f` según corresponda.
 4. Compilar y flashear:
 
@@ -396,7 +423,7 @@ El factor es propio de cada conjunto celda-módulo-montaje. No copiarlo de otro 
 - **No calibrar con el servo girando.** La vibración contamina el raw y puede producir un factor incorrecto.
 - **No apoyar peso adicional sobre la bandeja durante la línea base.** Si se apoya una mano, una herramienta o un peso y luego se retira, la referencia queda contaminada y el incremento se calcula mal.
 - **No superar los 5 kg de la celda.** Incluir el peso de la bandeja.
-- **No copiar el factor `7050` a producción.** Es un placeholder para compilar y probar la lógica, no una calibración real.
+- **No copiar el factor `482.7` a otra unidad.** Es el valor medido para esta celda y este montaje; recalcular con peso patrón si cambia el conjunto. `7050` era el placeholder histórico y ya no está en el firmware.
 - La exactitud final depende de la mecánica, del flujo del tornillo sin fin, de la vibración del servo y del tipo de croqueta. La calibración corrige la escala, no los problemas mecánicos.
 - La celda de 5 kg usada para raciones de 50 g puede tener ruido apreciable; por eso el firmware usa mediana, 3 lecturas consecutivas y una ventana de verificación.
 - La calibración es por compilación: no hay comandos de calibración por el puerto serie.

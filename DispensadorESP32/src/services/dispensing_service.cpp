@@ -54,6 +54,41 @@ WeightSample unavailableSample(float factor, float sign) {
   return makeSample(false, 0, factor, sign);
 }
 
+// Diagnóstico de una ventana de verificación fallida. No imprime por muestra
+// (se ejecuta solo al fallar) y no altera el contrato del servicio.
+void logVerificationDiagnostics(unsigned samples, unsigned responded,
+                                long lastRaw, float lastGrams, bool hasLast,
+                                unsigned validCount,
+                                unsigned consecutiveInvalid, float factor,
+                                float sign) {
+  if (hasLast) {
+    Serial.printf(
+        "Verificacion HX711: muestras=%u, respondidas=%u, validas=%u, "
+        "invalidas_consecutivas=%u, ultimo_raw=%ld, ultimo_g=%.2f, "
+        "factor=%.1f, signo=%+.1f\n",
+        samples, responded, validCount, consecutiveInvalid, lastRaw, lastGrams,
+        factor, sign);
+  } else {
+    Serial.printf(
+        "Verificacion HX711: muestras=%u, respondidas=%u, validas=%u, "
+        "invalidas_consecutivas=%u, ultimo_raw=sin_lectura, "
+        "ultimo_g=sin_lectura, factor=%.1f, signo=%+.1f\n",
+        samples, responded, validCount, consecutiveInvalid, factor, sign);
+  }
+
+  if (responded == 0) {
+    Serial.println("Causa probable: el modulo HX711 no respondio (revise "
+                   "alimentacion y cableado DT/SCK).");
+  } else if (validCount == 0) {
+    Serial.println("Causa probable: lecturas fuera de rango; revise la "
+                   "calibracion (factor y signo) y el montaje.");
+  } else {
+    Serial.println(
+        "Causa probable: ventana de verificacion sin lecturas validas "
+        "suficientes.");
+  }
+}
+
 } // namespace
 
 DispenseResult dispenseWeight(float amountGrams) {
@@ -100,6 +135,14 @@ DispenseResult dispenseWeight(float amountGrams) {
   unsigned long nextSampleMs = verification.startMs;
   VerificationOutcome verificationOutcome = VerificationOutcome::IN_PROGRESS;
 
+  // Contadores de diagnóstico: solo lecturas reales intentadas, no las muestras
+  // no respondidas que cierran la ventana.
+  unsigned samples = 0;
+  unsigned respondedCount = 0;
+  long lastRaw = 0;
+  float lastGrams = 0.0f;
+  bool hasLastReading = false;
+
   while (true) {
     const unsigned long now = millis();
 
@@ -126,6 +169,14 @@ DispenseResult dispenseWeight(float amountGrams) {
       const unsigned long sampleTimeMs = millis();
       const WeightSample sample = makeSample(responded, raw, factor, sign);
 
+      ++samples;
+      if (responded) {
+        ++respondedCount;
+        lastRaw = raw;
+        lastGrams = sample.grams;
+        hasLastReading = true;
+      }
+
       verificationOutcome =
           recordVerificationSample(&verification, sample, sampleTimeMs);
       if (verificationOutcome != VerificationOutcome::IN_PROGRESS) {
@@ -146,6 +197,9 @@ DispenseResult dispenseWeight(float amountGrams) {
     // RF-4: nunca dispensar a ciegas; el servo no llegó a arrancar.
     result.reason = DispenseReason::SENSOR_UNAVAILABLE;
     stopServo();
+    logVerificationDiagnostics(samples, respondedCount, lastRaw, lastGrams,
+                               hasLastReading, verification.validCount,
+                               verification.consecutiveInvalid, factor, sign);
     logDispenseResult(result);
     return result;
   }
@@ -154,6 +208,9 @@ DispenseResult dispenseWeight(float amountGrams) {
   if (!verificationBaseline(&verification, &baseline)) {
     result.reason = DispenseReason::SENSOR_UNAVAILABLE;
     stopServo();
+    logVerificationDiagnostics(samples, respondedCount, lastRaw, lastGrams,
+                               hasLastReading, verification.validCount,
+                               verification.consecutiveInvalid, factor, sign);
     logDispenseResult(result);
     return result;
   }

@@ -145,7 +145,7 @@ T5): se escriben en rojo, se implementan y se ponen en verde.
   - Verificación (2026-10-23): `pio run -t clean && pio run` en `esp32dev`
     termina en SUCCESS (RAM 64 444 B, 19.7 % de 327 680 B; Flash 2 004 342 B,
     63.7 % de 3 145 728 B). `pio test -e native` pasa 65/65 en 0.84 s:
-    `test_provisioning_utils` 5/5 y `test_dispensing_utils` 60/60.
+    `test_provisioning_utils` 5/5 y `test_dispensing_utils` 60/60. (cifras históricas previas a la corrección de calibración; ver la nota de T10 para el 72/72).
     `platformio.ini` solo añade `bogde/HX711 @ ^0.7.5` a `lib_deps` (HX711
     0.7.5 en `.pio/libdeps/esp32dev`; Unity es el framework de test) y
     `test_dispensing_utils` a `test_ignore`. Sin restos de `delay(10000)`,
@@ -166,10 +166,29 @@ T5): se escriben en rojo, se implementan y se ponen en verde.
     servidor, reset de credenciales y consulta 20 s después del fin queda
     cumplido y registrado; `MEMORY.md` queda actualizado con el estado, las
     decisiones y los pendientes de hardware.
-  - Nota (2026-10-23): calibrar con peso patrón antes de medir exactitud (el
-    factor `7050` es placeholder) y usar la desconexión del **módulo HX711 del
-    ESP32** para las pruebas de RF-4/RF-9; desconectar solo la celda con el
-    módulo alimentado puede dar lecturas plausibles.
+  - Nota (2026-10-23): calibrar con peso patrón antes de medir exactitud y usar
+    la desconexión del **módulo HX711 del ESP32** para las pruebas de RF-4/RF-9;
+    desconectar solo la celda con el módulo alimentado puede dar lecturas
+    plausibles.
+  - Nota (2026-10-24): en la primera prueba física el log repitió
+    `sensor no disponible` y el servo no se movió aunque el sensor respondía. La
+    causa fue la calibración: el factor `7050` y el signo `-1` no correspondían a
+    la celda; el RAW real es ≈ 160658 en vacío y ≈ 260500 con ~206.8 g
+    (≈ 482.7 cuentas/g, signo `+1`). Se corrigió `config.h` a `482.7f`/`+1.0f`, se
+    añadió diagnóstico en la ventana de verificación y 7 pruebas nuevas
+    (`pio test -e native` 72/72). T10 sigue `[ ]`: falta verificar 50–55 g, los
+    fallos de sensor, la frecuencia y la no regresión.
+  - Nota (2026-10-24, verificación parcial): con el build corregido
+    (`Build actual de compilacion: Oct 24 2026 23:14:35`) el flasheo limpió la
+    NVS y el equipo aprovisionó por BLE (`PDAM-Config-<MAC>`), conectó a WiFi y
+    validó HTTP 200. En 12 ciclos consecutivos la verificación se superó sin
+    `sensor no disponible`, el servo giró y se detuvo, y el motivo fue
+    `objetivo alcanzado`; la línea base fue ≈ 333.1 g (359.7 g y 421.7 g en dos
+    ciclos, por peso residual sobre la bandeja). Los incrementos observados
+    (52.4–530.5 g) se obtuvieron ejerciendo presión manual sobre la celda porque
+    no había alimento seco, así que su variabilidad no mide exactitud. T10 sigue
+    `[ ]`: faltan P3 con alimento real y medición externa de 50–55 g, P5, P6, P7,
+    P8, P10, P11 y P12.
 
 ## Nota de alcance
 

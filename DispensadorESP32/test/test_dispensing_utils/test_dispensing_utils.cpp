@@ -946,6 +946,118 @@ void test_fill_measurements_does_not_change_requested_or_reason(void) {
                         static_cast<int>(result.reason));
 }
 
+// --- calibracion real con peso patron de ~206.8 g (RF-11) ---
+
+void test_real_calibration_converts_raw_to_grams(void) {
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 332.83f,
+                           convertRawToGrams(160658, 482.7f, 1.0f));
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 539.67f,
+                           convertRawToGrams(260500, 482.7f, 1.0f));
+}
+
+void test_placeholder_calibration_makes_real_readings_invalid(void) {
+  // Reproduccion del fallo reportado: con el factor placeholder 7050 y signo
+  // -1, el RAW real de la bandeja vacia (160658) da un peso negativo y toda
+  // lectura se rechaza, por lo que la verificacion aborta.
+  const WeightSample sample = makeSample(true, 160658, 7050.0f, -1.0f);
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, -22.79f, sample.grams);
+  TEST_ASSERT_FALSE(isReadingValid(sample));
+}
+
+void test_real_calibration_reading_is_valid(void) {
+  const WeightSample sample = makeSample(true, 160658, 482.7f, 1.0f);
+  TEST_ASSERT_TRUE(isReadingValid(sample));
+}
+
+void test_verification_passes_with_five_real_readings(void) {
+  VerificationState state;
+  startVerification(&state, 0);
+
+  const WeightSample sample = makeSample(true, 160658, 482.7f, 1.0f);
+  for (unsigned i = 0; i < 5; ++i) {
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(VerificationOutcome::IN_PROGRESS),
+        static_cast<int>(
+            recordVerificationSample(&state, sample, i * 200UL)));
+  }
+
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(VerificationOutcome::PASSED),
+      static_cast<int>(recordVerificationSample(&state, invalidSample(), 2000)));
+
+  float baseline = 0.0f;
+  TEST_ASSERT_TRUE(verificationBaseline(&state, &baseline));
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 332.83f, baseline);
+}
+
+void test_verification_aborts_with_three_placeholder_readings(void) {
+  VerificationState state;
+  startVerification(&state, 0);
+
+  const WeightSample sample = makeSample(true, 160658, 7050.0f, -1.0f);
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(VerificationOutcome::IN_PROGRESS),
+      static_cast<int>(recordVerificationSample(&state, sample, 0)));
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(VerificationOutcome::IN_PROGRESS),
+      static_cast<int>(recordVerificationSample(&state, sample, 200)));
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(VerificationOutcome::ABORTED_BY_INVALID),
+      static_cast<int>(recordVerificationSample(&state, sample, 400)));
+  TEST_ASSERT_TRUE(state.finished);
+}
+
+void test_real_calibration_reaches_fifty_grams_target(void) {
+  const float baseline = convertRawToGrams(160658, 482.7f, 1.0f);
+  RotationState state;
+  startRotation(&state, 0);
+
+  const WeightSample sample = makeSample(true, 184793, 482.7f, 1.0f);
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(RotationOutcome::CONTINUE),
+      static_cast<int>(
+          recordRotationSample(&state, sample, 0, baseline, 50.0f)));
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(RotationOutcome::CONTINUE),
+      static_cast<int>(
+          recordRotationSample(&state, sample, 200, baseline, 50.0f)));
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(RotationOutcome::TARGET_REACHED),
+      static_cast<int>(
+          recordRotationSample(&state, sample, 400, baseline, 50.0f)));
+
+  TEST_ASSERT_TRUE(state.hasLastValid);
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 382.83f, state.lastValidGrams);
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 50.0f, state.lastValidGrams - baseline);
+}
+
+void test_real_calibration_get_real_increment_for_known_weight(void) {
+  const float baseline = convertRawToGrams(160658, 482.7f, 1.0f);
+  const WeightSample loaded = makeSample(true, 260500, 482.7f, 1.0f);
+
+  RotationState rotation;
+  startRotation(&rotation, 0);
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(RotationOutcome::CONTINUE),
+      static_cast<int>(
+          recordRotationSample(&rotation, loaded, 0, baseline, 500.0f)));
+
+  DispenseResult result;
+  result.requestedGrams = 500.0f;
+  result.reason = DispenseReason::NOT_REACHED;
+  result.baselineAvailable = false;
+  result.baselineGrams = 0.0f;
+  result.finalAvailable = false;
+  result.finalGrams = 0.0f;
+  result.incrementAvailable = false;
+  result.incrementGrams = 0.0f;
+
+  fillDispenseMeasurements(&result, true, baseline, rotation);
+
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 206.80f, result.incrementGrams);
+}
+
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_classify_order_reset_wifi_has_absolute_priority);
@@ -1008,5 +1120,12 @@ int main(int argc, char **argv) {
   RUN_TEST(test_fill_measurements_without_last_valid_marks_final_and_increment_unavailable);
   RUN_TEST(test_fill_measurements_with_null_result_is_safe);
   RUN_TEST(test_fill_measurements_does_not_change_requested_or_reason);
+  RUN_TEST(test_real_calibration_converts_raw_to_grams);
+  RUN_TEST(test_placeholder_calibration_makes_real_readings_invalid);
+  RUN_TEST(test_real_calibration_reading_is_valid);
+  RUN_TEST(test_verification_passes_with_five_real_readings);
+  RUN_TEST(test_verification_aborts_with_three_placeholder_readings);
+  RUN_TEST(test_real_calibration_reaches_fifty_grams_target);
+  RUN_TEST(test_real_calibration_get_real_increment_for_known_weight);
   return UNITY_END();
 }

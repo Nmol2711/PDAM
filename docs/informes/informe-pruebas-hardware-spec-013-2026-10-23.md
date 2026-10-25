@@ -10,17 +10,19 @@
 | Tareas | [Tasks 013](../../specs/013-dispensado-por-peso-hx711/tasks.md) |
 | Subsistema | PlatformIO / ESP32 (hardware) |
 | Alcance | Checklist físico T10: exactitud, fallos de sensor, muestreo, no regresión BLE/WiFi y temporizador |
-| Estado | **No ejecutadas** |
-| Motivo | El hardware no está armado: falta montar la celda de carga, el módulo HX711, el servo con alimentación externa y la bandeja de prueba |
+| Estado | **Parcialmente ejecutadas (2026-10-24)** |
+| Motivo | Se ejecutó el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo con el firmware corregido; faltan la exactitud con alimento real y las pruebas de fallo y no regresión |
+| Incidencia previa (2026-10-24) | Primera prueba física fallida por calibración (factor y signo incorrectos). Corregida; ver §2.3 |
+| Ejecución parcial (2026-10-24) | 12 ciclos con verificación superada y motivo `objetivo alcanzado`, con carga manual por falta de alimento seco; ver §2.5 |
 | Informe relacionado | [Calibración de la celda de carga (HX711)](informe-calibracion-hx711-2026-10-23.md) |
 
-> Este documento es un procedimiento de prueba, no un registro de resultados. No contiene mediciones reales ni evidencia de T10. Los fragmentos de log que aparecen son plantillas de formato; no deben interpretarse como pruebas ejecutadas.
+> Este documento es un procedimiento de prueba con un registro parcial de resultados. La ejecución del 2026-10-24 (§2.5) cubre el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo con carga manual; **no hay evidencia completa de T10**: falta la exactitud con alimento real, las pruebas de fallo de sensor, el muestreo y la no regresión, entendida esta última como P10 (reconexión WiFi/rollback) y P11 (`reset_wifi`); P9 (aprovisionamiento BLE, WiFi y HTTP 200) sí se observó. Los fragmentos de log de §7.1 y §7.2 son plantillas de formato salvo donde se indique lo contrario; el log de la incidencia del §2.3 y las líneas citadas en §2.5 corresponden a ejecuciones reales.
 
 ---
 
 ## 2. Resumen
 
-La Spec 013 sustituye el dispensado por tiempo fijo de 10 segundos por un dispensado por peso medido con una celda de carga de 5 kg y un amplificador HX711. El firmware ya está implementado y la lógica pura está cubierta por pruebas nativas, pero la validación física sigue pendiente.
+La Spec 013 sustituye el dispensado por tiempo fijo de 10 segundos por un dispensado por peso medido con una celda de carga de 5 kg y un amplificador HX711. El firmware ya está implementado y la lógica pura está cubierta por pruebas nativas. La validación física es parcial (2026-10-24): el ciclo completo funciona con carga aplicada a mano, pero la exactitud con alimento real y las pruebas de fallo siguen pendientes.
 
 ### 2.1 Cambios que se validan
 
@@ -37,13 +39,135 @@ La Spec 013 sustituye el dispensado por tiempo fijo de 10 segundos por un dispen
 
 ### 2.2 Estado automatizado
 
-Según la verificación registrada en `tasks.md` el 2026-10-23:
+Según la verificación registrada en `tasks.md` el 2026-10-24, tras la corrección de calibración:
 
-- **T1–T9 cerradas.** `pio test -e native` pasa **65/65** y `pio run` en `esp32dev` termina en **SUCCESS**.
-- **T10 no ejecutada.** No hay resultados físicos de exactitud, fallo de sensor, frecuencia de muestreo ni no regresión.
+- **T1–T9 cerradas.** `pio test -e native` pasa **72/72** (67 dispensing + 5 provisioning) y `pio run` en `esp32dev` termina en **SUCCESS** (RAM 19.7 %, Flash 63.8 %).
+- **T10 parcialmente ejecutada.** El firmware corregido se flasheó el 2026-10-24 y el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo funcionaron (§2.5). Siguen pendientes la exactitud con alimento real, los fallos de sensor, la frecuencia de muestreo y la no regresión de P10 (reconexión WiFi/rollback) y P11 (`reset_wifi`); P9 (aprovisionamiento BLE, WiFi y HTTP 200) sí se observó. La primera prueba física falló por calibración y se corrigió el 2026-10-24 (§2.3).
 - La única dependencia nueva es `bogde/HX711 @ ^0.7.5`; el resto del firmware conserva el comportamiento anterior salvo el reemplazo explícito del dispensado por tiempo.
 
 La comprobación física de RF-5, RF-9, RF-11, RF-12, RF-13, RNF-1, RNF-4 y RNF-5, la exactitud de 50 g y la no regresión quedan exclusivamente en este checklist.
+
+### 2.3 Incidencia detectada en la primera prueba y corrección aplicada
+
+Log observado en la primera prueba física, repetido en cada consulta:
+
+```text
+HX711 inicializado: DT=19, SCK=18.
+Despacho: solicitado=50.0 g, linea_base=no disponible, peso_final=no disponible, incremento=no disponible, motivo=sensor no disponible
+```
+
+El servo no se movió y el firmware cerró la ventana de verificación con `sensor no disponible` aunque el módulo HX711 respondía. Un sketch independiente leyó el sensor y confirmó que la celda y el servo funcionan: RAW ≈ 160658 con la bandeja vacía y ≈ 260500 con ~206.8 g (≈ 482.7 cuentas/g, signo `+1`).
+
+**Causa raíz.** El firmware tenía el placeholder del plan: factor `7050` y signo `-1`. Con el RAW real de ≈ 160658, la conversión daba ≈ −22.8 g, fuera del rango válido de 0–5000 g, así que `isReadingValid` descartaba todas las lecturas y la línea base nunca se completaba. No era un problema de sensor ni de cableado.
+
+**Corrección aplicada.**
+
+- `DispensadorESP32/src/config/config.h`: `hx711CalibrationFactor = 482.7f` y `hx711RawSign = 1.0f`.
+- `initHx711()` imprime ahora factor y signo al inicializar, para que el log muestre la calibración activa.
+- La ventana de verificación imprime un diagnóstico cuando falla.
+- 7 pruebas nativas nuevas con los valores reales: `pio test -e native` pasa 72/72.
+
+**Valores esperados con la corrección.** Con la bandeja vacía, la conversión absoluta es ≈ 332.8 g (línea base). Para 50 g el objetivo es ≈ 382.8 g y el RAW objetivo ≈ 184793 (`160658 + 50 × 482.7 = 184793`). Son cálculos, no mediciones de dispensación: deben confirmarse en P3.
+
+**Diagnóstico nuevo al fallar la verificación.** El firmware imprime, solo cuando la verificación falla:
+
+```text
+Verificacion HX711: muestras=<n>, respondidas=<n>, validas=<n>, invalidas_consecutivas=<n>, ultimo_raw=<entero|sin_lectura>, ultimo_g=<g|sin_lectura>, factor=<factor>, signo=<signo>
+Causa probable: <texto>
+```
+
+Cómo interpretarlo:
+
+| Señal en el log | Interpretación |
+|---|---|
+| `respondidas=0` y `Causa probable: el modulo HX711 no respondio` | El módulo no responde: revisar alimentación y DT/SCK antes de tocar la calibración |
+| `respondidas > 0` y `validas=0` | No hubo ninguna lectura válida: la causa se imprime siempre que `validCount == 0`, aunque la lectura estuviera en rango y se descartara. Mirar `ultimo_raw` y `ultimo_g` para distinguir rango, saturación o calibración |
+| `respondidas > 0`, `validas > 0` e `invalidas_consecutivas` alto | Ventana sin lecturas válidas suficientes: revisar estabilidad, ruido y mecánica |
+
+Si el factor y el signo impresos no son los esperados, el firmware flasheado no es el corregido.
+
+**Alcance.** Esto solo desbloquea la prueba: ninguna prueba P1–P12 queda aprobada solo por este cambio. La ejecución parcial posterior se registra en §2.5 y no cierra T10.
+
+### 2.4 Modo de prueba temporal del endpoint
+
+Para facilitar las pruebas, el usuario dejó un cambio **local y no commiteable** en `api/app/api/endpoints/dispenser.py`, función `check_dispenser_taks`: devuelve siempre `{"serve": true, "amount": 50}` y la llamada real a `dispenser_service.check_pending_task(...)` queda comentada.
+
+Consecuencia: el ESP32 recibe una orden cada 20 s sin necesidad de horario, de `pending_dispensing` ni del endpoint `check-taks-test`, y **repetirá la dispensación de 50 g cada 20 s** mientras esté encendido.
+
+Advertencias:
+
+- No dejar el banco desatendido; el ciclo se repite indefinidamente.
+- Mantener depósito con alimento y bandeja colocada para no forzar el tope de 30 s una y otra vez.
+- Cortar la alimentación del servo si algo va mal; no depender del software.
+- Este modo no descuenta stock, no limpia banderas ni respeta `reset_wifi`; sirve solo para observar el ciclo de peso.
+- No debe commitearse. Antes de cerrar la spec hay que restaurar `return dispenser_service.check_pending_task(...)` en `check_dispenser_taks`.
+- Mientras esté activo, los procedimientos por SQLite (§5.2) y `check-taks-test` (§5.3) no aportan nada distinto: el resultado es siempre `serve:true` con 50 g.
+
+### 2.5 Resultados de la ejecución parcial (2026-10-24)
+
+Ejecución con el firmware corregido (`Build actual de compilacion: Oct 24 2026 23:14:35`) y el modo de prueba del §2.4 activo: el endpoint devolvió `{"serve":true,"amount":50}` en cada consulta. El usuario no disponía de alimento seco, así que aplicó la carga **ejerciendo presión manual sobre la celda**. Eso permite validar el ciclo de verificación y la detección del objetivo, pero **no** la exactitud.
+
+**Arranque y aprovisionamiento.** Al flashear se limpió la NVS y el equipo entró en aprovisionamiento BLE como `PDAM-Config-<MAC>`. Recibió SSID y contraseña por BLE, conectó a WiFi, validó el servidor con código 200 y entró en estado normal. La inicialización del sensor quedó así:
+
+```text
+HX711 inicializado: DT=19, SCK=18, factor=482.7, signo=+1.0.
+```
+
+**Ciclos de dispensación.** Doce ciclos consecutivos, todos con motivo `objetivo alcanzado`:
+
+| Ciclo | Línea base (g) | Peso final (g) | Incremento (g) | Motivo |
+|---|---|---|---|---|
+| 1 | 333.1 | 803.6 | 470.5 | objetivo alcanzado |
+| 2 | 333.1 | 453.9 | 120.8 | objetivo alcanzado |
+| 3 | 333.1 | 490.5 | 157.4 | objetivo alcanzado |
+| 4 | 359.7 | 412.3 | 52.6 | objetivo alcanzado |
+| 5 | 333.1 | 399.3 | 66.2 | objetivo alcanzado |
+| 6 | 333.1 | 385.5 | 52.4 | objetivo alcanzado |
+| 7 | 421.7 | 686.4 | 264.8 | objetivo alcanzado |
+| 8 | 333.1 | 863.5 | 530.5 | objetivo alcanzado |
+| 9 | 333.1 | 689.4 | 356.3 | objetivo alcanzado |
+| 10 | 333.1 | 529.8 | 196.7 | objetivo alcanzado |
+| 11 | 333.1 | 408.1 | 75.1 | objetivo alcanzado |
+| 12 | 333.1 | 385.4 | 52.4 | objetivo alcanzado |
+
+La línea base más el incremento coincide con el peso final salvo ±0.1 g en algunos ciclos, por el redondeo a un decimal de los valores impresos por el firmware.
+
+**Comprobaciones ejecutadas.**
+
+| Comprobación | Observación real | Estado |
+|---|---|---|
+| Flasheo del build corregido | `Build actual de compilacion: Oct 24 2026 23:14:35` en el arranque | Ejecutada |
+| Borrado de NVS | El equipo arrancó sin credenciales y entró en aprovisionamiento | Ejecutada |
+| Aprovisionamiento BLE | Anunció `PDAM-Config-<MAC>` y aceptó SSID y contraseña | Ejecutada |
+| Conexión WiFi | Conectó a la red local tras el aprovisionamiento | Ejecutada |
+| Validación HTTP | `Validación HTTP exitosa (Status 200). Entrando en estado normal.` | Ejecutada |
+| Inicialización del HX711 | `HX711 inicializado: DT=19, SCK=18, factor=482.7, signo=+1.0.` | Ejecutada |
+| Verificación de la celda | 12/12 ciclos superados; no apareció `sensor no disponible` | Ejecutada |
+| Giro del servo | Arrancó y se detuvo en los 12 ciclos | Ejecutada |
+| Detección del objetivo | Motivo `objetivo alcanzado` en los 12 ciclos | Ejecutada |
+| Respuesta del endpoint de prueba | `{"serve":true,"amount":50}` en cada consulta | Ejecutada |
+
+**Limitación de la medición.**
+
+- Sin alimento seco, la carga se aplicó con presión manual sobre la celda, no con croquetas cayendo por el tornillo sin fin.
+- Por eso los incrementos (52.4 g a 530.5 g) **no son una medición de exactitud** ni permiten evaluar el criterio de 50–55 g: dependen de cuánta presión aplicó el usuario y de cuándo la retiró.
+- La línea base de 359.7 g y 421.7 g en dos ciclos refleja peso residual sobre la bandeja al iniciar el ciclo, no una deriva de la calibración; el firmware la cancela con la mediana de la ventana de verificación.
+- El log serie no incluye marcas de tiempo, así que el intervalo de 20 s no está medido.
+
+**Qué sigue pendiente.** Estas pruebas **no se ejecutaron y no se marcan como aprobadas**:
+
+- **P3 con alimento real**: 50 g solicitados deben entregar 50–55 g medidos en una báscula externa, en tres repeticiones con la bandeja limpia.
+- **P5**: fallo de sensor al arranque desconectando el módulo HX711 del ESP32.
+- **P6**: fallo de sensor a mitad del giro.
+- **P7**: inválida aislada sin detener el ciclo.
+- **P8**: frecuencia de muestreo de al menos 5 Hz.
+- **P10**: reconexión WiFi y rollback a aprovisionamiento BLE.
+- **P11**: `reset_wifi` y su prioridad sobre `serve`.
+- **P12**: intervalo de 20 s tras el fin del ciclo, con marcas de tiempo externas.
+
+Tampoco se completaron P2 (verificación con peso patrón de 500 g o 1 kg) ni P4 (tope de 30 s con depósito vacío): la línea base ≈ 333.1 g solo confirma coherencia en reposo.
+
+**Conclusión.** La corrección de calibración desbloquea la dispensación: la verificación pasa, el servo arranca y se detiene y el objetivo se detecta en 12 de 12 ciclos; el fail-safe `sensor no disponible` ya no se dispara por error. La exactitud con alimento real y las pruebas de fallo físico siguen pendientes, por lo que **T10 permanece abierto**.
 
 ---
 
@@ -155,9 +279,9 @@ No registrar credenciales reales en este informe ni en capturas de pantalla.
 1. Programar una comida en la app para un horario cercano.
 2. El planificador del backend revisa los horarios cada minuto y marca `pending_dispensing` cuando corresponde.
 3. El ESP32 consulta cada 20 segundos y recibe `serve: true` con el `amount` del horario.
-4. La orden real descuenta stock y limpia la bandera al entregarse.
+4. Cuando se restaure la implementación real, la orden descuenta stock y limpia la bandera al entregarse.
 
-Este es el flujo recomendado para el checklist principal porque valida el camino completo app → backend → firmware.
+Este es el flujo recomendado para el checklist principal porque valida el camino completo app → backend → firmware. Mientras siga activo el modo de prueba del §2.4, los pasos 1–2 no hacen falta y el punto 4 no se cumple; restaurar el endpoint antes de usar este flujo como evidencia.
 
 ### 5.2 Disparo manual reproducible por SQLite
 
@@ -192,12 +316,13 @@ Condiciones y advertencias:
 
 - El dispensador debe tener una mascota y **al menos un horario** asociado. Si no hay horario, `check_pending_task` devuelve `serve: false` y no limpia la bandera.
 - Si `pending_wifi_reset` está activo, el backend devuelve primero la orden de reseteo y no dispensa. Verificar y limpiar esa bandera antes de las pruebas de peso.
-- El endpoint real **descuenta stock y limpia `pending_dispensing`** al entregar la orden. Para cada repetición hay que volver a ejecutar el `UPDATE` o reabastecer.
+- Cuando se restaure la implementación real, el endpoint **descuenta stock y limpia `pending_dispensing`** al entregar la orden. Para cada repetición hay que volver a ejecutar el `UPDATE` o reabastecer.
+- Con el modo de prueba del §2.4 activo, este procedimiento no tiene efecto: el endpoint devuelve `serve:true` con 50 g aunque `pending_dispensing` esté a 0. Sirve como alternativa solo después de restaurar el endpoint.
 - No editar la base de datos con el backend en ejecución.
 
 ### 5.3 Endpoint de prueba
 
-El backend expone un endpoint de prueba que devuelve la orden **sin descontar stock ni limpiar la bandera**:
+Cuando se restaure la implementación real, el backend expone un endpoint de prueba que devuelve la orden **sin descontar stock ni limpiar la bandera**:
 
 ```text
 GET http://<IP>:8000/dispenserscheck-taks-test/<MAC>
@@ -210,6 +335,8 @@ const char* const BASE_URL = "http://<IP>:8000/dispenserscheck-taks-test/";
 ```
 
 Advertencia: mientras `pending_dispensing` siga activo, el ESP32 puede **repetir la dispensación cada 20 segundos**. No se recomienda para el checklist principal; sirve para depurar la respuesta HTTP o para una prueba aislada. Después de usarlo, restaurar `BASE_URL` y recompilar.
+
+Con el modo de prueba del §2.4 activo, este endpoint y el real devuelven lo mismo (`serve:true`, 50 g); cambiar `BASE_URL` no aporta nada distinto. Es una alternativa válida solo tras restaurar la implementación real.
 
 ### 5.4 Verificación con `curl`
 
@@ -239,9 +366,9 @@ No usar el endpoint real con `curl` antes de que consulte el ESP32: la orden se 
 
 | ID | Requisito | Objetivo | Procedimiento | Resultado esperado | Evidencia |
 |---|---|---|---|---|---|
-| P1 | RNF-4, RNF-6 | Confirmar que el firmware compila, la suite nativa pasa y la placa flashea. | `cd DispensadorESP32`<br>`pio test -e native`<br>`pio run -t clean && pio run`<br>`pio run --target upload` | 65/65 en nativo; `pio run` SUCCESS; carga completa; monitor a 115200. | Salida de terminal y primeras líneas del monitor. |
-| P2 | RF-11 | Calibrar la celda y verificar la conversión con un peso conocido. | Ejecutar el [informe de calibración](informe-calibracion-hx711-2026-10-23.md). Verificar con 500 g o 1 kg usando el sketch de raw. | Factor positivo, signo coherente, lectura que sigue al peso y error operativo no mayor que 2 % (10 g en 500 g). | Tabla de raw, valores finales de `config.h` y monitor. |
-| P3 | RF-1, RF-6, RF-7, RF-12, RNF-1, RNF-2 | Validar el camino feliz de 50 g. | Bandeja vacía; solicitar 50 g; medir la comida entregada en una báscula externa; repetir 3 veces limpiando la bandeja. | 3/3 entre 50 g y 55 g; log con `incremento` en ese rango y motivo `objetivo alcanzado`; servo detenido. | Tres líneas `Despacho:` y tres mediciones externas. |
+| P1 | RNF-4, RNF-6 | Confirmar que el firmware compila, la suite nativa pasa y la placa flashea. | `cd DispensadorESP32`<br>`pio test -e native`<br>`pio run -t clean && pio run`<br>`pio run --target upload` | 72/72 en nativo; `pio run` SUCCESS; carga completa; monitor a 115200. | Salida de terminal y primeras líneas del monitor. |
+| P2 | RF-11 | Calibrar la celda y verificar la conversión con un peso conocido. | Ejecutar el [informe de calibración](informe-calibracion-hx711-2026-10-23.md). Verificar con 500 g o 1 kg usando el sketch de raw. | Factor positivo (vigente `482.7`), signo coherente (`+1`), lectura que sigue al peso y error operativo no mayor que 2 % (10 g en 500 g). | Tabla de raw, valores finales de `config.h` y monitor. |
+| P3 | RF-1, RF-6, RF-7, RF-12, RNF-1, RNF-2 | Validar el camino feliz de 50 g. | Bandeja vacía; solicitar 50 g; medir la comida entregada en una báscula externa; repetir 3 veces limpiando la bandeja. | 3/3 entre 50 g y 55 g; log con `incremento` en ese rango y motivo `objetivo alcanzado`; servo detenido. Si falla, el log debe mostrar `Verificacion HX711: ...` con `muestras`, `respondidas`, `ultimo_raw`, `ultimo_g`, `factor` (`482.7`) y `signo` (`+1.0`) antes de concluir la causa. | Tres líneas `Despacho:` y tres mediciones externas; si falla, la línea `Verificacion HX711:`. |
 | P4 | RF-8, RNF-3 | Validar el tope de 30 s con depósito vacío. | Vaciar el depósito; solicitar 50 g; cronometrar desde el arranque del giro. | Parada a los 30 s, sin superarlos; motivo `objetivo no alcanzado`; incremento cercano a 0; ciclo total no mayor que 32 s. | Log y tiempo medido. |
 | P5 | RF-4, RF-12 | Validar el fallo de sensor al arranque. | Desconectar el **módulo HX711 del ESP32** (DT/SCK; idealmente también VCC/GND), no solo la celda; reiniciar y solicitar 50 g. | El servo no se mueve; en un máximo de 2 s aparece `sensor no disponible`; línea base, peso final e incremento como `no disponible`. | Monitor y video u observación directa. |
 | P6 | RF-9, RNF-3 | Validar el fallo de sensor a mitad del giro. | Con una dispensación válida en curso, desconectar el módulo HX711 durante el giro; medir desde la desconexión (cota conservadora) y, si hay instrumentación, desde la primera de las 3 lecturas inválidas. Repetir 5–10 veces. | Parada en menos de 1 s desde la primera inválida y, en la práctica, en menos de 1 s desde la desconexión; motivo `fallo del sensor durante la dispensacion`; sin esperar los 30 s. | Logs y video con cronómetro. |
@@ -255,6 +382,8 @@ No usar el endpoint real con `curl` antes de que consulte el ESP32: la orden se 
 Notas sobre criterios:
 
 - El criterio de 2 % para el peso patrón es un criterio operativo de este informe; la spec solo fija 50–55 g para la prueba de 50 g.
+- Si P3 falla, la línea `Verificacion HX711:` (muestras, RAW, gramos, factor y signo) distingue un fallo de calibración de un módulo desconectado; sin esa línea no se puede concluir la causa.
+- Con la corrección vigente se espera línea base ≈ 332.8 g, objetivo ≈ 382.8 g y RAW objetivo ≈ 184793. Son cálculos; la aprobación exige la medición externa.
 - P7 es opcional y puede resultar no concluyente si al aflojar solo la celda el módulo sigue entregando valores plausibles.
 - P8 no puede sustituirse por una inspección visual del log actual: el firmware no imprime una línea por muestra.
 - P10 puede tardar hasta 20 s en detectar la pérdida de WiFi porque la comprobación ocurre al vencer el temporizador de consulta.
@@ -265,7 +394,7 @@ Notas sobre criterios:
 
 ### 7.1 Formato exacto del log de dispensación
 
-No hay fragmentos reales porque T10 no se ha ejecutado. El formato exacto que emite el firmware es:
+No hay un log de una dispensación aprobada porque T10 sigue abierto. La ejecución parcial del §2.5 produjo 12 líneas `Despacho:` con motivo `objetivo alcanzado`, pero corresponden a carga manual y el log no tiene marcas de tiempo. El otro log real es el de la incidencia del §2.3. El formato exacto que emite el firmware es:
 
 ```text
 Despacho: solicitado=%.1f g, linea_base=%s, peso_final=%s, incremento=%s, motivo=%s
@@ -300,7 +429,7 @@ Los textos de motivo son literales del código; `dispensacion` aparece sin tilde
 ### 7.2 Otros mensajes esperados
 
 ```text
-HX711 inicializado: DT=19, SCK=18.
+HX711 inicializado: DT=19, SCK=18, factor=482.7, signo=+1.0.
 ```
 
 ```text
@@ -346,22 +475,22 @@ No adjuntar credenciales, tokens, direcciones IP reales ni MAC reales en captura
 
 ## 8. Registro de resultados
 
-Rellenar únicamente después de ejecutar cada prueba. No completar con valores supuestos.
+Rellenar únicamente después de ejecutar cada prueba. No completar con valores supuestos. Las pruebas que no se ejecutaron quedan como «No ejecutada».
 
 | Fecha | Prueba | Resultado (aprobado / fallido / no concluyente) | Medición | Log o evidencia | Notas |
 |---|---|---|---|---|---|
-|  | P1 |  |  |  |  |
-|  | P2 |  |  |  |  |
-|  | P3 |  |  |  |  |
-|  | P4 |  |  |  |  |
-|  | P5 |  |  |  |  |
-|  | P6 |  |  |  |  |
-|  | P7 |  |  |  |  |
-|  | P8 |  |  |  |  |
-|  | P9 |  |  |  |  |
-|  | P10 |  |  |  |  |
-|  | P11 |  |  |  |  |
-|  | P12 |  |  |  |  |
+| 2026-10-24 | P1 | aprobado | `pio test -e native` 72/72; `pio run` SUCCESS (RAM 19.7 %, Flash 63.8 %) | Build `Oct 24 2026 23:14:35` en el arranque | Carga completa y arranque correctos; en esta sesión no se repitió `pio run -t clean` |
+| — | P2 | No ejecutada | Línea base ≈ 333.1 g en reposo | §2.5 | Factor `482.7` y signo `+1.0` impresos; 160658 / 482.7 ≈ 332.83 g es coherente, pero falta la comprobación con peso patrón de 500 g o 1 kg |
+| 2026-10-24 | P3 | no concluyente | 12 ciclos con `objetivo alcanzado`; incrementos de 52.4 g a 530.5 g | §2.5 | Carga por presión manual, sin alimento seco ni báscula externa: no valida el criterio de 50–55 g |
+| — | P4 | No ejecutada | — | — | No se forzó el tope de 30 s con depósito vacío |
+| — | P5 | No ejecutada | — | — | Pendiente desconectar el módulo HX711 del ESP32 al arranque |
+| — | P6 | No ejecutada | — | — | Pendiente desconectar el módulo HX711 durante el giro |
+| — | P7 | No ejecutada | — | — | Prueba opcional; no se intentó una inválida aislada |
+| — | P8 | No ejecutada | — | — | Sin analizador lógico ni contadores temporales; el log no imprime una línea por muestra |
+| 2026-10-24 | P9 | aprobado | `PDAM-Config-<MAC>`, WiFi conectado, `Validación HTTP exitosa (Status 200)` | §2.5 | NVS limpia al flashear; el servo no se movió durante el aprovisionamiento. El canal BLE y la recepción de credenciales se observaron por el monitor serie, pero no se registró si el cliente fue la app móvil; queda como evidencia parcial |
+| — | P10 | No ejecutada | — | — | No se cortó el router para observar reconexión ni rollback |
+| — | P11 | No ejecutada | — | — | No se probó `reset_wifi` ni su prioridad |
+| — | P12 | No ejecutada | — | — | El log no incluye marcas de tiempo; el intervalo de 20 s no está medido |
 
 ---
 
@@ -371,9 +500,9 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 
 Se considera aprobado cuando:
 
-- P1 pasa con 65/65 y `pio run` SUCCESS.
-- P2 deja un factor positivo y un signo coherente, con lectura verificada contra peso patrón.
-- P3 entrega 50–55 g en las tres repeticiones y el log muestra el incremento correspondiente.
+- P1 pasa con 72/72 y `pio run` SUCCESS.
+- P2 confirma factor `482.7` y signo `+1` con lectura verificada contra peso patrón.
+- P3 entrega 50–55 g en las tres repeticiones y el log muestra el incremento correspondiente. Si falla, el registro incluye el diagnóstico `Verificacion HX711:` con RAW, gramos, factor y signo.
 - P4 detiene el servo a los 30 s, sin superar el límite, y registra `objetivo no alcanzado`.
 - P5 no mueve el servo y registra `sensor no disponible` en un máximo de 2 s.
 - P6 detiene el servo en menos de 1 s en todas las repeticiones y registra el fallo de sensor.
@@ -382,6 +511,15 @@ Se considera aprobado cuando:
 - P12 muestra la siguiente consulta aproximadamente 20 s después del fin.
 - El log de las pruebas está en español, sin emojis y sin credenciales ni datos sensibles.
 - P7 es opcional; si se ejecuta, no debe detener el ciclo por una inválida aislada.
+
+### 9.1.1 Estado tras la ejecución parcial (2026-10-24)
+
+La ejecución del §2.5 **no cumple el criterio de aprobado** y no cierra T10:
+
+- P1 y P9 se pueden registrar como aprobadas con la evidencia disponible.
+- P3 queda `no concluyente`: hubo `objetivo alcanzado` en 12/12 ciclos, pero con presión manual sobre la celda y sin medición externa. El rango observado de incrementos (52.4 g a 530.5 g) no evalúa la exactitud de 50–55 g.
+- P2, P4, P5, P6, P7, P8, P10, P11 y P12 siguen sin ejecutar.
+- La exactitud con alimento real es la prueba que decide el cierre: mientras no se mida en báscula externa, la spec no puede declararse validada físicamente.
 
 ### 9.2 Fallido
 
@@ -399,6 +537,7 @@ Se considera fallido si ocurre cualquiera de estos casos:
 ### 9.3 Qué hacer si falla
 
 - **No cambiar la lógica de las 3 lecturas para "arreglar" un sobrepeso.** Esa lógica evita paradas por ruido; el sobrepeso suele venir de calibración, mecánica, vibración o alimento que sigue cayendo después de detener el servo.
+- Si el log repite `sensor no disponible` aunque el módulo responde, leer la línea `Verificacion HX711:`: `respondidas=0` apunta al módulo o al cableado, mientras que `validas=0` con `factor` y `signo` impresos apunta a la calibración. Fue la causa de la incidencia del §2.3.
 - Revisar primero la calibración con el [informe de calibración](informe-calibracion-hx711-2026-10-23.md).
 - Revisar el montaje de la celda, los roces de la bandeja, la fijación del servo y el flujo del tornillo sin fin.
 - Si el fallo es de detección de sensor, confirmar que se desconectó el **módulo completo** y no solo la celda.
@@ -425,10 +564,11 @@ Se considera fallido si ocurre cualquiera de estos casos:
 
 Cuando todas las pruebas obligatorias pasen:
 
+0. Restaurar el endpoint real `check_dispenser_taks` (quitar el modo de prueba del §2.4) y confirmar que ese cambio no se commitea.
 1. Actualizar `MEMORY.md` con el estado de T10, los valores finales de calibración y los pendientes que queden.
 2. Marcar T10 como `[x]` en [`tasks.md`](../../specs/013-dispensado-por-peso-hx711/tasks.md).
 3. Actualizar el estado de la [spec 013](../../specs/013-dispensado-por-peso-hx711/spec.md) para reflejar que la validación física está completa.
 4. Adjuntar la evidencia y este informe al registro de la spec.
 5. Commitear solo si el usuario lo solicita.
 
-Mientras T10 no se ejecute, debe permanecer como `[ ]` y la spec debe seguir indicando que la validación física está pendiente. Este informe no modifica `MEMORY.md`, `tasks.md`, la spec ni el firmware.
+Mientras T10 no se complete, debe permanecer como `[ ]` y la spec debe seguir indicando que la validación física está pendiente. La ejecución del 2026-10-24 es parcial (§2.5) y no autoriza ese cierre. Este informe no modifica el firmware ni la spec; el registro de la ejecución parcial en `MEMORY.md` y `tasks.md` se hace fuera de este documento.

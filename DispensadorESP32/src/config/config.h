@@ -20,10 +20,12 @@ const int servoPin = 4;
 const int hx711SckPin = 18;
 const int hx711DtPin = 19;
 
-// Calibración manual antes de compilar: magnitud positiva en cuentas ADC por
-// gramo, ajustable con un peso patrón. El signo reproduce el clásico -7050.
-const float hx711CalibrationFactor = 7050.0f;
-const float hx711RawSign = -1.0f;
+// Calibración medida con un peso patrón de ~206.8 g: con la bandeja vacía el
+// RAW es 160658 y con el peso es 260500, es decir, unas 482.7 cuentas ADC por
+// gramo. El signo es +1.0f porque el RAW aumenta al añadir peso. Si se cambia
+// la celda o el montaje, recalcular el factor con un peso conocido.
+const float hx711CalibrationFactor = 482.7f;
+const float hx711RawSign = 1.0f;
 
 // Temporizador no bloqueante
 const unsigned long CHECK_INTERVAL = 20000; // 20 segundos
