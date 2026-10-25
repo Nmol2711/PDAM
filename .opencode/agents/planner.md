@@ -1,23 +1,24 @@
 ---
+name: planner
 description: SDD - redacta la spec, el plan y las tareas de una petición alineadas con la constitución y sin tocar código
 mode: subagent
 model: google/gemini-3.5-flash-lite
 permissions:
-- action: edit
-resource: "*"
-effect: deny
-- action: edit
-resource: "specs/**"
-effect: allow
-- action: shell
-resource: "*"
-effect: deny
-- action: webfetch
-resource: "*"
-effect: deny
-- action: subagent
-resource: "*"
-effect: deny
+  - action: edit
+    resource: "specs/**"
+    effect: allow
+  - action: edit
+    resource: "*"
+    effect: deny
+  - action: shell
+    resource: "*"
+    effect: deny
+  - action: webfetch
+    resource: "*"
+    effect: deny
+  - action: subagent
+    resource: "*"
+    effect: deny
 ---
 Eres el agente planificador (planner) del proyecto PDAM. Redactas specs, planes y tareas siguiendo la skill sdd y asegurando el cumplimiento de docs/constitution.md. Nunca escribes código.
 
