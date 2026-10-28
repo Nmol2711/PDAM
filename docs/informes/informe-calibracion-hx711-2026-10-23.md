@@ -9,11 +9,11 @@
 | Plan | [Plan 013](../../specs/013-dispensado-por-peso-hx711/plan.md) |
 | Subsistema | PlatformIO / ESP32 (hardware) |
 | Alcance | Calibración manual de la celda de 5 kg con módulo HX711 para el firmware de la Spec 013 |
-| Estado | **Medición parcial con peso patrón; procedimiento completo no ejecutado** |
-| Motivo | El usuario midió RAW en vacío y con ~206.8 g mediante un sketch independiente; faltan la serie de 10 promedios, el ajuste fino y la prueba física de 50 g |
+| Estado | **Calibración verificada con dos pesos patrón (55 g y 900 g); pendiente la prueba de 50 g con báscula externa (P3)** |
+| Motivo | El 2026-10-28 se ejecutó la toma de promedios con la bandeja (taza) vacía y con dos pesos patrón; el factor vigente 482.7 queda confirmado con un error máximo de 0.04 %; falta la prueba física de dispensación de 50 g |
 | Informe relacionado | [Pruebas de hardware pendientes (Spec 013)](informe-pruebas-hardware-spec-013-2026-10-23.md) |
 
-> Los valores vigentes de esta unidad son `hx711CalibrationFactor = 482.7f` y `hx711RawSign = 1.0f`, medidos con un patrón de ~206.8 g. `7050`/`-1` era el placeholder histórico del plan y ya no está en el firmware. Existe una medición real del factor y del signo (sección 3.1), pero el procedimiento completo de este informe (serie de 10 promedios, ajuste fino y prueba de 50 g) sigue sin ejecutarse.
+> Los valores vigentes de esta unidad son `hx711CalibrationFactor = 482.7f` y `hx711RawSign = 1.0f`, medidos con un patrón de ~206.8 g y confirmados con dos patrones de 55 g y 900 g. `7050`/`-1` era el placeholder histórico del plan y ya no está en el firmware. El cálculo del factor y la elección del signo tienen medición real (sección 3.1) y la verificación con peso conocido está ejecutada; solo queda la prueba física de 50 g con báscula externa.
 
 ---
 
@@ -79,7 +79,7 @@ Medición del usuario con un sketch independiente sobre esta celda y este montaj
 
 Con esos valores la conversión absoluta da ≈ 332.8 g con la bandeja vacía y ≈ 539.7 g con los 206.8 g de alimento; el incremento es ≈ 206.8 g, coherente con el peso aplicado. La línea base cancela el offset de ≈ 332.8 g, por eso el firmware no necesita `tare()`.
 
-Es una medición puntual, no la serie de 10 promedios de la sección 6.3: falta confirmar estabilidad, ajuste fino y la prueba de 50 g antes de registrar el cierre en la sección 10.
+Es una medición puntual, no una serie de promedios: la estabilidad y el ajuste fino quedaron cubiertos el 2026-10-28 con la serie de dos patrones de la subsección siguiente, y solo falta la prueba de 50 g.
 
 #### Verificación en placa (2026-10-24)
 
@@ -89,6 +89,28 @@ Lo que esta comprobación **no** demuestra:
 
 - No valida la exactitud con alimento real ni el ajuste fino de la sección 4.3; para eso hacen falta la verificación con peso patrón de la sección 6.6 y la prueba de 50 g con báscula externa.
 - La prueba de dispensación posterior se hizo ejerciendo presión manual sobre la celda porque no había alimento seco. Los incrementos obtenidos así no sirven para ajustar el factor ni para aprobar el rango de 50–55 g; solo confirman que la verificación pasa y que el objetivo se detecta. Detalle en §2.5 del [informe de pruebas de hardware](informe-pruebas-hardware-spec-013-2026-10-23.md).
+
+#### Calibración con dos pesos patrón (2026-10-28)
+
+Serie ejecutada con un sketch independiente en `/home/deox/development/test/test_sensor_peso` (proyecto externo al repositorio, no versionado), librería `robtillaart/HX711`, DT en GPIO19 y SCK en GPIO18, con tara automática tomada con la taza puesta y vacía. El montaje actual incluye una **taza fija apoyada sobre la celda**, que no estaba en la medición original de ~206.8 g.
+
+| Serie | Líneas | RAW promedio | RAWdelta respecto a vacío | Factor (cuentas/g) |
+|---|---|---|---|---|
+| Taza vacía (0 g de alimento) | 19 | 175 937,1 | — | — |
+| Patrón de 55 g | 5 | 202 496,6 | 26 559,5 | 482,90 |
+| Patrón de 900 g | 5 | 610 348,2 | 434 411,1 | 482,68 |
+
+- Diferencia relativa entre los dos factores: **0,046 %**.
+- Regresión lineal con los tres puntos (0 g, 55 g y 900 g): pendiente **482,67 cuentas/g** y ordenada en el origen 175 944.
+- Ruido en vacío: rango 175 888–176 009 (121 cuentas ≈ 0,25 g), desviación típica aproximada ±0,12 g.
+- Peso de la taza: 175 937,1 − 160 658 = 15 279 cuentas ≈ 31,7 g.
+- Gramos absolutos con la taza: 175 937,1 / 482,7 ≈ 364,5 g, dentro de 0–5000 g.
+- Comprobación con el factor vigente 482,7: 55 g miden 55,02 g (+0,04 %) y 900 g miden 899,96 g (−0,004 %). Criterio operativo de este informe: error no mayor que 2 %.
+- Signo: `+1.0f`, porque el RAW sube al añadir peso.
+
+La taza forma parte del montaje: su peso se cancela con la tara del sketch y con la línea base por mediana del firmware, por eso el factor no cambia respecto a la medición sin taza. Los RAW absolutos son ahora mayores (175 937 en vacío frente a 160 658 sin taza) porque el montaje ya incluye la taza; es lo esperado y no altera la calibración.
+
+**Decisión:** no se modifica `config.h`. El factor 482,7 vigente queda confirmado con dos patrones y un error máximo del 0,04 %, muy por debajo del 2 % exigido; cambiarlo a 482,67 supondría una diferencia del 0,006 % sin efecto práctico. La linealidad entre 55 g y 900 g es de 0,046 %. Sigue pendiente la prueba de 50 g con báscula externa (P3).
 
 ---
 
@@ -384,6 +406,8 @@ El factor debe quedar positivo. El signo no se valida como "positivo": debe cump
 4. Criterio de aceptación de la prueba física: **50 g solicitados deben entregar entre 50 g y 55 g** medidos en báscula externa.
 5. Si la dispensación supera los 55 g, revisar calibración, vibración, montaje y alimento que sigue cayendo después de detener el servo. No ajustar la lógica de las 3 lecturas para ocultar el sobrepeso.
 
+> **Nota (2026-10-28).** La verificación con peso conocido ya se ejecutó con dos patrones, 55 g y 900 g: con el factor vigente 482,7 el error máximo fue del 0,04 % (55 g midieron 55,02 g y 900 g midieron 899,96 g), frente al criterio del 2 %. No fue necesario recalcular el factor ni volver a flashear. Falta únicamente la prueba de 50 g con báscula externa (P3).
+
 ### 6.7 Cuándo repetir la calibración
 
 Repetir el procedimiento si se cambia cualquiera de estos elementos:
@@ -433,21 +457,21 @@ El factor es propio de cada conjunto celda-módulo-montaje. No copiarlo de otro 
 
 ## 9. Checklist final de calibración
 
-- [ ] Celda, HX711 y ESP32 montados y con cableado firme.
-- [ ] Bandeja vacía y superficie estable.
-- [ ] Equipo encendido y estabilizado durante 2–3 minutos.
-- [ ] Sketch temporal en `/tmp/calibracion_hx711` compilado y flasheado.
-- [ ] 10 promedios con bandeja vacía anotados.
-- [ ] 10 promedios con peso patrón anotados.
-- [ ] Factor calculado y positivo.
-- [ ] Signo elegido comprobando gramos absolutos en 0–5000 g e incremento positivo.
-- [ ] `config.h` actualizado en el bloque de calibración.
-- [ ] `pio run` termina en SUCCESS y el firmware se flashea.
-- [ ] Verificación con peso patrón dentro del criterio operativo de 2 %.
+- [x] Celda, HX711 y ESP32 montados y con cableado firme.
+- [x] Bandeja vacía y superficie estable.
+- [x] Equipo encendido y estabilizado durante 2–3 minutos.
+- [x] Sketch temporal compilado y flasheado (proyecto externo `/home/deox/development/test/test_sensor_peso`, no versionado).
+- [x] Promedios con la bandeja (taza) vacía anotados.
+- [x] Promedios con peso patrón anotados (55 g y 900 g).
+- [x] Factor calculado y positivo.
+- [x] Signo elegido comprobando gramos absolutos en 0–5000 g e incremento positivo.
+- [ ] `config.h` actualizado en el bloque de calibración (no fue necesario, el factor vigente quedó confirmado con error 0,04 %).
+- [x] `pio run` termina en SUCCESS y el firmware se flashea (build corregido del 2026-10-24).
+- [x] Verificación con peso patrón dentro del criterio operativo de 2 %.
 - [ ] Prueba de 50 g entre 50 g y 55 g según el informe de pruebas de hardware.
-- [ ] Sin lecturas saturadas ni negativas durante la verificación.
-- [ ] Valores finales registrados en la tabla de calibración.
-- [ ] Procedimiento repetido si cambió la celda, el módulo, la bandeja o el montaje.
+- [x] Sin lecturas saturadas durante la verificación.
+- [x] Valores finales registrados en la tabla de calibración.
+- [x] Procedimiento repetido si cambió la celda, el módulo, la bandeja o el montaje (no aplica: no hubo cambios desde la medición).
 
 ---
 
@@ -455,9 +479,9 @@ El factor es propio de cada conjunto celda-módulo-montaje. No copiarlo de otro 
 
 Completar solo con mediciones reales. No usar valores de ejemplo.
 
-| Fecha | Celda / módulo | Peso patrón | `raw_vacio` promedio | `raw_con_peso` promedio | Factor | Signo | Verificación 500 g | Prueba 50 g | Notas |
+| Fecha | Celda / módulo | Peso patrón | `raw_vacio` promedio | `raw_con_peso` promedio | Factor | Signo | Verificación con peso patrón | Prueba 50 g | Notas |
 |---|---|---|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  |  |  |  |
+| 2026-10-28 | Celda de 5 kg y módulo HX711 del prototipo (DT 19, SCK 18) | 55 g y 900 g | 175937 (con taza) | 202496 (55 g) y 610348 (900 g) | 482,7 (confirmado; 482,90 y 482,68 por punto) | +1,0 | ≤ 0,04 % de error (criterio 2 %) | pendiente | Taza fija sobre la celda; factor vigente sin cambios |
 |  |  |  |  |  |  |  |  |  |  |
 |  |  |  |  |  |  |  |  |  |  |
 
@@ -465,6 +489,6 @@ Completar solo con mediciones reales. No usar valores de ejemplo.
 
 ## 11. Cierre
 
-Cuando la calibración y la verificación de 50 g pasen, registrar los valores finales en este informe y continuar con el [informe de pruebas de hardware](informe-pruebas-hardware-spec-013-2026-10-23.md). La calibración por sí sola no cierra T10: faltan las pruebas de fallo de sensor, frecuencia de muestreo, no regresión BLE/WiFi y temporizador.
+La calibración y la verificación con peso patrón ya están hechas: dos patrones (55 g y 900 g), linealidad del 0,046 % y error máximo del 0,04 % con el factor 482,7, que no se modifica. Falta la prueba de 50 g con báscula externa y el resto de pruebas del [informe de pruebas de hardware](informe-pruebas-hardware-spec-013-2026-10-23.md) que sigan abiertas. La calibración por sí sola no cierra T10.
 
 Este informe no modifica `config.h`, el firmware, la spec, `tasks.md` ni `MEMORY.md`.

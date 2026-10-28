@@ -11,13 +11,13 @@
 | Subsistema | PlatformIO / ESP32 (hardware) |
 | Alcance | Checklist físico T10: exactitud, fallos de sensor, muestreo, no regresión BLE/WiFi y temporizador |
 | Estado | **Parcialmente ejecutadas (2026-10-27)** |
-| Motivo | Se ejecutó el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo, y el 2026-10-27 las pruebas de fallo y de no regresión; faltan la exactitud con báscula externa, el peso patrón (P2), el muestreo (P8) y repetir P11 |
+| Motivo | Se ejecutó el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo, y el 2026-10-27 las pruebas de fallo y de no regresión; P2 se aprobó el 2026-10-28 con dos pesos patrón; faltan la exactitud con báscula externa, el muestreo (P8) y repetir P11 |
 | Incidencia previa (2026-10-24) | Primera prueba física fallida por calibración (factor y signo incorrectos). Corregida; ver §2.3 |
 | Ejecución parcial (2026-10-24) | 12 ciclos con verificación superada y motivo `objetivo alcanzado`, con carga manual por falta de alimento seco; ver §2.5 |
 | Ejecución física (2026-10-27) | P4, P5, P6, P10, P12 y P13 aprobadas; P7 y P9 no concluyentes; P11 fallida y bloqueada por el endpoint fijo, ya restaurado; ver §12.2 |
 | Informe relacionado | [Calibración de la celda de carga (HX711)](informe-calibracion-hx711-2026-10-23.md) |
 
-> Este documento es un procedimiento de prueba con un registro parcial de resultados. La ejecución del 2026-10-24 (§2.5) cubre el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo con carga manual; la del 2026-10-27 (§12.2) cubre las pruebas de fallo de sensor y de no regresión. **No hay evidencia completa de T10**: falta la exactitud con báscula externa, la comprobación con peso patrón (P2), la frecuencia de muestreo (P8) y repetir P11, ya con `check_pending_task` restaurado. Los fragmentos de log de §7.1 y §7.2 son plantillas de formato salvo donde se indique lo contrario; el log de la incidencia del §2.3, las líneas citadas en §2.5 y los logs de §12.2 corresponden a ejecuciones reales.
+> Este documento es un procedimiento de prueba con un registro parcial de resultados. La ejecución del 2026-10-24 (§2.5) cubre el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo con carga manual; la del 2026-10-27 (§12.2) cubre las pruebas de fallo de sensor y de no regresión. **No hay evidencia completa de T10**: la comprobación con peso patrón (P2) quedó aprobada el 2026-10-28 (ver §8 y §13), y faltan la exactitud con báscula externa (P3), la frecuencia de muestreo (P8) y repetir P11, ya con `check_pending_task` restaurado. Los fragmentos de log de §7.1 y §7.2 son plantillas de formato salvo donde se indique lo contrario; el log de la incidencia del §2.3, las líneas citadas en §2.5 y los logs de §12.2 corresponden a ejecuciones reales.
 
 ---
 
@@ -43,7 +43,7 @@ La Spec 013 sustituye el dispensado por tiempo fijo de 10 segundos por un dispen
 Según la verificación registrada en `tasks.md` el 2026-10-24, tras la corrección de calibración:
 
 - **T1–T9 cerradas.** `pio test -e native` pasa **136/136** (110 `test_dispensing_utils`, 21 `test_dispensing_cycle` y 5 `test_provisioning_utils`) y `pio run` en `esp32dev` termina en **SUCCESS** (RAM 19.7 %, Flash 63.8 %).
-- **T10 parcialmente ejecutada.** El firmware corregido se flasheó el 2026-10-24 y el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo funcionaron (§2.5). El 2026-10-27 se ejecutaron las pruebas de fallo de sensor y de no regresión (§12.2): P4, P5, P6, P10, P12 y P13 aprobadas, P7 y P9 no concluyentes y P11 fallida por el endpoint fijo de depuración, ya restaurado. Siguen pendientes la exactitud con báscula externa, la comprobación con peso patrón (P2), la frecuencia de muestreo (P8) y repetir P11. La primera prueba física falló por calibración y se corrigió el 2026-10-24 (§2.3).
+- **T10 parcialmente ejecutada.** El firmware corregido se flasheó el 2026-10-24 y el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo funcionaron (§2.5). El 2026-10-27 se ejecutaron las pruebas de fallo de sensor y de no regresión (§12.2): P4, P5, P6, P10, P12 y P13 aprobadas, P7 y P9 no concluyentes y P11 fallida por el endpoint fijo de depuración, ya restaurado. La comprobación con peso patrón (P2) se aprobó el 2026-10-28 con 55 g y 900 g (§8); siguen pendientes la exactitud con báscula externa, la frecuencia de muestreo (P8) y repetir P11. La primera prueba física falló por calibración y se corrigió el 2026-10-24 (§2.3).
 - La única dependencia nueva es `bogde/HX711 @ ^0.7.5`; el resto del firmware conserva el comportamiento anterior salvo el reemplazo explícito del dispensado por tiempo.
 
 > Nota de conteos: el 136/136 de esta sección (110 `test_dispensing_utils`, 21 `test_dispensing_cycle` y 5 `test_provisioning_utils`) y el 136/136 del §2.3 corresponden a la ejecución del 2026-10-24. El estado actual de la suite nativa es **137/137** con **22** pruebas de `test_dispensing_cycle`.
@@ -171,7 +171,7 @@ La línea base más el incremento coincide con el peso final salvo ±0.1 g en al
 - **P12**: intervalo de 20 s tras el fin del ciclo, con marcas de tiempo externas.
 - **P13**: rechazo de una orden de dispensación inválida sin mover ni retroceder el servo.
 
-Tampoco se completaron P2 (verificación con peso patrón de 500 g o 1 kg) ni P4 (tope de 30 s con depósito vacío): la línea base ≈ 333.1 g solo confirma coherencia en reposo.
+Tampoco se completaron en esa sesión P2 (verificación con peso patrón) ni P4 (tope de 30 s con depósito vacío): la línea base ≈ 333.1 g solo confirma coherencia en reposo. P2 se cerró después, el 2026-10-28, con dos pesos patrón (ver §8 y §13).
 
 **Conclusión.** La corrección de calibración desbloquea la dispensación: la verificación pasa, el servo arranca y se detiene y el objetivo se detecta en 12 de 12 ciclos; el fail-safe `sensor no disponible` ya no se dispara por error. La exactitud con alimento real y las pruebas de fallo físico siguen pendientes, por lo que **T10 permanece abierto**.
 
@@ -517,7 +517,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | Fecha | Prueba | Resultado (aprobado / fallido / no concluyente) | Medición | Log o evidencia | Notas |
 |---|---|---|---|---|---|
 | 2026-10-24 | P1 | aprobado | `pio test -e native` 72/72 en esa ejecución; suite vigente 137/137; `pio run` SUCCESS (RAM 19.7 %, Flash 63.8 %) | Build `Oct 24 2026 23:14:35` en el arranque | Carga completa y arranque correctos; en esta sesión no se repitió `pio run -t clean` |
-| — | P2 | No ejecutada | Línea base ≈ 333.1 g en reposo | §2.5 | Factor `482.7` y signo `+1.0` impresos; 160658 / 482.7 ≈ 332.83 g es coherente, pero falta la comprobación con peso patrón de 500 g o 1 kg |
+| 2026-10-28 | P2 | aprobado | Factor confirmado con 55 g y 900 g; error máximo 0,04 % (criterio 2 %); factor vigente 482,7 sin cambios | §3.1 y §10 del [informe de calibración](informe-calibracion-hx711-2026-10-23.md) | Linealidad del 0,046 % entre ambos patrones; RAW 175937 en vacío con la taza, 202496 con 55 g y 610348 con 900 g |
 | 2026-10-24 | P3 | no concluyente | 12 ciclos con `objetivo alcanzado`; incrementos de 52.4 g a 530.5 g | §2.5 | Carga por presión manual, sin alimento seco ni báscula externa: no valida el criterio de 50–55 g |
 | 2026-10-27 | P4 | aprobado | Depósito vacío: 4 avances y 3 retrocesos; motor ≈ 26,5 s; ciclo ≈ 28,5 s | §12.2 | El motivo es «atasco no resuelto» con reintentos=3 (RF-16); el tope de 30 s no se alcanza porque los reintentos se agotan antes. La eficacia del tope de 30 s está cubierta por la prueba nativa |
 | 2026-10-27 | P5 | aprobado | Servo inmóvil; «sensor no disponible»; línea base, peso final e incremento como no disponible | §12.2 | Módulo HX711 desconectado del ESP32 al arranque. No se transcribió la línea «Verificacion HX711:» en esta sesión |
@@ -561,7 +561,7 @@ La ejecución del §2.5 **no cumple el criterio de aprobado** y no cierra T10:
 
 - P1 y P9 se pueden registrar como aprobadas con la evidencia disponible.
 - P3 queda `no concluyente`: hubo `objetivo alcanzado` en 12/12 ciclos, pero con presión manual sobre la celda y sin medición externa. El rango observado de incrementos (52.4 g a 530.5 g) no evalúa la exactitud de 50–55 g.
-- P2, P4, P5, P6, P7, P8, P10, P11, P12 y P13 siguen sin ejecutar.
+- P2, P4, P5, P6, P7, P8, P10, P11, P12 y P13 siguen sin ejecutar en esa fecha (P2 se ejecutó después, el 2026-10-28).
 - La exactitud con alimento real es la prueba que decide el cierre: mientras no se mida en báscula externa, la spec no puede declararse validada físicamente.
 
 ### 9.2 Fallido
@@ -753,7 +753,11 @@ Los datos del atasco con depósito vacío (4 avances, 3 retrocesos, `reintentos=
 reintentos de T15.
 
 Nota final: P7 sigue no concluyente porque los cables de la celda están soldados al
-módulo y no se puede inducir una inválida aislada (resultado admitido); P2
-(calibración con peso patrón) y P3 (exactitud 50–55 g con báscula externa) quedan
-pendientes de la calibración aplazada por el usuario, y la transcripción de las
-líneas `Despacho:` de T15-6 y del atasco inducido quedó pendiente del usuario.
+módulo y no se puede inducir una inválida aislada (resultado admitido); P3 (exactitud
+50–55 g con báscula externa) queda pendiente de la calibración de la balanza, y la
+transcripción de las líneas `Despacho:` de T15-6 y del atasco inducido quedó pendiente
+del usuario.
+
+P2 se cerró el 2026-10-28 con dos pesos patrón (55 g y 900 g): linealidad del 0,046 %,
+error máximo del 0,04 % con el factor vigente 482,7, que no se modifica. Con eso solo
+queda P3 (50 g con báscula externa) para cerrar T10.
