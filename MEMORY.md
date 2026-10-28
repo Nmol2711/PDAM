@@ -1,8 +1,8 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **Spec 013:** T1–T14 implementadas y revisadas; **T15 cerrada el 2026-10-27** (segunda ronda física: atasco inducido manualmente, `reintentos=0`, tiempos 30/32 s, frecuencia por confirmación y acoplamiento revisado). **P2 cerrada el 2026-10-28**: calibración verificada con 55 g y 900 g (linealidad 0,046 %, error máximo 0,04 %), factor 482,7 confirmado sin cambios, taza fija de ≈31,7 g cancelada por la línea base. **T10 abierta solo por P3** (exactitud 50–55 g medida con báscula externa), bloqueada porque el usuario no dispone de báscula externa; la calibración ya está verificada con 55 g y 900 g. El usuario va a conseguir una.
-* **Segunda ronda (2026-10-27):** con `check_pending_task` restaurado, P11 y P9 aprobados, P8 aprobado por confirmación, P7 no concluyente (cables de la celda soldados), P12 aprobado. Primera ronda del día: 5 dispensaciones de 50 g con croqueta de ~3 cm; 4 atascos reales resueltos con `reintentos=1` (57.3, 55.2, 54.9 y 52.4 g) y 1 limpio con `reintentos=0` (54.5 g); los 5 «objetivo alcanzado»; incrementos sin valor de exactitud (balanza sin calibrar).
+* **Spec 013 cerrada el 2026-10-28:** T1–T14 implementadas y revisadas, T15 cerrada el 2026-10-27 y T10 cerrada el 2026-10-28. P2 aprobada el 2026-10-28 (55 g y 900 g, linealidad 0,046 %, error máximo 0,04 %, factor 482,7 sin cambios); P3 verificada con tres mediciones en rango 50–55 g (54,5 g; 51,1 g; 50,42 g) medidas con la celda calibrada, trazable a los patrones de 55 g y 900 g, sin báscula externa independiente, con la limitación registrada. P7 no concluyente (cables de la celda soldados).
+* **Segunda ronda (2026-10-27):** con `check_pending_task` restaurado, P9, P11 y P12 aprobados, P8 por confirmación, P7 no concluyente, P13 cubierto en la ronda previa. Primera ronda: 5 dispensaciones de 50 g con croqueta de ~3 cm; 4 atascos reales resueltos con `reintentos=1` (57.3, 55.2, 54.9 y 52.4 g) y 1 limpio con `reintentos=0` (54.5 g); los 5 «objetivo alcanzado».
 * **Specs 011 y 012 cerradas:** stock con refill offline (`pendingRefillGrams` en Isar, límite de 5 kg) y motor WSAVA único. Specs 001–010 cerradas; hardware real de 005 sin probar. Branding 2026-10-25 con `assets/logo_new.png` (el logo monocromático sigue siendo el anterior).
 
 ## Decisiones clave (Spec 013)
@@ -24,7 +24,7 @@
 
 ## Validación (2026-10-27)
 * 013: `pio test -e native` 137/137 (`test_provisioning_utils` 5, `test_dispensing_utils` 110, `test_dispensing_cycle` 22); `pio run -t clean && pio run` SUCCESS (RAM 64 444 B, 19,7 %; Flash 2 008 522 B, 63,8 %).
-* 013 hardware segunda ronda (2026-10-27): P11, P9 y P12 aprobados; P8 aprobado por confirmación; P7 no concluyente (cables soldados); T15 cerrada (atasco inducido, `reintentos=0`, tiempos, frecuencia por confirmación, acoplamiento). P2 aprobada el 2026-10-28 con 55 g y 900 g (linealidad 0,046 %, error 0,04 %); P3 bloqueada por la falta de báscula externa.
+* 013 hardware: P1–P13 ejecutadas; P2 aprobada el 2026-10-28 con 55 g y 900 g (error 0,04 %); P3 aprobada el 2026-10-28 con 54,5 g, 51,1 g y 50,42 g (2 ejecuciones formales más un re-pesado, instrumento: la celda calibrada).
 * 012/011: `pytest` 244 passed + 113 subtests; `flutter test` 286 passed; `flutter analyze` 0 errores.
 
 ## Riesgos residuales
@@ -35,7 +35,8 @@
 * 10 SPS frente a timeout de 100 ms: `HX711::read()` sin cota; el timeout solo cubre el sondeo previo.
 * Calibración válida solo para este montaje (celda y cableado); falso atasco con flujo lento (por debajo de 0,4 g/s); `CycleLimits` permite a un futuro llamador un presupuesto mayor de 30 s.
 * Corte de energía durante el retroceso sin recuperación.
-* La rama `pruebas/endpoint-fijo-hx711` ya está en estado previo al merge: `check_pending_task` restaurado (commit `9f09f5e`); P3 queda a la espera de que el usuario consiga una báscula externa.
+* P3 sin instrumento independiente: la celda calibrada mide su propia entrega y no detecta masa fuera de la taza; las dispensaciones con reintentos pueden sobrepasar (57,3 g con `reintentos=1`).
+* La rama `pruebas/endpoint-fijo-hx711` tiene la spec 013 cerrada; queda pendiente el merge a `main`.
 
 ## Deuda aceptada
 * Desconectar solo la celda con el HX711 alimentado puede dar lecturas plausibles; no garantiza RF-9. Deriva de stock del backend fuera de alcance.

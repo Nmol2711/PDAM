@@ -1,6 +1,6 @@
 # Spec 013 — Dispensado por peso con celda de carga
 
-Estado: aprobada (T1–T14 implementadas y revisadas; T15 cerrada el 2026-10-27 tras la segunda ronda física: atasco inducido, `reintentos=0`, tiempos, frecuencia y acoplamiento); T10 abierta únicamente por P2 (calibración) y P3 (exactitud 50–55 g con báscula externa), pendientes de la calibración aplazada por el usuario.
+Estado: cerrada (T1–T14 implementadas y revisadas; T15 cerrada el 2026-10-27 tras la segunda ronda física: atasco inducido, `reintentos=0`, tiempos, frecuencia y acoplamiento; T10 cerrada el 2026-10-28 con P1–P13 ejecutadas y P7 no concluyente por los cables soldados de la celda; P3 se verificó con la celda calibrada como instrumento de medida al no disponer de báscula externa, con su limitación registrada).
 
 ## Contexto y objetivo
 El firmware del dispensador dispensa hoy una cantidad fija de tiempo: al recibir una
@@ -580,6 +580,10 @@ conexión WiFi ni la consulta periódica a la API.
   atasco y resolución de atasco.
 - Prueba física con un peso patrón: con una cantidad solicitada de 50 g, el incremento
   de peso medido está entre 50 g y 55 g, es decir, con un sobrepeso máximo del 10 %.
+  Nota de estado (2026-10-28): verificado sin báscula externa: tres mediciones en
+  rango (54,5 g; 51,1 g; 50,42 g) tomadas con la celda calibrada contra patrones de
+  55 g y 900 g (error máximo 0,04 %). Limitación registrada: el instrumento no es
+  independiente y no se puede descartar masa que caiga fuera de la taza.
 - Prueba física de frecuencia: durante la ventana de verificación y el ciclo de motor se
   observa un periodo de muestreo máximo de 200 ms, es decir, al menos 5 lecturas por
   segundo de forma efectiva.

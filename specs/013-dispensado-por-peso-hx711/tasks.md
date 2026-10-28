@@ -156,7 +156,7 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     RF-11, RF-12, RF-13 y RNF-1, RNF-4 y RNF-5, la exactitud de 50 g y la no
     regresión quedan exclusivamente en T10.
 
-- [ ] **T10. Checklist físico, no regresión y actualización de `MEMORY.md`.**
+- [x] **T10. Checklist físico, no regresión y actualización de `MEMORY.md`.**
   RF-5, RF-9, RF-11, RF-12, RF-13, RNF-1, RNF-4, RNF-5
   - Hecho cuando: con el módulo HX711 desconectado del ESP32 (DT/SCK;
     idealmente también VCC/GND) al arrancar el servo no se mueve;
@@ -203,8 +203,28 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     `[x]` hasta cerrar P2/P3.
   - Aclaración (2026-10-28): P2 ya se aprobó ese día —calibración verificada con
     55 g y 900 g, error máximo 0,04 %, factor 482,7 confirmado sin cambios—, así que
-    la condición «cerrar P2/P3» queda reducida a P3. Solo queda P3, bloqueada porque
-    el usuario no dispone de báscula externa: el bloqueo no es la calibración.
+    la condición «cerrar P2/P3» quedaba reducida a P3.
+  - Cerrada el 2026-10-28. P1–P13 ejecutadas; P7 queda no concluyente porque los
+    cables de la celda están soldados al módulo y no se puede inducir una inválida
+    aislada (resultado admitido). P2 aprobada el 2026-10-28: calibración verificada
+    con 55 g y 900 g, error máximo 0,04 %, factor 482,7 sin cambios. P3 cumplida con
+    tres mediciones en el rango 50–55 g: 54,5 g (2026-10-27, `reintentos=0`);
+    51,1 g (2026-10-28, línea base 364,8 g, peso final 415,9 g, `reintentos=0`); y
+    50,42 g del re-pesado de esa misma entrega con el sketch de calibración sobre la
+    misma celda (RAWdelta 24 344 / 482,7; diferencia de 0,68 g, 1,3 %, respecto al
+    incremento del ciclo). Las tres terminaron con `motivo=objetivo alcanzado`.
+    Limitaciones registradas:
+    - Son 2 ejecuciones formales de dispensado (27 y 28 de octubre) más un
+      re-pesado de la misma entrega, no 3 dispensaciones independientes.
+    - No hubo báscula externa independiente: el instrumento de medida fue la propia
+      celda del dispensador, calibrada y trazable a los pesos patrón de 55 g y 900 g
+      (error máximo 0,04 %).
+    - No se puede descartar masa que caiga fuera de la taza, porque ninguna de estas
+      mediciones lo detectaría.
+    - Observación adicional: las dispensaciones con reintentos mostraron sobrepeso
+      (un caso de 57,3 g con `reintentos=1`), porque el retroceso y la reanudación
+      añaden alimento extra; con `reintentos=0` las tres mediciones quedaron en
+      rango.
 
 - [x] **T11. Constantes de atasco y lógica pura de detección, decisión y
   registro, con tests nativos primero en rojo.**
@@ -455,5 +475,5 @@ API (`serve`, `amount`, `reset_wifi`) ya envía la cantidad en gramos y el
 descuento de stock sigue fuera de alcance.
 
 La ampliación de detección y resolución de atascos añade T11–T15; la estructura
-resultante de 15 tareas fue aprobada por el usuario junto con el plan, y
-T11–T14 están implementadas y revisadas.
+resultante de 15 tareas fue aprobada por el usuario junto con el plan. T1–T15
+están implementadas y revisadas: T15 se cerró el 2026-10-27 y T10 el 2026-10-28.
