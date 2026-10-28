@@ -11,6 +11,10 @@ void initServo();
 // Arranca el servomotor en giro continuo (0°) para dispensar alimento
 void startServo();
 
+// Pone el servomotor en el ángulo de retroceso (180°) para desatascar el tornillo;
+// queda marcado en movimiento para que stopServo() siga siendo idempotente
+void reverseServo();
+
 // Detiene el servomotor (90°); es idempotente
 void stopServo();
 

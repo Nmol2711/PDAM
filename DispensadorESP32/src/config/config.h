@@ -5,6 +5,20 @@
 
 #include "dispensing_utils.h"
 
+// Umbrales de detección y resolución de atascos (Spec 013, RNF-7). Se reexportan
+// desde dispensing_utils.h y solo se ajustan allí, en un único lugar; este archivo
+// no duplica valores:
+//   - gracia tras cada arranque de avance: 2 000 ms (kStallGraceMs)
+//   - ventana de estancamiento: 5 000 ms (kStallWindowMs)
+//   - progreso mínimo: 2,0 g (kMinProgressGrams)
+//   - tamaño de la mediana móvil: 5 lecturas válidas (kMovingMedianSize)
+//   - mínimo de lecturas válidas desde el arranque: 5 (kMinAdvanceValidReadings)
+//   - retroceso de desatasco: 1 200 ms (kReverseMs)
+//   - pausa tras el retroceso: 300 ms (kPauseMs)
+//   - máximo de reintentos: 3 (kMaxStallRetries)
+//   - presupuesto de motor: 30 000 ms (kMotorBudgetMs)
+//   - presupuesto mínimo de reintento: 3 500 ms (kMinRetryBudgetMs)
+
 // UUIDs para el servicio BLE de aprovisionamiento (RF-05, RF-06)
 #define SERVICE_UUID               "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID_SSID   "beb5483e-36e1-4688-b7f5-ea07361b26a6"

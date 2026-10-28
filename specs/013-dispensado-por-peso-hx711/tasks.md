@@ -1,8 +1,9 @@
 # Tareas 013 — Dispensado por peso con celda de carga HX711
 
-Máximo 10 tareas, en orden de dependencia. Ninguna se marca como hecha hasta
-completar su comprobación. Tests primero en las tareas de lógica pura (T3, T4 y
-T5): se escriben en rojo, se implementan y se ponen en verde.
+Quince tareas, en orden de dependencia: T1–T10 de la spec original y T11–T15 de
+la ampliación de atascos. Ninguna se marca como hecha hasta completar su
+comprobación. Tests primero en las tareas de lógica pura (T3, T4, T5, T11, T12 y
+T14): se escriben en rojo, se implementan y se ponen en verde.
 
 - [x] **T1. Configuración de hardware, calibración y dependencia HX711.**
   RF-11, RNF-4
@@ -155,16 +156,20 @@ T5): se escriben en rojo, se implementan y se ponen en verde.
     RF-11, RF-12, RF-13 y RNF-1, RNF-4 y RNF-5, la exactitud de 50 g y la no
     regresión quedan exclusivamente en T10.
 
-- [ ] **T10. Checklist físico, no regresión y actualización de `MEMORY.md`.**
+- [x] **T10. Checklist físico, no regresión y actualización de `MEMORY.md`.**
   RF-5, RF-9, RF-11, RF-12, RF-13, RNF-1, RNF-4, RNF-5
   - Hecho cuando: con el módulo HX711 desconectado del ESP32 (DT/SCK;
     idealmente también VCC/GND) al arrancar el servo no se mueve;
     desconectándolo a mitad del giro el servo se detiene dentro de 1 s desde la
-    primera de las 3 inválidas; con 50 g solicitados el incremento medido está
+    primera de las 3 inválidas; una orden de dispensación inválida, es decir,
+    con `amount` negativo o no numérico (P13), no mueve el servo ni provoca
+    retroceso; con 50 g solicitados el incremento medido está
     entre 50 g y 55 g; se observan ≥ 5 lecturas/s; el log está en español, sin
     emojis ni credenciales; el checklist de BLE, WiFi, reconexión, validación de
     servidor, reset de credenciales y consulta 20 s después del fin queda
-    cumplido y registrado; `MEMORY.md` queda actualizado con el estado, las
+    cumplido y registrado; el checklist se ejecuta sobre el firmware final con
+    desatasco (T11–T14) y repite la exactitud de 50 g y el fallo de sensor como
+    no regresión; `MEMORY.md` queda actualizado con el estado, las
     decisiones y los pendientes de hardware.
   - Nota (2026-10-23): calibrar con peso patrón antes de medir exactitud y usar
     la desconexión del **módulo HX711 del ESP32** para las pruebas de RF-4/RF-9;
@@ -188,10 +193,287 @@ T5): se escriben en rojo, se implementan y se ponen en verde.
     (52.4–530.5 g) se obtuvieron ejerciendo presión manual sobre la celda porque
     no había alimento seco, así que su variabilidad no mide exactitud. T10 sigue
     `[ ]`: faltan P3 con alimento real y medición externa de 50–55 g, P5, P6, P7,
-    P8, P10, P11 y P12.
+    P8, P10, P11, P12 y P13.
+  - Nota (2026-10-27, segunda ronda): con `check_pending_task` restaurado (commit
+    `9f09f5e`), P11, P9 y P12 quedaron aprobados y P8 aprobado por confirmación del
+    usuario; P7 sigue no concluyente porque los cables de la celda están soldados y no
+    se puede inducir una inválida aislada (resultado admitido). Quedan pendientes
+    únicamente P2 (calibración con peso patrón) y P3 (exactitud 50–55 g con báscula
+    externa), que se ejecutan cuando el usuario calibre la balanza. T10 no se marcará
+    `[x]` hasta cerrar P2/P3.
+  - Aclaración (2026-10-28): P2 ya se aprobó ese día —calibración verificada con
+    55 g y 900 g, error máximo 0,04 %, factor 482,7 confirmado sin cambios—, así que
+    la condición «cerrar P2/P3» quedaba reducida a P3.
+  - Cerrada el 2026-10-28. P1–P13 ejecutadas; P7 queda no concluyente porque los
+    cables de la celda están soldados al módulo y no se puede inducir una inválida
+    aislada (resultado admitido). P2 aprobada el 2026-10-28: calibración verificada
+    con 55 g y 900 g, error máximo 0,04 %, factor 482,7 sin cambios. P3 cumplida con
+    tres mediciones en el rango 50–55 g: 54,5 g (2026-10-27, `reintentos=0`);
+    51,1 g (2026-10-28, línea base 364,8 g, peso final 415,9 g, `reintentos=0`); y
+    50,42 g del re-pesado de esa misma entrega con el sketch de calibración sobre la
+    misma celda (RAWdelta 24 344 / 482,7; diferencia de 0,68 g, 1,3 %, respecto al
+    incremento del ciclo). Las tres terminaron con `motivo=objetivo alcanzado`.
+    Limitaciones registradas:
+    - Son 2 ejecuciones formales de dispensado (27 y 28 de octubre) más un
+      re-pesado de la misma entrega, no 3 dispensaciones independientes.
+    - No hubo báscula externa independiente: el instrumento de medida fue la propia
+      celda del dispensador, calibrada y trazable a los pesos patrón de 55 g y 900 g
+      (error máximo 0,04 %).
+    - No se puede descartar masa que caiga fuera de la taza, porque ninguna de estas
+      mediciones lo detectaría.
+    - Observación adicional: las dispensaciones con reintentos mostraron sobrepeso
+      (un caso de 57,3 g con `reintentos=1`), porque el retroceso y la reanudación
+      añaden alimento extra; con `reintentos=0` las tres mediciones quedaron en
+      rango.
+
+- [x] **T11. Constantes de atasco y lógica pura de detección, decisión y
+  registro, con tests nativos primero en rojo.**
+  RF-12, RF-14, RF-15, RF-16, RF-17, RNF-6, RNF-7
+  - Hecho cuando: `dispensing_utils.h` define en un único lugar, documentadas en
+    español, las constantes de gracia 2 000 ms, ventana 5 000 ms, progreso
+    mínimo 2,0 g, mediana móvil 5, mínimo 5 válidas desde el arranque, retroceso
+    1 200 ms, pausa 300 ms, máximo 3 reintentos, presupuesto mínimo de reintento
+    3 500 ms y ángulo 180°, y renombra `kMaxRotationMs` a `kMotorBudgetMs`;
+    existen mediana móvil, máximo observado, apertura/reinicio/expiración de la
+    ventana, declaración de atasco, `decideStallAction`, contabilidad del
+    presupuesto, `budgetExhaustedReason`, contador de reintentos,
+    `DispenseReason::STALL_UNRESOLVED`, `DispenseResult::retryCount` y
+    `reintentos=N` en `formatDispenseLog`; las pruebas se escriben antes y fallan
+    por símbolos ausentes; `pio test -e native` pasa en verde y `pio run` compila.
+  - Comprobación verificable: `pio test -e native` en rojo antes de implementar y
+    en verde después, con las cuatro aserciones de log existentes actualizadas a
+    `reintentos=0`.
+  - Verificación (2026-10-26): con los 36 tests nuevos y sin implementación,
+    `pio test -e native` falló por símbolos ausentes (`kStallGraceMs`,
+    `kStallWindowMs`, `kMinProgressGrams`, `kMovingMedianSize`,
+    `kMinAdvanceValidReadings`, `kReverseMs`, `kPauseMs`, `kMaxStallRetries`,
+    `kMinRetryBudgetMs`, `kReverseAngleDegrees`, `kMotorBudgetMs`,
+    `MovingMedianState`, `StallState`, `StallOutcome`, `StallAction`,
+    `recordAdvanceSample`, `decideStallAction`, `motorBudgetRemainingMs`,
+    `budgetExhaustedReason`, `STALL_UNRESOLVED`, `retryCount`). Tras añadirlos a
+    `dispensing_utils.h` (header puro, tiempo por parámetro), `pio test -e native`
+    pasa 108/108 (72 previos + 36 nuevos) y `pio run` en `esp32dev` termina en
+    SUCCESS (RAM 64 444 B, 19.7 %; Flash 2 005 422 B, 63.8 %). Las 10 constantes
+    de umbral quedan solo en `dispensing_utils.h` y `config.h` las reexpone por
+    su `#include`, sin cambios. `grep` de `kMaxRotationMs` en `src/` y `test/` sin
+    resultados. Decisión de lectura: RF-14 exige reiniciar la ventana con
+    «progreso igual o mayor que 2 gramos», así que la prueba de 4,9 g verifica el
+    reinicio (y la renovación de la referencia), no su ausencia; el límite
+    inferior se cubre con 1,9 g, que no reinicia.
+
+- [x] **T12. Retroceso explícito del servo y extracción del ciclo a una unidad
+  pura con puertos inyectables.**
+  RF-6, RF-7, RF-14, RF-15, RF-17, RNF-1, RNF-6
+  - Hecho cuando: `servo_driver` expone `reverseServo()` a 180° con la constante
+    `kReverseAngleDegrees`, sin cambiar `initServo`, `startServo`, `stopServo` ni
+    `setServoAngle`; existe `dispensing_cycle.h` sin Arduino con `MotorPhase`,
+    `CyclePorts`, `CycleDiagnostics` y `runDispenseCycle`, que muestrea cada
+    200 ms en avance, retroceso y pausa, evalúa el atasco solo en avance,
+    comprueba el objetivo en las tres fases y llama a `stop` en toda salida;
+    `platformio.ini` añade `test_dispensing_cycle` a `test_ignore` sin
+    dependencias nuevas; `pio test -e native` y `pio run` pasan.
+  - Comprobación verificable: el servo simulado registra cero `startReverse` con
+    `SENSOR_FAILURE`, con orden inválida y con lecturas inválidas alternas, y al
+    menos uno en el perfil de estancamiento.
+  - Verificación (2026-10-26): con el test nuevo y sin `dispensing_cycle.h`,
+    `pio test -e native` falló por cabecera ausente
+    (`config/dispensing_cycle.h: No such file or directory`) con las 108 pruebas
+    previas en verde. Tras crear la unidad pura, `pio test -e native` pasa
+    120/120: `test_provisioning_utils` 5, `test_dispensing_utils` 103 y
+    `test_dispensing_cycle` 12. `pio run -t clean && pio run` en `esp32dev`
+    termina en SUCCESS (RAM 64 444 B, 19.7 %; Flash 2 005 470 B, 63.8 %) y los
+    avisos del build son solo de `bogde/HX711` y `ESP32Servo`. `reverseServo()`
+    escribe `kReverseAngleDegrees` y deja el servo marcado en movimiento.
+    `dispensing_service.cpp` conserva el bucle anterior hasta T13, así que el
+    ciclo nuevo aún no se ejecuta en el firmware. Pruebas de mutación: quitar la
+    comprobación del objetivo en retroceso y pausa, evaluar el atasco en las tres
+    fases o contar el reintento al retroceder rompe las pruebas nuevas. El
+    reintento no se cuenta cuando el objetivo detiene el ciclo dentro del
+    retroceso o de la pausa (RF-12). Corrección documental en `plan.md` §7.1: el
+    reinicio de la ventana ocurre con progreso igual o mayor que 2 g (con 1,9 g
+    no y con 4,9 g sí).
+
+- [x] **T13. Integración del ciclo en el servicio con presupuesto absoluto,
+  retroceso, pausa y reanudación.**
+  RF-8, RF-12, RF-15, RF-16, RNF-3, RNF-5
+  - Hecho cuando: `dispenseWeight` delega en `runDispenseCycle` con los
+    adaptadores Arduino (`startServo`, `reverseServo`, `stopServo`,
+    `readHx711Raw`, `millis`, espera hasta vencimiento absoluto) y conserva la
+    validación previa de factor y cantidad, la inicialización única de la celda,
+    el diagnóstico de verificación y la línea de log; el presupuesto se cuenta
+    desde el primer arranque de avance e incluye retroceso y pausa; un retroceso
+    interrumpido por fallo de sensor o presupuesto no incrementa `retryCount`;
+    la firma pública de `dispenseWeight` no cambia; `pio run` compila y
+    `pio test -e native` pasa.
+  - Comprobación verificable: `pio test -e native` en verde con `reintentos=0/1/3`
+    y el motivo nuevo; búsqueda en `src` sin restos del bucle antiguo en
+    `dispensing_service.cpp`.
+  - Verificación (2026-10-27): `dispenseWeight` construye los `CyclePorts` sobre
+    `startServo`, `reverseServo`, `stopServo`, `readHx711Raw`, `millis()` y una
+    espera por tramos de 5 ms que recalcula el restante antes de cada `delay()`,
+    así que nunca duerme más allá del vencimiento, y delega en
+    `runDispenseCycle`. El servicio pasa de 292 a 141 líneas: desaparecen los
+    bucles de verificación y de giro, el `switch` de motivos y los helpers de
+    vencimientos locales (`reached`, `remainingMs`, `earlierDeadline`,
+    `waitUntil`), y se reutilizan los de `dispensing_cycle.h`. Se conservan la
+    validación previa, la inicialización única de la celda, el diagnóstico de la
+    verificación fallida con `CycleDiagnostics` y la línea única de
+    `formatDispenseLog`; `retryCount` sale del ciclo y queda en 0 en las salidas
+    tempranas. `pio run -t clean && pio run` en `esp32dev` termina en SUCCESS
+    (RAM 64 444 B, 19.7 %; Flash 2 008 370 B, 63.8 %) sin avisos nuevos en
+    `src/`, y `pio test -e native` pasa 120/120 (`test_provisioning_utils` 5,
+    `test_dispensing_utils` 103, `test_dispensing_cycle` 12). `grep` sin restos
+    de `recordRotationSample`, `recordVerificationSample`, `startVerification`,
+    `verificationBaseline`, `RotationState`, `earlierDeadline` ni
+    `fillDispenseMeasurements` en el servicio; `api_service.cpp` y
+    `dispenser_task.cpp` no se tocaron y la firma
+    `DispenseResult dispenseWeight(float)` no cambió. La comprobación física del
+    retroceso y del presupuesto queda en T15.
+
+- [x] **T14. Validación nativa completa, aserciones de log y compilación.**
+  RF-7, RF-8, RF-14, RF-15, RF-16, RF-17, RNF-3, RNF-6
+  - Hecho cuando: la suite nativa cubre el perfil de flujo por encima de 0,4 g/s
+    sin atasco con «objetivo alcanzado» y `reintentos=0`, los valores por
+    defecto de `CycleLimits` iguales a `kMotorBudgetMs` y `kMaxStallRetries`, el
+    presupuesto inyectado de 10 000 ms sin atasco con «objetivo no alcanzado» y
+    parada del motor a los 10 000 ms, `maxRetries = 0` y un presupuesto que deja
+    menos de 3 500 ms al declararse el atasco sin retroceso (la frontera de
+    3 499/3 500 ms y el contador en 3 se verifican en `decideStallAction`,
+    porque en el ciclo no son alcanzables con el punto de inyección), la cota de
+    30 000 ms en todos los perfiles, la prioridad del objetivo sobre el atasco y
+    que la última acción del ciclo es `stop`; las cuatro aserciones de log
+    actualizadas pasan; `pio run -t clean && pio run` compila y se revisa que no
+    hay dependencias nuevas.
+  - Comprobación verificable: `pio test -e native` con todas las pruebas en PASS y
+    `pio run` en SUCCESS, con conteo de tests y uso de RAM/Flash anotados.
+  - Verificación (2026-10-27): `pio test -e native` pasa 130/130
+    (`test_provisioning_utils` 5, `test_dispensing_utils` 109,
+    `test_dispensing_cycle` 16) y `pio run -t clean && pio run` en `esp32dev`
+    termina en SUCCESS (RAM 64 444 B, 19,7 %; Flash 2 008 370 B, 63,8 %) sin
+    avisos en `src/` ni en `test/`: los únicos avisos del build son de
+    `bogde/HX711` y `ESP32Servo`. `platformio.ini` no añade dependencias
+    respecto a `HEAD` (`bogde/HX711 @ ^0.7.5` ya estaba; el único cambio es
+    `test_dispensing_cycle` en `test_ignore`, de T12).
+    Cierre de las lagunas de T12: la secuencia de reintento comprueba el
+    instante de la parada tras el retroceso (`reverseStart + kReverseMs`) y el
+    de la reanudación (`+ kPauseMs`), además de la suma de 1 500 ms, y un perfil
+    con carga transitoria durante el retroceso y la pausa demuestra que el
+    máximo observado incluye esas medianas (segundo atasco a los 17 500 ms y
+    `reintentos=2`). Mutaciones verificadas en una copia en `/tmp` y
+    revertidas: usar `kPauseMs` como duración del retroceso y `kReverseMs` como
+    duración de la pausa rompe `test_stall_profile_reverses_with_fixed_sequence`
+    (1200 esperado, 300 obtenido); quitar `feedMovingMedian` del retroceso y de
+    la pausa, o solo de la pausa, rompe
+    `test_reverse_and_pause_readings_raise_observed_max` (2 retrocesos
+    esperados, 1 obtenido). `grep` de «mutacion» en `src/` y `test/` sin
+    resultados.
+    Matriz de §7.1: se añaden el perfil realista de 1 g/s con ruido alterno de
+    0,4 g, el fallo de sensor durante el retroceso y durante la pausa (sin
+    retroceso adicional, sin reanudar el avance y con `reintentos=0`), el pico
+    doble de ruido que no eleva el máximo observado y la combinación de contador
+    y presupuesto en `decideStallAction`; la cota de 30 000 ms y la parada final
+    se comprueban en los doce perfiles del ciclo. Los casos de presupuesto de
+    3 499 ms, 3 500 ms exactos y contador en 3 se cubren con valores inyectados
+    en la función pura, como pide RF-16 («no se verifica de extremo a extremo»).
+    Log: se añaden las aserciones de peso final e incremento no disponibles con
+    línea base disponible, línea base no disponible al abortar antes de fijarla,
+    los textos de los siete motivos en español y una comprobación de ASCII
+    imprimible sin palabras sensibles (RNF-5), además de `reintentos=0`, `1` y
+    `3` con «atasco no resuelto».
+  - Corrección de la revisión de T14 (2026-10-27): la rama `GIVE_UP` del ciclo
+    quedaba sin cobertura (sustituirla por `if (false)` mantenía 130/130), porque
+    el ciclo usaba las constantes directamente y esa rama solo se alcanza tras
+    30 s. Se añade en `dispensing_cycle.h` el punto de inyección `CycleLimits`
+    (`motorBudgetMs` y `maxRetries` con los valores aprobados por defecto) como
+    sexto parámetro con valor por defecto de `runDispenseCycle`, de modo que el
+    servicio no cambia. Nuevas pruebas: `maxRetries = 0` y presupuesto de
+    10 000 ms (3 000 ms restantes al declararse el atasco) dan «atasco no
+    resuelto» sin retroceso; el ciclo completo se acota en 32 000 ms además de los
+    30 000 ms de motor; invariante `kMinRetryBudgetMs >= kReverseMs + kPauseMs +
+    kStallGraceMs` (RF-12, RF-16); y un perfil que sube 0,5 g/s en retroceso y
+    pausa no declara allí ningún atasco (RF-14). `pio test -e native` 134/134
+    (`test_provisioning_utils` 5, `test_dispensing_utils` 110,
+    `test_dispensing_cycle` 19) y `pio run -t clean && pio run` en SUCCESS
+    (RAM 64 444 B, 19,7 %; Flash 2 008 522 B, 63,8 %). La Flash sube 152 B frente
+    a 2 008 370 B por el punto de inyección: 40 B del temporal del argumento por
+    defecto en la llamada del servicio y 112 B de leer presupuesto y reintentos
+    desde la estructura en vez de inmediatos, medido con una variante en `/tmp`
+    que conserva la firma y usa las constantes en el cuerpo; la RAM no cambia.
+    Mutaciones en `/tmp`, revertidas: `if (false)` en lugar de la comparación con
+    `GIVE_UP` rompe las dos pruebas nuevas («Expected 1 Was 4» y «Was 2»);
+    intercambiar `kReverseMs`/`kPauseMs` en el ciclo rompe la secuencia de
+    reintento (1200 esperado, 300 obtenido); quitar `feedMovingMedian` del
+    retroceso y la pausa rompe `test_reverse_and_pause_readings_raise_observed_max`
+    (2 retrocesos esperados, 1 obtenido). La aserción de 32 s se comprobó con una
+    igualdad temporal a 32 000 ms en el perfil de estancamiento (la última acción,
+    la parada final, cae exactamente en 32 000 ms) y un desfase de 1 ms la rompe.
+  - Corrección de coherencia (2026-10-27): el comportamiento documentado del fallo
+    que empieza en la pausa (dos inválidas dentro de la pausa, avance reanudado y
+    fallo detectado ya en el avance) no tenía prueba nativa. Se añade
+    `test_sensor_failure_started_in_pause_resumes_and_stops_without_reverse`, que
+    comprueba el motivo «fallo del sensor durante la dispensación», `reintentos=1`,
+    la segunda llamada de avance, un único retroceso, dos lecturas dentro de la
+    pausa y la parada del servo en la primera lectura del avance reanudado.
+    `pio test -e native` 137/137 (`test_provisioning_utils` 5,
+    `test_dispensing_utils` 110, `test_dispensing_cycle` 22) y `pio run -t clean
+    && pio run` SUCCESS con la misma RAM y Flash, porque solo cambia un archivo de
+    test. Mutación en una copia de `/tmp`, revertida: quitar `startAdvance` y
+    `resumeAdvanceAfterRetry` de la transición de la pausa rompe la prueba nueva
+    («Expected 2 Was 1» en el contador de avances).
+
+  - Cierre de huecos de la revisión (2026-10-27): dos aserciones nuevas.
+    `test_cycle_limits_default_to_approved_constants` fija que `CycleLimits{}`
+    vale `kMotorBudgetMs` y `kMaxStallRetries`, para que el valor de producción
+    no pueda separarse de las constantes aprobadas (RNF-7); se coloca en
+    `test_dispensing_cycle` porque `CycleLimits` vive en `dispensing_cycle.h` y no
+    es visible desde `test_dispensing_utils`.
+    `test_injected_budget_exhausts_cycle_without_stall` inyecta 10 000 ms con un
+    perfil sin atasco (una lectura válida de cada dos y objetivo de 200 g): el
+    ciclo termina en «objetivo no alcanzado», sin retroceso, con la parada final
+    exactamente a los 10 000 ms de motor más los 2 s de verificación, lo que fija
+    la comprobación de agotamiento del bucle al presupuesto inyectado y no a
+    `kMotorBudgetMs`. `pio test -e native` pasa 136/136 en esa ejecución, conteo
+    anterior a la prueba del fallo iniciado en la pausa que lo lleva a 137/137
+    (`test_provisioning_utils` 5, `test_dispensing_utils` 110,
+    `test_dispensing_cycle` 21) y `pio run -t clean && pio run` en `esp32dev`
+    termina en SUCCESS. Mutaciones en la copia de `/tmp`, revertidas: el valor por
+    defecto `maxRetries = 4` rompe la aserción de límites («Expected 3 Was 4»);
+    devolver la comprobación de agotamiento del bucle a `kMotorBudgetMs` deja el
+    ciclo nuevo sin terminar (bucle ocupado, el reloj virtual ya no avanza), así
+    que `pio test` no completa y aborta por timeout; no existe una variante con
+    fallo limpio porque el camino de espera también está acotado por el
+    presupuesto inyectado.
+
+- [x] **T15. Checklist físico de atasco y actualización de `MEMORY.md`.**
+  RF-14, RF-15, RF-16, RF-17, RNF-3, RNF-4
+  - Evidenciado (2026-10-27): 5 dispensaciones de 50 g con croqueta de ~3 cm, balanza sin
+    calibrar. Cuatro ciclos declararon un atasco real y lo resolvieron con `reintentos=1`
+    (incrementos 57.3, 55.2, 54.9 y 52.4 g); el tercero no se atascó (`reintentos=0`,
+    54.5 g). Los cinco terminaron con «objetivo alcanzado», así que la detección y el
+    retroceso funcionaron en 4 de 4 atascos reales. Los incrementos no se usan como
+    prueba de exactitud porque la balanza no está calibrada.
+  - Cerrada el 2026-10-27 (segunda ronda): atasco inducido manualmente (el usuario detuvo
+    el tornillo y el ciclo lo detectó y lo resolvió o terminó como corresponde); peso de
+    la bandeja antes y después del retroceso sin disminución; tiempos del ciclo de motor
+    y del ciclo completo dentro de 30/32 s; frecuencia de lectura (≥ 5 lecturas/s en
+    avance, retroceso y pausa) confirmada por el usuario; acoplamiento del tornillo sin
+    fin revisado; y dispensación normal con `reintentos=0` y `motivo=objetivo alcanzado`.
+    Los datos del atasco con depósito vacío (4 avances, 3 retrocesos, `reintentos=3`,
+    `atasco no resuelto`) quedan como evidencia adicional del tope de reintentos.
+  - Nota: el log de la dispensación con `reintentos=0` se registra por confirmación del
+    usuario. Con alimento de ~3 cm el atasco es esperable por el paso de la hélice, así
+    que un `reintentos>0` en esas condiciones no invalida el criterio; con alimento que
+    el tornillo transporta sin trabarse la dispensación debe dar `reintentos=0`. No se
+    ajustan umbrales por este motivo.
+  - Comprobación verificable: log serie de cada dispensación con `reintentos` y motivo, y
+    checklist con fecha anotado en la tarea.
 
 ## Nota de alcance
 
 No se incluyen tareas de backend ni de aplicación móvil: el contrato real de la
 API (`serve`, `amount`, `reset_wifi`) ya envía la cantidad en gramos y el
 descuento de stock sigue fuera de alcance.
+
+La ampliación de detección y resolución de atascos añade T11–T15; la estructura
+resultante de 15 tareas fue aprobada por el usuario junto con el plan. T1–T15
+están implementadas y revisadas: T15 se cerró el 2026-10-27 y T10 el 2026-10-28.

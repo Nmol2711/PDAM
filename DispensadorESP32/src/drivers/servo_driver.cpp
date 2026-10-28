@@ -28,6 +28,15 @@ void startServo() {
   Serial.println("Servomotor en giro continuo (0°).");
 }
 
+void reverseServo() {
+  // Giro inverso de desatasco: libera la croqueta cuñada entre la hélice y el
+  // tubo. Se marca en movimiento para que stopServo() registre la parada una
+  // sola vez, igual que en el avance.
+  myServo.write(kReverseAngleDegrees);
+  servoEnGiro = true;
+  Serial.println("Servomotor en retroceso (180°) para desatascar.");
+}
+
 void stopServo() {
   myServo.write(90); // Detenido
 

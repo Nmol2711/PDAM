@@ -5,15 +5,16 @@
 
 namespace dispensing {
 
-// Ejecuta una dispensación por peso (Spec 013, T7).
+// Ejecuta una dispensación por peso (Spec 013).
 //
 // Valida el factor de calibración y la cantidad antes de tocar el hardware,
-// abre la ventana fija de verificación de 2 s, fija la línea base, arranca el
-// servo y lo detiene en toda salida (objetivo, tiempo, fallo del sensor o
-// aborto). Emite una única línea de registro en español con el resultado.
+// inicializa la celda una sola vez y delega el ciclo en runDispenseCycle:
+// ventana fija de verificación de 2 s, avance con objetivo sostenido, retroceso
+// y pausa de desatasco dentro del presupuesto de motor, y servo detenido en toda
+// salida (objetivo, tiempo, atasco, fallo del sensor o aborto). Emite una única
+// línea de registro en español con el resultado y reintentos=N.
 //
-// Requiere que initServo() se haya llamado durante el arranque; la celda HX711
-// se inicializa internamente una sola vez, en la primera dispensación válida.
+// Requiere que initServo() se haya llamado durante el arranque.
 DispenseResult dispenseWeight(float amountGrams);
 
 } // namespace dispensing
