@@ -77,11 +77,7 @@ def update_dispenser(
 
 @router.get("check-taks/{address_mac}", response_model=dict)
 def check_dispenser_taks(address_mac: str, db: Session = Depends(get_db)):
-    # return dispenser_service.check_pending_task(db=db, mac_address=address_mac)
-    return {
-        "serve": True,
-        "amount": 50
-    }
+    return dispenser_service.check_pending_task(db=db, mac_address=address_mac)
 
 
 @router.get("check-taks-test/{address_mac}", response_model=dict)
