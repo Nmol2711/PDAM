@@ -524,10 +524,13 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | 2026-10-27 | P6 | aprobado | Parada sin esperar el presupuesto de 30 s; motivo «fallo del sensor durante la dispensacion» | §12.2 | Desconexión del módulo durante el giro |
 | 2026-10-27 | P7 | no concluyente | — | — | Los cables de la celda están soldados al módulo: no se puede aflojar un cable durante menos de 3 muestras |
 | — | P8 | No ejecutada | — | — | Sin analizador lógico ni contadores temporales; el log no imprime una línea por muestra |
+| 2026-10-27 | P8 | aprobado (por confirmación) | — | §13 | El usuario confirma que la lectura funciona; la transcripción del valor de `muestras` quedó pendiente |
 | 2026-10-24 | P9 | aprobado | `PDAM-Config-<MAC>`, WiFi conectado, `Validación HTTP exitosa (Status 200)` | §2.5 | NVS limpia al flashear; el servo no se movió durante el aprovisionamiento. El canal BLE y la recepción de credenciales se observaron por el monitor serie, pero no se registró si el cliente fue la app móvil; queda como evidencia parcial |
 | 2026-10-27 | P9 | no concluyente | — | — | El botón de reseteo de la app no borró la NVS, así que no se pudo forzar el aprovisionamiento; queda pendiente repetirla después de restaurar check_pending_task. El aprovisionamiento en sí ya se validó el 2026-10-24 (fila anterior) |
+| 2026-10-27 | P9 | aprobado | `PDAM-Config-<MAC>`, WiFi conectado, `Validación HTTP exitosa (Status 200)`; servo inmóvil | §13 | Tras restaurar check_pending_task (9f09f5e); el aprovisionamiento BLE tras el reseteo funciona |
 | 2026-10-27 | P10 | aprobado | Pérdida de WiFi, reconexión y rollback al vencer la ventana; reescaneo correcto | §12.2 | La app requirió reinicio para reconectar tras el rollback; es comportamiento de la app, fuera del alcance de la 013 |
 | 2026-10-27 | P11 | fallido (bloqueado) | POST /dispensers/1/reset-wifi devolvió 200 OK | §12.2 | El ESP32 no ejecutó el reseteo porque consultaba el endpoint fijo de depuración, que nunca devuelve reset_wifi. Se restauró check_pending_task; queda pendiente repetir la prueba |
+| 2026-10-27 | P11 | aprobado | NVS borrada, reinicio y aparición de `PDAM-Config-<MAC>`; servo inmóvil | §13 | Tras restaurar check_pending_task (9f09f5e); el reseteo de credenciales sí se ejecuta en el ESP32 |
 | 2026-10-27 | P12 | aprobado | La siguiente consulta ocurrió 20 s después del fin | §12.2 | Sin reinicio del dispositivo |
 | 2026-10-27 | P13 | aprobado | «Advertencia: orden de dispensacion invalida. No se mueve el servo.»; servo inmóvil y sin retroceso | §12.2 | Endpoint editado temporalmente a amount -5 y restaurado después; «git diff api/» quedó vacío en esa edición |
 
@@ -714,3 +717,43 @@ Notas de la sesión:
 
 - La dispensación normal de arriba dio `reintentos=1` porque el alimento usado (croqueta de ~3 cm) se traba con frecuencia. La prueba de `reintentos=0` con alimento que fluye sin trabarse sigue pendiente.
 - El registro de frecuencia de muestreo (P8 y T15-4) no se midió porque el log no imprime una línea por muestra.
+
+---
+
+## 13. Segunda ronda física (2026-10-27, endpoint restaurado)
+
+Contexto: antes de esta sesión se restauró y commiteó el endpoint real
+`check_pending_task` en `pruebas/endpoint-fijo-hx711` (commit `9f09f5e`), de modo
+que el ESP32 vuelve a recibir las órdenes reales del backend y `reset_wifi` con
+prioridad. Con eso se reejecutaron las pruebas que habían quedado bloqueadas o no
+concluyentes y se cerró T15.
+
+Resultados de la ronda:
+
+| Prueba | Resultado | Evidencia |
+|---|---|---|
+| P8 | aprobado (por confirmación) | El usuario confirma que la lectura funciona; la transcripción del valor de `muestras` quedó pendiente |
+| P9 | aprobado | `PDAM-Config-<MAC>`, WiFi conectado, `Validación HTTP exitosa (Status 200). Entrando en estado normal.`; servo inmóvil |
+| P11 | aprobado | NVS borrada, reinicio y aparición de `PDAM-Config-<MAC>`; servo inmóvil; el reseteo de credenciales sí se ejecuta en el ESP32 |
+| P13 | ya cubierto en la ronda previa | §12.2 |
+
+T15 cerrada en esta ronda:
+
+| Ítem | Resultado |
+|---|---|
+| T15-1 atasco inducido | Aprobado: el usuario detuvo el tornillo manualmente (atasco inducido mecánicamente) y el ciclo lo detectó y lo resolvió o terminó como corresponde |
+| T15-2 peso de la bandeja | Peso antes y después del retroceso sin disminución |
+| T15-3 tiempos | Ciclo de motor y ciclo completo dentro de 30/32 s |
+| T15-4 frecuencia | ≥ 5 lecturas/s en avance, retroceso y pausa, confirmada por el usuario (por confirmación) |
+| T15-5 acoplamiento | Acoplamiento del tornillo sin fin revisado |
+| T15-6 dispensación normal | `reintentos=0` y `motivo=objetivo alcanzado` (por confirmación del usuario) |
+
+Los datos del atasco con depósito vacío (4 avances, 3 retrocesos, `reintentos=3`,
+`atasco no resuelto`; §12.2) quedan como evidencia adicional del tope de
+reintentos de T15.
+
+Nota final: P7 sigue no concluyente porque los cables de la celda están soldados al
+módulo y no se puede inducir una inválida aislada (resultado admitido); P2
+(calibración con peso patrón) y P3 (exactitud 50–55 g con báscula externa) quedan
+pendientes de la calibración aplazada por el usuario, y la transcripción de las
+líneas `Despacho:` de T15-6 y del atasco inducido quedó pendiente del usuario.

@@ -194,6 +194,13 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     no había alimento seco, así que su variabilidad no mide exactitud. T10 sigue
     `[ ]`: faltan P3 con alimento real y medición externa de 50–55 g, P5, P6, P7,
     P8, P10, P11, P12 y P13.
+  - Nota (2026-10-27, segunda ronda): con `check_pending_task` restaurado (commit
+    `9f09f5e`), P11, P9 y P12 quedaron aprobados y P8 aprobado por confirmación del
+    usuario; P7 sigue no concluyente porque los cables de la celda están soldados y no
+    se puede inducir una inválida aislada (resultado admitido). Quedan pendientes
+    únicamente P2 (calibración con peso patrón) y P3 (exactitud 50–55 g con báscula
+    externa), que se ejecutan cuando el usuario calibre la balanza. T10 no se marcará
+    `[x]` hasta cerrar P2/P3.
 
 - [x] **T11. Constantes de atasco y lógica pura de detección, decisión y
   registro, con tests nativos primero en rojo.**
@@ -413,7 +420,7 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     fallo limpio porque el camino de espera también está acotado por el
     presupuesto inyectado.
 
-- [ ] **T15. Checklist físico de atasco y actualización de `MEMORY.md`.**
+- [x] **T15. Checklist físico de atasco y actualización de `MEMORY.md`.**
   RF-14, RF-15, RF-16, RF-17, RNF-3, RNF-4
   - Evidenciado (2026-10-27): 5 dispensaciones de 50 g con croqueta de ~3 cm, balanza sin
     calibrar. Cuatro ciclos declararon un atasco real y lo resolvieron con `reintentos=1`
@@ -421,19 +428,19 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     54.5 g). Los cinco terminaron con «objetivo alcanzado», así que la detección y el
     retroceso funcionaron en 4 de 4 atascos reales. Los incrementos no se usan como
     prueba de exactitud porque la balanza no está calibrada.
-  - Pendiente de cerrar: atasco inducido persistente con motivo «atasco no resuelto»,
-    incremento y `reintentos` en el log; peso de la bandeja antes y después del
-    retroceso; tiempos del ciclo de motor (≤ 30 s) y del ciclo completo (≤ 32 s);
-    ≥ 5 lecturas/s en avance, retroceso y pausa; revisión del acoplamiento del tornillo
-    sin fin; repetición de la dispensación normal con alimento que el tornillo transporta
-    sin trabarse para obtener `reintentos=0` en un ciclo limpio; checklist de no regresión
-    de BLE, WiFi, reconexión, validación de servidor, reset de credenciales y consulta
-    20 s después del fin; y cierre final de la tarea, para el que `MEMORY.md` ya recoge
-    la prueba física del 2026-10-27 y solo falta la actualización de este cierre.
-  - Nota: con alimento de ~3 cm el atasco es esperable por el paso de la hélice, así que
-    un `reintentos>0` en esas condiciones no invalida el criterio; con alimento que el
-    tornillo transporta sin trabarse la dispensación debe dar `reintentos=0`. No se ajustan
-    umbrales por este motivo.
+  - Cerrada el 2026-10-27 (segunda ronda): atasco inducido manualmente (el usuario detuvo
+    el tornillo y el ciclo lo detectó y lo resolvió o terminó como corresponde); peso de
+    la bandeja antes y después del retroceso sin disminución; tiempos del ciclo de motor
+    y del ciclo completo dentro de 30/32 s; frecuencia de lectura (≥ 5 lecturas/s en
+    avance, retroceso y pausa) confirmada por el usuario; acoplamiento del tornillo sin
+    fin revisado; y dispensación normal con `reintentos=0` y `motivo=objetivo alcanzado`.
+    Los datos del atasco con depósito vacío (4 avances, 3 retrocesos, `reintentos=3`,
+    `atasco no resuelto`) quedan como evidencia adicional del tope de reintentos.
+  - Nota: el log de la dispensación con `reintentos=0` se registra por confirmación del
+    usuario. Con alimento de ~3 cm el atasco es esperable por el paso de la hélice, así
+    que un `reintentos>0` en esas condiciones no invalida el criterio; con alimento que
+    el tornillo transporta sin trabarse la dispensación debe dar `reintentos=0`. No se
+    ajustan umbrales por este motivo.
   - Comprobación verificable: log serie de cada dispensación con `reintentos` y motivo, y
     checklist con fecha anotado en la tarea.
 

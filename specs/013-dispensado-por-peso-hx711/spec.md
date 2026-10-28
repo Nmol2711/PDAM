@@ -1,6 +1,6 @@
 # Spec 013 — Dispensado por peso con celda de carga
 
-Estado: aprobada (T1–T9 y T11–T14 implementadas y revisadas; primera prueba física con alimento real registrada); T15 (checklist físico de atasco) y T10 (checklist físico previo) pendientes.
+Estado: aprobada (T1–T14 implementadas y revisadas; T15 cerrada el 2026-10-27 tras la segunda ronda física: atasco inducido, `reintentos=0`, tiempos, frecuencia y acoplamiento); T10 abierta únicamente por P2 (calibración) y P3 (exactitud 50–55 g con báscula externa), pendientes de la calibración aplazada por el usuario.
 
 ## Contexto y objetivo
 El firmware del dispensador dispensa hoy una cantidad fija de tiempo: al recibir una
