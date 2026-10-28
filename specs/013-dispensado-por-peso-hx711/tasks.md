@@ -201,6 +201,10 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     únicamente P2 (calibración con peso patrón) y P3 (exactitud 50–55 g con báscula
     externa), que se ejecutan cuando el usuario calibre la balanza. T10 no se marcará
     `[x]` hasta cerrar P2/P3.
+  - Aclaración (2026-10-28): P2 ya se aprobó ese día —calibración verificada con
+    55 g y 900 g, error máximo 0,04 %, factor 482,7 confirmado sin cambios—, así que
+    la condición «cerrar P2/P3» queda reducida a P3. Solo queda P3, bloqueada porque
+    el usuario no dispone de báscula externa: el bloqueo no es la calibración.
 
 - [x] **T11. Constantes de atasco y lógica pura de detección, decisión y
   registro, con tests nativos primero en rojo.**

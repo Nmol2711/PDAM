@@ -754,10 +754,12 @@ reintentos de T15.
 
 Nota final: P7 sigue no concluyente porque los cables de la celda están soldados al
 módulo y no se puede inducir una inválida aislada (resultado admitido); P3 (exactitud
-50–55 g con báscula externa) queda pendiente de la calibración de la balanza, y la
-transcripción de las líneas `Despacho:` de T15-6 y del atasco inducido quedó pendiente
-del usuario.
+50–55 g con báscula externa) queda pendiente de que el usuario disponga de báscula
+externa, y la transcripción de las líneas `Despacho:` de T15-6 y del atasco inducido
+quedó pendiente del usuario.
 
 P2 se cerró el 2026-10-28 con dos pesos patrón (55 g y 900 g): linealidad del 0,046 %,
 error máximo del 0,04 % con el factor vigente 482,7, que no se modifica. Con eso solo
-queda P3 (50 g con báscula externa) para cerrar T10.
+queda P3 (50 g con báscula externa) para cerrar T10. P2 queda cerrada. P3 sigue
+pendiente porque el usuario no dispone de báscula externa y va a conseguir una; sin
+ella no se puede emitir una medición independiente de la masa entregada.
