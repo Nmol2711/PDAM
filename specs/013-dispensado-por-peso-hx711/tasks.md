@@ -161,7 +161,9 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
   - Hecho cuando: con el módulo HX711 desconectado del ESP32 (DT/SCK;
     idealmente también VCC/GND) al arrancar el servo no se mueve;
     desconectándolo a mitad del giro el servo se detiene dentro de 1 s desde la
-    primera de las 3 inválidas; con 50 g solicitados el incremento medido está
+    primera de las 3 inválidas; una orden de dispensación inválida, es decir,
+    con `amount` negativo o no numérico (P13), no mueve el servo ni provoca
+    retroceso; con 50 g solicitados el incremento medido está
     entre 50 g y 55 g; se observan ≥ 5 lecturas/s; el log está en español, sin
     emojis ni credenciales; el checklist de BLE, WiFi, reconexión, validación de
     servidor, reset de credenciales y consulta 20 s después del fin queda
@@ -191,7 +193,7 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     (52.4–530.5 g) se obtuvieron ejerciendo presión manual sobre la celda porque
     no había alimento seco, así que su variabilidad no mide exactitud. T10 sigue
     `[ ]`: faltan P3 con alimento real y medición externa de 50–55 g, P5, P6, P7,
-    P8, P10, P11 y P12.
+    P8, P10, P11, P12 y P13.
 
 - [x] **T11. Constantes de atasco y lógica pura de detección, decisión y
   registro, con tests nativos primero en rojo.**
@@ -374,6 +376,19 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     (2 retrocesos esperados, 1 obtenido). La aserción de 32 s se comprobó con una
     igualdad temporal a 32 000 ms en el perfil de estancamiento (la última acción,
     la parada final, cae exactamente en 32 000 ms) y un desfase de 1 ms la rompe.
+  - Corrección de coherencia (2026-10-27): el comportamiento documentado del fallo
+    que empieza en la pausa (dos inválidas dentro de la pausa, avance reanudado y
+    fallo detectado ya en el avance) no tenía prueba nativa. Se añade
+    `test_sensor_failure_started_in_pause_resumes_and_stops_without_reverse`, que
+    comprueba el motivo «fallo del sensor durante la dispensación», `reintentos=1`,
+    la segunda llamada de avance, un único retroceso, dos lecturas dentro de la
+    pausa y la parada del servo en la primera lectura del avance reanudado.
+    `pio test -e native` 137/137 (`test_provisioning_utils` 5,
+    `test_dispensing_utils` 110, `test_dispensing_cycle` 22) y `pio run -t clean
+    && pio run` SUCCESS con la misma RAM y Flash, porque solo cambia un archivo de
+    test. Mutación en una copia de `/tmp`, revertida: quitar `startAdvance` y
+    `resumeAdvanceAfterRetry` de la transición de la pausa rompe la prueba nueva
+    («Expected 2 Was 1» en el contador de avances).
 
   - Cierre de huecos de la revisión (2026-10-27): dos aserciones nuevas.
     `test_cycle_limits_default_to_approved_constants` fija que `CycleLimits{}`
@@ -386,7 +401,8 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
     ciclo termina en «objetivo no alcanzado», sin retroceso, con la parada final
     exactamente a los 10 000 ms de motor más los 2 s de verificación, lo que fija
     la comprobación de agotamiento del bucle al presupuesto inyectado y no a
-    `kMotorBudgetMs`. `pio test -e native` pasa 136/136
+    `kMotorBudgetMs`. `pio test -e native` pasa 136/136 en esa ejecución, conteo
+    anterior a la prueba del fallo iniciado en la pausa que lo lleva a 137/137
     (`test_provisioning_utils` 5, `test_dispensing_utils` 110,
     `test_dispensing_cycle` 21) y `pio run -t clean && pio run` en `esp32dev`
     termina en SUCCESS. Mutaciones en la copia de `/tmp`, revertidas: el valor por
@@ -399,18 +415,27 @@ T14): se escriben en rojo, se implementan y se ponen en verde.
 
 - [ ] **T15. Checklist físico de atasco y actualización de `MEMORY.md`.**
   RF-14, RF-15, RF-16, RF-17, RNF-3, RNF-4
-  - Hecho cuando: con la hélice bloqueada o una croqueta cuñada se observa el
-    retroceso de 1,2 s, la pausa de 0,3 s y la reanudación, y si el bloqueo
-    persiste el motivo es «atasco no resuelto» con incremento y `reintentos` en
-    el log; liberando el bloqueo durante un reintento el motivo es «objetivo
-    alcanzado» con `reintentos` mayor que 0; en dispensación normal el motivo es
-    «objetivo alcanzado» con `reintentos=0`; el peso de la bandeja antes y
-    después del retroceso no disminuye; se observan al menos 5 lecturas por
-    segundo en las tres fases; el ciclo de motor no supera 30 s ni el completo
-    32 s; se revisa el acoplamiento del tornillo sin fin; `MEMORY.md` queda
-    actualizado con estado, decisiones y pendientes.
-  - Comprobación verificable: log serie de las tres dispensaciones con
-    `reintentos` y motivo, y checklist con fecha anotado en la tarea.
+  - Evidenciado (2026-10-27): 5 dispensaciones de 50 g con croqueta de ~3 cm, balanza sin
+    calibrar. Cuatro ciclos declararon un atasco real y lo resolvieron con `reintentos=1`
+    (incrementos 57.3, 55.2, 54.9 y 52.4 g); el tercero no se atascó (`reintentos=0`,
+    54.5 g). Los cinco terminaron con «objetivo alcanzado», así que la detección y el
+    retroceso funcionaron en 4 de 4 atascos reales. Los incrementos no se usan como
+    prueba de exactitud porque la balanza no está calibrada.
+  - Pendiente de cerrar: atasco inducido persistente con motivo «atasco no resuelto»,
+    incremento y `reintentos` en el log; peso de la bandeja antes y después del
+    retroceso; tiempos del ciclo de motor (≤ 30 s) y del ciclo completo (≤ 32 s);
+    ≥ 5 lecturas/s en avance, retroceso y pausa; revisión del acoplamiento del tornillo
+    sin fin; repetición de la dispensación normal con alimento que el tornillo transporta
+    sin trabarse para obtener `reintentos=0` en un ciclo limpio; checklist de no regresión
+    de BLE, WiFi, reconexión, validación de servidor, reset de credenciales y consulta
+    20 s después del fin; y cierre final de la tarea, para el que `MEMORY.md` ya recoge
+    la prueba física del 2026-10-27 y solo falta la actualización de este cierre.
+  - Nota: con alimento de ~3 cm el atasco es esperable por el paso de la hélice, así que
+    un `reintentos>0` en esas condiciones no invalida el criterio; con alimento que el
+    tornillo transporta sin trabarse la dispensación debe dar `reintentos=0`. No se ajustan
+    umbrales por este motivo.
+  - Comprobación verificable: log serie de cada dispensación con `reintentos` y motivo, y
+    checklist con fecha anotado en la tarea.
 
 ## Nota de alcance
 

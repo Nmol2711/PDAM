@@ -86,7 +86,7 @@ Cómo interpretarlo:
 
 Si el factor y el signo impresos no son los esperados, el firmware flasheado no es el corregido.
 
-**Alcance.** Esto solo desbloquea la prueba: ninguna prueba P1–P12 queda aprobada solo por este cambio. La ejecución parcial posterior se registra en §2.5 y no cierra T10.
+**Alcance.** Esto solo desbloquea la prueba: ninguna prueba P1–P13 queda aprobada solo por este cambio. La ejecución parcial posterior se registra en §2.5 y no cierra T10.
 
 ### 2.4 Modo de prueba temporal del endpoint
 
@@ -100,7 +100,7 @@ Advertencias:
 - Mantener depósito con alimento y bandeja colocada para no forzar el tope de 30 s una y otra vez.
 - Cortar la alimentación del servo si algo va mal; no depender del software.
 - Este modo no descuenta stock, no limpia banderas ni respeta `reset_wifi`; sirve solo para observar el ciclo de peso.
-- No debe commitearse. Antes de cerrar la spec hay que restaurar `return dispenser_service.check_pending_task(...)` en `check_dispenser_taks`.
+- Está commiteado en la rama `pruebas/endpoint-fijo-hx711` en el commit `b009a5b`. Antes de mergear a `main` hay que restaurar `return dispenser_service.check_pending_task(...)` en `check_dispenser_taks`.
 - Mientras esté activo, los procedimientos por SQLite (§5.2) y `check-taks-test` (§5.3) no aportan nada distinto: el resultado es siempre `serve:true` con 50 g.
 
 ### 2.5 Resultados de la ejecución parcial (2026-10-24)
@@ -164,6 +164,7 @@ La línea base más el incremento coincide con el peso final salvo ±0.1 g en al
 - **P10**: reconexión WiFi y rollback a aprovisionamiento BLE.
 - **P11**: `reset_wifi` y su prioridad sobre `serve`.
 - **P12**: intervalo de 20 s tras el fin del ciclo, con marcas de tiempo externas.
+- **P13**: rechazo de una orden de dispensación inválida sin mover ni retroceder el servo.
 
 Tampoco se completaron P2 (verificación con peso patrón de 500 g o 1 kg) ni P4 (tope de 30 s con depósito vacío): la línea base ≈ 333.1 g solo confirma coherencia en reposo.
 
@@ -362,11 +363,11 @@ No usar el endpoint real con `curl` antes de que consulte el ESP32: la orden se 
 
 ---
 
-## 6. Checklist P1–P12
+## 6. Checklist P1–P13
 
 | ID | Requisito | Objetivo | Procedimiento | Resultado esperado | Evidencia |
 |---|---|---|---|---|---|
-| P1 | RNF-4, RNF-6 | Confirmar que el firmware compila, la suite nativa pasa y la placa flashea. | `cd DispensadorESP32`<br>`pio test -e native`<br>`pio run -t clean && pio run`<br>`pio run --target upload` | 136/136 en nativo; `pio run` SUCCESS; carga completa; monitor a 115200. | Salida de terminal y primeras líneas del monitor. |
+| P1 | RNF-4, RNF-6 | Confirmar que el firmware compila, la suite nativa pasa y la placa flashea. | `cd DispensadorESP32`<br>`pio test -e native`<br>`pio run -t clean && pio run`<br>`pio run --target upload` | 137/137 en nativo; `pio run` SUCCESS; carga completa; monitor a 115200. | Salida de terminal y primeras líneas del monitor. |
 | P2 | RF-11 | Calibrar la celda y verificar la conversión con un peso conocido. | Ejecutar el [informe de calibración](informe-calibracion-hx711-2026-10-23.md). Verificar con 500 g o 1 kg usando el sketch de raw. | Factor positivo (vigente `482.7`), signo coherente (`+1`), lectura que sigue al peso y error operativo no mayor que 2 % (10 g en 500 g). | Tabla de raw, valores finales de `config.h` y monitor. |
 | P3 | RF-1, RF-6, RF-7, RF-12, RNF-1, RNF-2 | Validar el camino feliz de 50 g. | Bandeja vacía; solicitar 50 g; medir la comida entregada en una báscula externa; repetir 3 veces limpiando la bandeja. | 3/3 entre 50 g y 55 g; log con `incremento` en ese rango y motivo `objetivo alcanzado`; servo detenido. Si falla, el log debe mostrar `Verificacion HX711: ...` con `muestras`, `respondidas`, `ultimo_raw`, `ultimo_g`, `factor` (`482.7`) y `signo` (`+1.0`) antes de concluir la causa. | Tres líneas `Despacho:` y tres mediciones externas; si falla, la línea `Verificacion HX711:`. |
 | P4 | RF-8, RNF-3 | Validar el tope de 30 s con depósito vacío. | Vaciar el depósito; solicitar 50 g; cronometrar desde el arranque del giro. | Parada a los 30 s, sin superarlos; motivo `objetivo no alcanzado`; incremento cercano a 0; ciclo total no mayor que 32 s. | Log y tiempo medido. |
@@ -378,6 +379,7 @@ No usar el endpoint real con `curl` antes de que consulte el ESP32: la orden se 
 | P10 | RF-13 | Confirmar la reconexión WiFi y el rollback a BLE. | Con WiFi conectado, apagar el router; esperar la detección y el intento de reconexión; restaurar el router. Repetir una vez con el router restaurado antes de la ventana de 10 s y otra después, para observar ambos caminos. | Si vuelve a tiempo: `Reconexion WiFi exitosa` y validación 200. Si no: rollback a aprovisionamiento BLE. Sin movimiento del servo. | Monitor y estado del router. |
 | P11 | RF-10, RF-13 | Confirmar el reseteo de credenciales y su prioridad. | Desde la app o `POST /dispensers/{id}/reset-wifi` con sesión autenticada, con el equipo inactivo; opcionalmente poner también `pending_dispensing = 1` para probar la prioridad. Limpiar esa bandera al terminar si se dejó activa. | NVS borrada; reinicio; aparece `PDAM-Config-<MAC>`; el servo no se mueve; `reset_wifi` gana sobre `serve`. | Monitor. |
 | P12 | RF-13 | Confirmar que la siguiente consulta ocurre 20 s después del fin. | Tras una dispensación, medir el tiempo hasta el siguiente `Consultando ordenes pendientes en el servidor...`. | Aproximadamente 20 s después del fin (20–21 s), no inmediato; sin reinicio del dispositivo. | Log con marcas de tiempo externas o cronómetro. |
+| P13 | RF-17 | Confirmar que una orden de dispensación inválida no mueve el servo ni provoca retroceso. | La orden inválida no se puede provocar desde el servidor: `check-taks/{address_mac}` es un endpoint fijo de depuración que no lee la base de datos y el esquema rechaza `amount` menor o igual que 0. Hay que editar el endpoint de forma temporal.<br>1. Con el servidor parado, editar temporalmente `api/app/api/endpoints/dispenser.py` para que `check-taks/{address_mac}` devuelva `{"serve": True, "amount": -5}`.<br>2. Arrancar el servidor (`cd api && uvicorn app.main:app --reload --port 8000 --host 0.0.0.0`), dejar que el ESP32 consulte y observar el log serie.<br>3. Resultado esperado: `Advertencia: orden de dispensacion invalida. No se mueve el servo.`, el servo no gira ni retrocede y el ciclo no se ejecuta.<br>4. Repetir con `{"serve": True, "amount": 0}`: el resultado esperado es `Estado: sin orden de dispensacion` (rama de reposo), sin advertencia y sin movimiento del servo. Este segundo caso no ejercita la rama `INVALID_ORDER`, solo confirma el reposo.<br>5. Restaurar el endpoint a su contenido original `{"serve": True, "amount": 50}` y confirmar con `git diff api/` que el backend queda sin cambios.<br>Advertencia: el endpoint fijo de depuración está commiteado en la rama de pruebas (commit `b009a5b`) y debe restaurarse a `check_pending_task` antes de mergear a `main`.<br>Nota: la edición del endpoint es un cambio temporal de prueba; no debe commitearse. | Con `amount` negativo el ESP32 rechaza la orden: no gira el servo, no retrocede, el ciclo no se ejecuta y el log muestra `Advertencia: orden de dispensacion invalida. No se mueve el servo.` Con `amount` igual a 0 el log muestra el reposo (`Estado: sin orden de dispensacion`), sin advertencia, y el servo tampoco se mueve ni retrocede; este caso no ejercita la rama `INVALID_ORDER`, solo confirma el reposo. | Monitor y video u observación directa del servo. |
 
 Notas sobre criterios:
 
@@ -486,6 +488,7 @@ Orden recibida: [reset_wifi = true]. Borrando credenciales NVS y reiniciando en 
 | P10 | Monitor con pérdida, reconexión o rollback, y validación posterior. |
 | P11 | Monitor con borrado de NVS y aparición de `PDAM-Config-<MAC>`. |
 | P12 | Log con marcas de tiempo o cronómetro entre el fin y la siguiente consulta. |
+| P13 | Monitor con el rechazo de la orden inválida (o el reposo con `amount` 0) y video del servo inmóvil. |
 
 No adjuntar credenciales, tokens, direcciones IP reales ni MAC reales en capturas o transcripciones.
 
@@ -507,7 +510,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 
 | Fecha | Prueba | Resultado (aprobado / fallido / no concluyente) | Medición | Log o evidencia | Notas |
 |---|---|---|---|---|---|
-| 2026-10-24 | P1 | aprobado | `pio test -e native` 72/72 en esa ejecución; suite vigente 136/136; `pio run` SUCCESS (RAM 19.7 %, Flash 63.8 %) | Build `Oct 24 2026 23:14:35` en el arranque | Carga completa y arranque correctos; en esta sesión no se repitió `pio run -t clean` |
+| 2026-10-24 | P1 | aprobado | `pio test -e native` 72/72 en esa ejecución; suite vigente 137/137; `pio run` SUCCESS (RAM 19.7 %, Flash 63.8 %) | Build `Oct 24 2026 23:14:35` en el arranque | Carga completa y arranque correctos; en esta sesión no se repitió `pio run -t clean` |
 | — | P2 | No ejecutada | Línea base ≈ 333.1 g en reposo | §2.5 | Factor `482.7` y signo `+1.0` impresos; 160658 / 482.7 ≈ 332.83 g es coherente, pero falta la comprobación con peso patrón de 500 g o 1 kg |
 | 2026-10-24 | P3 | no concluyente | 12 ciclos con `objetivo alcanzado`; incrementos de 52.4 g a 530.5 g | §2.5 | Carga por presión manual, sin alimento seco ni báscula externa: no valida el criterio de 50–55 g |
 | — | P4 | No ejecutada | — | — | No se forzó el tope de 30 s con depósito vacío |
@@ -519,6 +522,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | — | P10 | No ejecutada | — | — | No se cortó el router para observar reconexión ni rollback |
 | — | P11 | No ejecutada | — | — | No se probó `reset_wifi` ni su prioridad |
 | — | P12 | No ejecutada | — | — | El log no incluye marcas de tiempo; el intervalo de 20 s no está medido |
+| — | P13 | No ejecutada | — | — | No se editó el endpoint para forzar la orden inválida |
 
 ---
 
@@ -528,7 +532,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 
 Se considera aprobado cuando:
 
-- P1 pasa con 136/136 y `pio run` SUCCESS.
+- P1 pasa con 137/137 y `pio run` SUCCESS.
 - P2 confirma factor `482.7` y signo `+1` con lectura verificada contra peso patrón.
 - P3 entrega 50–55 g en las tres repeticiones y el log muestra el incremento correspondiente. Si falla, el registro incluye el diagnóstico `Verificacion HX711:` con RAW, gramos, factor y signo.
 - P4 detiene el servo a los 30 s, sin superar el límite, y registra `objetivo no alcanzado`.
@@ -537,6 +541,7 @@ Se considera aprobado cuando:
 - P8 demuestra al menos 5 intentos de lectura por segundo.
 - P9, P10 y P11 no muestran regresiones de BLE, WiFi, validación de servidor ni reseteo.
 - P12 muestra la siguiente consulta aproximadamente 20 s después del fin.
+- P13 no mueve ni retrocede el servo con una orden de dispensación inválida.
 - El log de las pruebas está en español, sin emojis y sin credenciales ni datos sensibles.
 - P7 es opcional; si se ejecuta, no debe detener el ciclo por una inválida aislada.
 
@@ -546,7 +551,7 @@ La ejecución del §2.5 **no cumple el criterio de aprobado** y no cierra T10:
 
 - P1 y P9 se pueden registrar como aprobadas con la evidencia disponible.
 - P3 queda `no concluyente`: hubo `objetivo alcanzado` en 12/12 ciclos, pero con presión manual sobre la celda y sin medición externa. El rango observado de incrementos (52.4 g a 530.5 g) no evalúa la exactitud de 50–55 g.
-- P2, P4, P5, P6, P7, P8, P10, P11 y P12 siguen sin ejecutar.
+- P2, P4, P5, P6, P7, P8, P10, P11, P12 y P13 siguen sin ejecutar.
 - La exactitud con alimento real es la prueba que decide el cierre: mientras no se mida en báscula externa, la spec no puede declararse validada físicamente.
 
 ### 9.2 Fallido
@@ -600,3 +605,47 @@ Cuando todas las pruebas obligatorias pasen:
 5. Commitear solo si el usuario lo solicita.
 
 Mientras T10 no se complete, debe permanecer como `[ ]` y la spec debe seguir indicando que la validación física está pendiente. La ejecución del 2026-10-24 es parcial (§2.5) y no autoriza ese cierre. Este informe no modifica el firmware ni la spec; el registro de la ejecución parcial en `MEMORY.md` y `tasks.md` se hace fuera de este documento.
+
+---
+
+## 12. Prueba física con alimento real (2026-10-27)
+
+Montaje: firmware con T1–T14, croqueta de ~3 cm de tamaño, balanza sin calibrar.
+
+| # | Se trabó | Incremento (g) | `reintentos` | Motivo |
+|---|---|---|---|---|
+| 1 | sí | 57.3 | 1 | objetivo alcanzado |
+| 2 | sí | 55.2 | 1 | objetivo alcanzado |
+| 3 | no | 54.5 | 0 | objetivo alcanzado |
+| 4 | sí | 54.9 | 1 | objetivo alcanzado |
+| 5 | sí | 52.4 | 1 | objetivo alcanzado |
+
+Las cinco dispensaciones fueron de 50 g y las cinco terminaron con «objetivo
+alcanzado».
+
+Conclusión:
+
+- La detección y el retroceso fueron correctos en 4 de 4 atascos reales: cada uno
+  se declaró, se ejecutó el retroceso y la dispensación siguió hasta el objetivo
+  con `reintentos=1`.
+- El tercer ciclo, el que no se trabó, dio `reintentos=0` y también alcanzó el
+  objetivo, de modo que la detección distinguió el ciclo limpio.
+- El atasco frecuente con croqueta de ~3 cm es una limitación mecánica del paso de
+  la hélice y no un fallo de la detección; por ese motivo no se ajustan umbrales y
+  la ventana de gracia se mantiene en 2 s. Los incrementos no se usan como prueba
+  de exactitud porque la balanza no está calibrada.
+
+Pendientes que quedan en T15:
+
+- Atasco inducido persistente con motivo «atasco no resuelto», incremento y
+  `reintentos` en el log.
+- Peso de la bandeja antes y después del retroceso.
+- Tiempos del ciclo de motor (≤ 30 s) y del ciclo completo (≤ 32 s).
+- Al menos 5 lecturas por segundo en avance, retroceso y pausa.
+- Revisión del acoplamiento del tornillo sin fin.
+- Repetición de la dispensación normal con alimento que el tornillo transporta sin
+  trabarse, como confirmación del ciclo limpio ya observado y no como primera
+  obtención de `reintentos=0`.
+- Checklist de no regresión de BLE, WiFi, reconexión, validación de servidor, reset
+  de credenciales y consulta 20 s después del fin.
+- `MEMORY.md` actualizado con el cierre de T15.

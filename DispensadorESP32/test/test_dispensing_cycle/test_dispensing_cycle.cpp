@@ -389,6 +389,16 @@ FakeReading profileSensorFailureInPause(unsigned long nowMs) {
   return noAnswer();
 }
 
+// La celda deja de responder con la primera lectura de la pausa: solo caben dos
+// inválidas dentro de los 0,3 s de pausa, así que el avance se reanuda y la
+// tercera inválida consecutiva llega ya en el avance reanudado (RF-9).
+FakeReading profileSensorFailureResumesAfterPause(unsigned long nowMs) {
+  if (nowMs < kStallExpiryMs + kReverseMs) {
+    return validGrams(0.0f);
+  }
+  return noAnswer();
+}
+
 // El peso sube despacio (0,5 g/s) durante el retroceso y la pausa del reintento,
 // por debajo del umbral de progreso de 2 g, y desde la reanudación avanza 2 g/s
 // hasta el objetivo.
@@ -803,6 +813,33 @@ void test_sensor_failure_detected_during_pause_stops_without_resume(void) {
                    reverseMs + kReverseMs + kPauseMs);
 }
 
+void test_sensor_failure_started_in_pause_resumes_and_stops_without_reverse(void) {
+  CycleHarness harness{};
+  harness.profile = profileSensorFailureResumesAfterPause;
+
+  const DispenseResult result = runHarness(&harness, 50.0f);
+
+  // El fallo empieza en la pausa, pero las dos inválidas que caben en ella no
+  // completan las 3 consecutivas: el avance se reanuda y el fallo se detecta en
+  // el avance, sin retroceso adicional (RF-9).
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_FAILURE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_UINT(1, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(2, harness.advanceCount);
+  // El reintento se cuenta al reanudar el avance (RF-12, decisión 21).
+  TEST_ASSERT_EQUAL_UINT(1, result.retryCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+
+  RetryTimeline timeline{};
+  TEST_ASSERT_TRUE(firstRetryTimeline(harness, &timeline));
+  // Solo dos lecturas caen dentro de la pausa: la tercera inválida ya es la
+  // primera lectura del avance reanudado, y ahí se detiene el servo.
+  TEST_ASSERT_EQUAL_UINT(2, readsBetween(harness, timeline.stopMs,
+                                         timeline.resumeMs));
+  TEST_ASSERT_EQUAL_UINT32(static_cast<unsigned long>(timeline.resumeMs),
+                           lastActionMs(harness));
+}
+
 // --- Cota del ciclo de motor y parada final (RF-8, RNF-3) ---
 
 namespace {
@@ -936,6 +973,7 @@ int main(int, char **) {
   RUN_TEST(test_target_reached_during_pause_stops_the_cycle);
   RUN_TEST(test_sensor_failure_during_reverse_stops_without_resume);
   RUN_TEST(test_sensor_failure_detected_during_pause_stops_without_resume);
+  RUN_TEST(test_sensor_failure_started_in_pause_resumes_and_stops_without_reverse);
   RUN_TEST(test_motor_cycle_never_exceeds_budget_and_ends_stopped);
   RUN_TEST(test_sampling_period_holds_in_all_phases);
   RUN_TEST(test_verification_failure_fills_diagnostics);

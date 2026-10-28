@@ -1,6 +1,6 @@
 # Spec 013 — Dispensado por peso con celda de carga
 
-Estado: aprobada (T1–T9 y T11–T14 implementadas y revisadas); T15 (checklist físico de atasco) y T10 (checklist físico previo) pendientes.
+Estado: aprobada (T1–T9 y T11–T14 implementadas y revisadas; primera prueba física con alimento real registrada); T15 (checklist físico de atasco) y T10 (checklist físico previo) pendientes.
 
 ## Contexto y objetivo
 El firmware del dispensador dispensa hoy una cantidad fija de tiempo: al recibir una
@@ -362,10 +362,15 @@ conexión WiFi ni la consulta periódica a la API.
   motor con «objetivo no alcanzado».
 - Factor de calibración no positivo: error de configuración; no se dispensa y se
   registra.
-- Celda que falla a mitad de la dispensación: 3 lecturas inválidas consecutivas detienen
-  el servo dentro de 1 s desde la primera, sin esperar el presupuesto de motor, y se
-  registra el motivo. Si el fallo ocurre durante un retroceso o una pausa, tampoco se
-  reanuda el avance ni se ejecuta un retroceso adicional.
+- Celda que falla a mitad de la dispensación: las 3 lecturas inválidas consecutivas
+  completadas detienen el servo dentro de 1 s desde la primera, sin esperar el
+  presupuesto de motor, y se registra el motivo. Si esas 3 lecturas inválidas
+  consecutivas se completan durante un retroceso o una pausa, tampoco se reanuda el
+  avance ni se ejecuta un retroceso adicional. El inicio del fallo, es decir, la primera
+  lectura inválida, no impide por sí mismo reanudar: si empieza en la pausa y no llega a
+  completar las 3 inválidas consecutivas antes de reanudar, el avance se reanuda y el
+  fallo se detecta ya en el avance, como detalla el caso límite del fallo de sensor
+  durante el retroceso o la pausa.
 - Lectura inválida aislada durante el ciclo de motor: no detiene el ciclo; solo 3
   lecturas inválidas consecutivas se consideran fallo del sensor.
 - Ninguna lectura válida durante el ciclo de motor (caso defensivo): el peso final y el
@@ -392,10 +397,15 @@ conexión WiFi ni la consulta periódica a la API.
 - Atasco justo al alcanzar el objetivo: si en la misma muestra se cumplen el objetivo y
   el final de la ventana de estancamiento, prevalece el objetivo y no se ejecuta
   retroceso.
-- Fallo de sensor durante el retroceso o la pausa: 3 lecturas inválidas consecutivas
-  detienen el servo dentro de 1 s desde la primera, no se ejecuta ningún retroceso
-  adicional y no se reanuda el avance; el motivo es «fallo del sensor durante la
-  dispensación».
+- Fallo de sensor durante el retroceso o la pausa: si las 3 lecturas inválidas
+  consecutivas se completan durante el retroceso o la pausa, el servo se detiene
+  dentro de 1 s desde la primera de esas 3 lecturas, no se ejecuta ningún
+  retroceso adicional ni se reanuda el avance, y el motivo es «fallo del sensor
+  durante la dispensación». Como la pausa dura 0,3 s y el muestreo es de 0,2 s,
+  dentro de la pausa solo caben 2 lecturas inválidas de las 3 necesarias: si el
+  fallo empieza en la pausa y no se completan las 3 inválidas consecutivas antes
+  de reanudar, el avance se reanuda y el fallo se detecta ya en el avance, que se
+  detiene dentro de 1 s desde la tercera lectura inválida, sin retroceso.
 - Presupuesto insuficiente para el reintento: si al declararse el atasco el presupuesto
   restante no alcanza para el retroceso, su pausa y la ventana de gracia, es decir, es
   menor que 3,5 segundos, no se inicia el retroceso, el servo se detiene y se registra
@@ -412,6 +422,13 @@ conexión WiFi ni la consulta periódica a la API.
 - Atasco con el depósito lleno y la croqueta cuñada: el retroceso de 1,2 s libera la
   hélice, la pausa de 0,3 s deja caer el alimento suelto y la reanudación del avance
   permite alcanzar el objetivo; el ciclo no se da por fallido.
+- Alimento de tamaño próximo al paso de la hélice: con croqueta de unos 3 cm el
+  tornillo sin fin se atasca con frecuencia, porque la croqueta se cuña entre la
+  hélice y el tubo. El ciclo lo detecta y lo intenta resolver con el retroceso, la pausa
+  y la reanudación: alcanza el objetivo cuando el retroceso libera la croqueta y, si no
+  la libera, termina en «atasco no resuelto» (RF-16). Es una limitación mecánica del paso
+  de la hélice frente al tamaño del alimento, no un fallo de la detección, y por ese
+  motivo no se ajustan los umbrales ni se relaja RF-14.
 - Retroceso sin dispensación negativa: el giro inverso devuelve la hélice pero no retira
   el alimento ya depositado en la bandeja; el incremento no disminuye por efecto del
   retroceso, y una disminución solo puede provenir de la celda, es decir, de la mascota
@@ -500,8 +517,13 @@ conexión WiFi ni la consulta periódica a la API.
 - RF-13: verificación de no regresión de aprovisionamiento BLE, conexión y reconexión
   WiFi, validación de conectividad con el servidor, reseteo de credenciales y consulta
   periódica mediante un checklist manual reproducible o las pruebas existentes de esas
-  funciones; prueba automatizada de que, tras finalizar el ciclo, la siguiente consulta
-  ocurre 20 s después del fin y no 20 s después de la consulta anterior.
+  funciones; revisión de código de que el temporizador de la consulta periódica se
+  reinicia al finalizar el ciclo, tanto en la operación normal como tras la primera
+  consulta siguiente a la conexión, de modo que la próxima consulta ocurra 20 s después
+  del fin y no de inmediato; prueba física P12 del checklist de que esa consulta ocurre
+  20 s después del fin y no de inmediato. El reinicio vive en el bucle de tareas del
+  firmware, que no es verificable en el entorno nativo, por lo que no se exige prueba
+  automatizada.
 - RF-14: prueba automatizada de que no se declara atasco durante la ventana de gracia de
   2 s; de que un progreso igual o mayor que 2 g reinicia la ventana en ese mismo instante y
   renueva la referencia, de modo que un flujo continuo no declara atasco; de que sí se
@@ -509,7 +531,13 @@ conexión WiFi ni la consulta periódica a la API.
   de 5 lecturas válidas; de que la ventana se abre al existir la primera mediana móvil
   cuando al terminar la gracia todavía no existía; de que un pico aislado de ruido hacia
   arriba no eleva el máximo observado porque la mediana móvil lo descarta; y de que la
-  evaluación no ocurre durante el retroceso ni la pausa.
+  evaluación no ocurre durante el retroceso ni la pausa. Evidencia física (2026-10-27):
+  en cinco dispensaciones de 50 g con croqueta de ~3 cm se declararon atascos en cuatro
+  de los cinco ciclos y el tercero no se atascó, de modo que la detección distinguió el
+  ciclo limpio; queda pendiente en T15 el atasco inducido persistente y la repetición de
+  la dispensación normal con alimento que el tornillo transporta sin trabarse, que
+  confirmaría el ciclo limpio ya observado y no sería la primera obtención de
+  `reintentos=0`.
 - Detección sin falso atasco: prueba automatizada con un perfil de flujo realista por
   encima de 0,4 g/s, es decir, por encima del umbral de 2 g cada 5 s, que no declara
   ningún atasco y termina con «objetivo alcanzado» y `reintentos=0`.
@@ -518,17 +546,24 @@ conexión WiFi ni la consulta periódica a la API.
   ejecuta la secuencia retroceso de 1,2 s, pausa de 0,3 s y reanudación del avance, de que
   retroceso y pausa descuentan del presupuesto de motor, de que un atasco resuelto no
   impide alcanzar el objetivo y de que el contador de reintentos es una red de seguridad
-  que no sustituye al presupuesto.
+  que no sustituye al presupuesto. Evidencia física (2026-10-27): cuatro atascos reales con
+  croqueta de ~3 cm se resolvieron con `reintentos=1` y motivo «objetivo alcanzado», es
+  decir, la secuencia de reintento liberó el mecanismo y la dispensación siguió hasta el
+  objetivo; queda pendiente en T15 el caso en que el atasco persiste y termina en «atasco
+  no resuelto».
 - RF-16: prueba automatizada sobre lógica pura, inyectando el contador de reintentos
   agotado y el presupuesto restante, de que con 0 reintentos disponibles, o con menos de
   3,5 s de presupuesto, el servo se detiene sin ejecutar otro retroceso y se registra
   «atasco no resuelto» con el incremento logrado; no se verifica de extremo a extremo.
-- RF-17: prueba de integración sobre lógica pura y servicio, con un servo simulado, de que
-  no se invoca el retroceso cuando el ciclo termina por `SENSOR_FAILURE` ni cuando la
-  orden es inválida, y de que la falta de lecturas nunca se interpreta como atasco. No
-  duplica los criterios de RF-2 ni de RF-9: aquellos verifican la clasificación de la
-  orden y la parada por fallo del sensor, este verifica la ausencia de la acción de
-  retroceso.
+- RF-17: prueba nativa sobre el ciclo puro con un servo simulado de que no se invoca el
+  retroceso cuando el ciclo termina por fallo del sensor, cuando la orden es inválida y
+  cuando las lecturas inválidas son alternas y nunca llega a formarse la mediana móvil, y
+  de que la falta de lecturas nunca se interpreta como atasco; prueba física de que el
+  servo no retrocede ante un fallo de sensor (P5 y P6 del checklist del informe) ni ante
+  una orden inválida (P13 del mismo checklist). No se exige prueba del adaptador de
+  hardware, que no contiene lógica de decisión. No duplica los criterios de RF-2 ni de
+  RF-9: aquellos verifican la clasificación de la orden y la parada por fallo del sensor,
+  este verifica la ausencia de la acción de retroceso.
 - RNF-1: revisión de código del bucle del servicio, verificando que el periodo de 200 ms
   se impone con vencimientos absolutos y no con esperas relativas, tanto en la verificación
   como en el ciclo de motor, incluidos retroceso y pausa; el ciclo puro cuenta además con
