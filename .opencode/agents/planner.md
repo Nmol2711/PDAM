@@ -2,7 +2,6 @@
 name: planner
 description: SDD - redacta la spec, el plan y las tareas de una petición alineadas con la constitución y sin tocar código
 mode: subagent
-model: google/gemini-3.5-flash-lite
 permissions:
   - action: edit
     resource: "specs/**"
