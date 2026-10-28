@@ -41,7 +41,7 @@ La Spec 013 sustituye el dispensado por tiempo fijo de 10 segundos por un dispen
 
 Según la verificación registrada en `tasks.md` el 2026-10-24, tras la corrección de calibración:
 
-- **T1–T9 cerradas.** `pio test -e native` pasa **72/72** (67 dispensing + 5 provisioning) y `pio run` en `esp32dev` termina en **SUCCESS** (RAM 19.7 %, Flash 63.8 %).
+- **T1–T9 cerradas.** `pio test -e native` pasa **136/136** (110 `test_dispensing_utils`, 21 `test_dispensing_cycle` y 5 `test_provisioning_utils`) y `pio run` en `esp32dev` termina en **SUCCESS** (RAM 19.7 %, Flash 63.8 %).
 - **T10 parcialmente ejecutada.** El firmware corregido se flasheó el 2026-10-24 y el arranque BLE/WiFi/HTTP y el camino de verificación/objetivo funcionaron (§2.5). Siguen pendientes la exactitud con alimento real, los fallos de sensor, la frecuencia de muestreo y la no regresión de P10 (reconexión WiFi/rollback) y P11 (`reset_wifi`); P9 (aprovisionamiento BLE, WiFi y HTTP 200) sí se observó. La primera prueba física falló por calibración y se corrigió el 2026-10-24 (§2.3).
 - La única dependencia nueva es `bogde/HX711 @ ^0.7.5`; el resto del firmware conserva el comportamiento anterior salvo el reemplazo explícito del dispensado por tiempo.
 
@@ -65,7 +65,7 @@ El servo no se movió y el firmware cerró la ventana de verificación con `sens
 - `DispensadorESP32/src/config/config.h`: `hx711CalibrationFactor = 482.7f` y `hx711RawSign = 1.0f`.
 - `initHx711()` imprime ahora factor y signo al inicializar, para que el log muestre la calibración activa.
 - La ventana de verificación imprime un diagnóstico cuando falla.
-- 7 pruebas nativas nuevas con los valores reales: `pio test -e native` pasa 72/72.
+- 7 pruebas nativas nuevas con los valores reales: `pio test -e native` pasa 136/136.
 
 **Valores esperados con la corrección.** Con la bandeja vacía, la conversión absoluta es ≈ 332.8 g (línea base). Para 50 g el objetivo es ≈ 382.8 g y el RAW objetivo ≈ 184793 (`160658 + 50 × 482.7 = 184793`). Son cálculos, no mediciones de dispensación: deben confirmarse en P3.
 
@@ -366,7 +366,7 @@ No usar el endpoint real con `curl` antes de que consulte el ESP32: la orden se 
 
 | ID | Requisito | Objetivo | Procedimiento | Resultado esperado | Evidencia |
 |---|---|---|---|---|---|
-| P1 | RNF-4, RNF-6 | Confirmar que el firmware compila, la suite nativa pasa y la placa flashea. | `cd DispensadorESP32`<br>`pio test -e native`<br>`pio run -t clean && pio run`<br>`pio run --target upload` | 72/72 en nativo; `pio run` SUCCESS; carga completa; monitor a 115200. | Salida de terminal y primeras líneas del monitor. |
+| P1 | RNF-4, RNF-6 | Confirmar que el firmware compila, la suite nativa pasa y la placa flashea. | `cd DispensadorESP32`<br>`pio test -e native`<br>`pio run -t clean && pio run`<br>`pio run --target upload` | 136/136 en nativo; `pio run` SUCCESS; carga completa; monitor a 115200. | Salida de terminal y primeras líneas del monitor. |
 | P2 | RF-11 | Calibrar la celda y verificar la conversión con un peso conocido. | Ejecutar el [informe de calibración](informe-calibracion-hx711-2026-10-23.md). Verificar con 500 g o 1 kg usando el sketch de raw. | Factor positivo (vigente `482.7`), signo coherente (`+1`), lectura que sigue al peso y error operativo no mayor que 2 % (10 g en 500 g). | Tabla de raw, valores finales de `config.h` y monitor. |
 | P3 | RF-1, RF-6, RF-7, RF-12, RNF-1, RNF-2 | Validar el camino feliz de 50 g. | Bandeja vacía; solicitar 50 g; medir la comida entregada en una báscula externa; repetir 3 veces limpiando la bandeja. | 3/3 entre 50 g y 55 g; log con `incremento` en ese rango y motivo `objetivo alcanzado`; servo detenido. Si falla, el log debe mostrar `Verificacion HX711: ...` con `muestras`, `respondidas`, `ultimo_raw`, `ultimo_g`, `factor` (`482.7`) y `signo` (`+1.0`) antes de concluir la causa. | Tres líneas `Despacho:` y tres mediciones externas; si falla, la línea `Verificacion HX711:`. |
 | P4 | RF-8, RNF-3 | Validar el tope de 30 s con depósito vacío. | Vaciar el depósito; solicitar 50 g; cronometrar desde el arranque del giro. | Parada a los 30 s, sin superarlos; motivo `objetivo no alcanzado`; incremento cercano a 0; ciclo total no mayor que 32 s. | Log y tiempo medido. |
@@ -397,34 +397,40 @@ Notas sobre criterios:
 No hay un log de una dispensación aprobada porque T10 sigue abierto. La ejecución parcial del §2.5 produjo 12 líneas `Despacho:` con motivo `objetivo alcanzado`, pero corresponden a carga manual y el log no tiene marcas de tiempo. El otro log real es el de la incidencia del §2.3. El formato exacto que emite el firmware es:
 
 ```text
-Despacho: solicitado=%.1f g, linea_base=%s, peso_final=%s, incremento=%s, motivo=%s
+Despacho: solicitado=%.1f g, linea_base=%s, peso_final=%s, incremento=%s, reintentos=%u, motivo=%s
 ```
 
 Plantilla para el camino feliz:
 
 ```text
-Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, motivo=objetivo alcanzado
+Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, reintentos=0, motivo=objetivo alcanzado
 ```
 
 Plantilla para el fallo al arranque:
 
 ```text
-Despacho: solicitado=<g> g, linea_base=no disponible, peso_final=no disponible, incremento=no disponible, motivo=sensor no disponible
+Despacho: solicitado=<g> g, linea_base=no disponible, peso_final=no disponible, incremento=no disponible, reintentos=0, motivo=sensor no disponible
 ```
 
 Plantilla para el fallo a mitad de giro:
 
 ```text
-Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, motivo=fallo del sensor durante la dispensacion
+Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, reintentos=<n>, motivo=fallo del sensor durante la dispensacion
 ```
 
 Plantilla para el límite de tiempo:
 
 ```text
-Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, motivo=objetivo no alcanzado
+Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, reintentos=<n>, motivo=objetivo no alcanzado
 ```
 
-Los textos de motivo son literales del código; `dispensacion` aparece sin tilde en el log.
+Plantilla para el atasco no resuelto:
+
+```text
+Despacho: solicitado=<g> g, linea_base=<g> g, peso_final=<g> g, incremento=<g> g, reintentos=<n>, motivo=atasco no resuelto
+```
+
+Los textos de motivo son literales del código; `dispensacion` aparece sin tilde en el log. `reintentos` siempre se imprime: las salidas tempranas (orden inválida, calibración inválida o sensor no disponible) muestran `reintentos=0`.
 
 ### 7.2 Otros mensajes esperados
 
@@ -437,6 +443,18 @@ Consultando ordenes pendientes en el servidor...
 ```
 
 ```text
+Servomotor en giro continuo (0°).
+```
+
+```text
+Servomotor en retroceso (180°) para desatascar.
+```
+
+Secuencia de un reintento (retroceso, pausa y reanudación del avance):
+
+```text
+Servomotor en retroceso (180°) para desatascar.
+Servomotor detenido en 90°.
 Servomotor en giro continuo (0°).
 ```
 
@@ -471,6 +489,16 @@ Orden recibida: [reset_wifi = true]. Borrando credenciales NVS y reiniciando en 
 
 No adjuntar credenciales, tokens, direcciones IP reales ni MAC reales en capturas o transcripciones.
 
+### 7.4 Pruebas de atasco (T15)
+
+Se ejecutan sobre el firmware final, después de las de T10, y se registran en T15 de [`tasks.md`](../../specs/013-dispensado-por-peso-hx711/tasks.md).
+
+- **Atasco inducido:** con el servo en avance, bloquear la hélice del tornillo sin fin o cuñar una croqueta. Se espera el retroceso de 1,2 s, la pausa de 0,3 s y la reanudación; si el bloqueo persiste, el motivo es `atasco no resuelto` con el incremento logrado y `reintentos` mayor que 0.
+- **Atasco resuelto:** liberar el bloqueo durante un reintento. Se espera `objetivo alcanzado` con `reintentos` mayor que 0.
+- **Dispensación normal:** sin bloqueo, se espera `objetivo alcanzado` con `reintentos=0`, como no regresión del camino feliz.
+- **Peso de la bandeja:** medir antes y después de cada retroceso. El peso no debe disminuir, porque el giro inverso no retira alimento de la bandeja.
+- **Cota y muestreo:** el ciclo de motor no supera 30 s ni el completo 32 s, y se observan al menos 5 lecturas por segundo también en retroceso y pausa.
+
 ---
 
 ## 8. Registro de resultados
@@ -479,7 +507,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 
 | Fecha | Prueba | Resultado (aprobado / fallido / no concluyente) | Medición | Log o evidencia | Notas |
 |---|---|---|---|---|---|
-| 2026-10-24 | P1 | aprobado | `pio test -e native` 72/72; `pio run` SUCCESS (RAM 19.7 %, Flash 63.8 %) | Build `Oct 24 2026 23:14:35` en el arranque | Carga completa y arranque correctos; en esta sesión no se repitió `pio run -t clean` |
+| 2026-10-24 | P1 | aprobado | `pio test -e native` 72/72 en esa ejecución; suite vigente 136/136; `pio run` SUCCESS (RAM 19.7 %, Flash 63.8 %) | Build `Oct 24 2026 23:14:35` en el arranque | Carga completa y arranque correctos; en esta sesión no se repitió `pio run -t clean` |
 | — | P2 | No ejecutada | Línea base ≈ 333.1 g en reposo | §2.5 | Factor `482.7` y signo `+1.0` impresos; 160658 / 482.7 ≈ 332.83 g es coherente, pero falta la comprobación con peso patrón de 500 g o 1 kg |
 | 2026-10-24 | P3 | no concluyente | 12 ciclos con `objetivo alcanzado`; incrementos de 52.4 g a 530.5 g | §2.5 | Carga por presión manual, sin alimento seco ni báscula externa: no valida el criterio de 50–55 g |
 | — | P4 | No ejecutada | — | — | No se forzó el tope de 30 s con depósito vacío |
@@ -500,7 +528,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 
 Se considera aprobado cuando:
 
-- P1 pasa con 72/72 y `pio run` SUCCESS.
+- P1 pasa con 136/136 y `pio run` SUCCESS.
 - P2 confirma factor `482.7` y signo `+1` con lectura verificada contra peso patrón.
 - P3 entrega 50–55 g en las tres repeticiones y el log muestra el incremento correspondiente. Si falla, el registro incluye el diagnóstico `Verificacion HX711:` con RAW, gramos, factor y signo.
 - P4 detiene el servo a los 30 s, sin superar el límite, y registra `objetivo no alcanzado`.

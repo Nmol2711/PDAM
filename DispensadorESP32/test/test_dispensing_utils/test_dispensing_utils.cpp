@@ -204,13 +204,14 @@ void test_format_dispense_log_complete_line(void) {
   result.finalGrams = 63.4f;
   result.incrementAvailable = true;
   result.incrementGrams = 51.1f;
+  result.retryCount = 0;
 
   char buffer[160];
 
   formatDispenseLog(result, buffer, sizeof(buffer));
   TEST_ASSERT_EQUAL_STRING(
       "Despacho: solicitado=50.0 g, linea_base=12.3 g, peso_final=63.4 g, "
-      "incremento=51.1 g, motivo=objetivo alcanzado",
+      "incremento=51.1 g, reintentos=0, motivo=objetivo alcanzado",
       buffer);
 }
 
@@ -224,13 +225,14 @@ void test_format_dispense_log_replaces_unavailable_values(void) {
   result.finalGrams = 0.0f;
   result.incrementAvailable = false;
   result.incrementGrams = 0.0f;
+  result.retryCount = 0;
 
   char buffer[160];
 
   formatDispenseLog(result, buffer, sizeof(buffer));
   TEST_ASSERT_EQUAL_STRING(
       "Despacho: solicitado=20.0 g, linea_base=no disponible, "
-      "peso_final=no disponible, incremento=no disponible, "
+      "peso_final=no disponible, incremento=no disponible, reintentos=0, "
       "motivo=sensor no disponible",
       buffer);
 }
@@ -245,6 +247,7 @@ void test_format_dispense_log_includes_sensor_failure_reason(void) {
   result.finalGrams = 25.0f;
   result.incrementAvailable = true;
   result.incrementGrams = 15.0f;
+  result.retryCount = 0;
 
   char buffer[160];
 
@@ -254,6 +257,7 @@ void test_format_dispense_log_includes_sensor_failure_reason(void) {
   TEST_ASSERT_NOT_NULL(strstr(buffer, "linea_base=10.0 g"));
   TEST_ASSERT_NOT_NULL(strstr(buffer, "peso_final=25.0 g"));
   TEST_ASSERT_NOT_NULL(strstr(buffer, "incremento=15.0 g"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "reintentos=0"));
 }
 
 void test_format_dispense_log_rejects_invalid_buffer(void) {
@@ -263,6 +267,7 @@ void test_format_dispense_log_rejects_invalid_buffer(void) {
   result.baselineAvailable = false;
   result.finalAvailable = false;
   result.incrementAvailable = false;
+  result.retryCount = 0;
 
   // Buffer no usable: la función retorna sin escribir y sin fallar.
   formatDispenseLog(result, nullptr, 100);
@@ -1058,6 +1063,700 @@ void test_real_calibration_get_real_increment_for_known_weight(void) {
   TEST_ASSERT_FLOAT_WITHIN(0.05f, 206.80f, result.incrementGrams);
 }
 
+// --- deteccion y resolucion de atascos ---
+// RF-12, RF-14, RF-15, RF-16, RF-17, RNF-6, RNF-7
+
+namespace {
+
+// Estado de atasco con el avance inicial arrancado en nowMs.
+StallState startedAdvance(unsigned long nowMs) {
+  StallState state;
+  startAdvance(&state, nowMs);
+  return state;
+}
+
+// Lecturas validas consecutivas cada 200 ms desde fromMs.
+void feedValid(StallState *state, float grams, unsigned long fromMs,
+               unsigned count) {
+  for (unsigned i = 0; i < count; ++i) {
+    recordAdvanceSample(state, validSample(grams), fromMs + i * 200UL);
+  }
+}
+
+} // namespace
+
+void test_stall_thresholds_are_defined_once(void) {
+  // RNF-7: umbrales aprobados en un unico lugar y documentados.
+  TEST_ASSERT_EQUAL_UINT32(2000, kStallGraceMs);
+  TEST_ASSERT_EQUAL_UINT32(5000, kStallWindowMs);
+  TEST_ASSERT_EQUAL_FLOAT(2.0f, kMinProgressGrams);
+  TEST_ASSERT_EQUAL_UINT(5, kMovingMedianSize);
+  TEST_ASSERT_EQUAL_UINT(5, kMinAdvanceValidReadings);
+  TEST_ASSERT_EQUAL_UINT32(1200, kReverseMs);
+  TEST_ASSERT_EQUAL_UINT32(300, kPauseMs);
+  TEST_ASSERT_EQUAL_UINT(3, kMaxStallRetries);
+  TEST_ASSERT_EQUAL_UINT32(3500, kMinRetryBudgetMs);
+  TEST_ASSERT_EQUAL_INT(180, kReverseAngleDegrees);
+  TEST_ASSERT_EQUAL_UINT32(30000, kMotorBudgetMs);
+}
+
+void test_moving_median_absent_with_four_valid_readings(void) {
+  MovingMedianState medianState;
+  resetMovingMedian(&medianState);
+
+  const float values[4] = {10.0f, 11.0f, 12.0f, 13.0f};
+  for (unsigned i = 0; i < 4; ++i) {
+    TEST_ASSERT_TRUE(pushMovingMedian(&medianState, validSample(values[i])));
+  }
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_EQUAL_UINT(4, medianState.count);
+  TEST_ASSERT_FALSE(movingMedianValue(&medianState, &medianGrams));
+  TEST_ASSERT_FALSE(movingMedianValue(nullptr, &medianGrams));
+  TEST_ASSERT_FALSE(movingMedianValue(&medianState, nullptr));
+}
+
+void test_moving_median_with_five_valid_readings(void) {
+  MovingMedianState medianState;
+  resetMovingMedian(&medianState);
+
+  const float values[5] = {10.0f, 30.0f, 20.0f, 50.0f, 40.0f};
+  for (unsigned i = 0; i < 5; ++i) {
+    pushMovingMedian(&medianState, validSample(values[i]));
+  }
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&medianState, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(30.0f, medianGrams);
+}
+
+void test_moving_median_with_six_valid_readings_drops_the_oldest(void) {
+  MovingMedianState medianState;
+  resetMovingMedian(&medianState);
+
+  // 1..5 dan mediana 3; la sexta lectura descarta el 1.
+  for (unsigned i = 1; i <= 5; ++i) {
+    pushMovingMedian(&medianState, validSample(static_cast<float>(i)));
+  }
+  pushMovingMedian(&medianState, validSample(10.0f));
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&medianState, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(4.0f, medianGrams);
+  TEST_ASSERT_EQUAL_UINT(6, medianState.count);
+}
+
+void test_invalid_reading_does_not_enter_moving_median(void) {
+  MovingMedianState medianState;
+  resetMovingMedian(&medianState);
+
+  for (unsigned i = 0; i < 4; ++i) {
+    pushMovingMedian(&medianState, validSample(10.0f));
+  }
+
+  // Una lectura invalida no se inserta ni cuenta para la mediana.
+  TEST_ASSERT_FALSE(pushMovingMedian(&medianState, invalidSample()));
+  TEST_ASSERT_EQUAL_UINT(4, medianState.count);
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_FALSE(movingMedianValue(&medianState, &medianGrams));
+
+  // La quinta valida si completa la mediana.
+  TEST_ASSERT_TRUE(pushMovingMedian(&medianState, validSample(10.0f)));
+  TEST_ASSERT_TRUE(movingMedianValue(&medianState, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, medianGrams);
+}
+
+void test_reset_moving_median_clears_the_window(void) {
+  MovingMedianState medianState;
+  resetMovingMedian(&medianState);
+
+  for (unsigned i = 0; i < 5; ++i) {
+    pushMovingMedian(&medianState, validSample(10.0f));
+  }
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&medianState, &medianGrams));
+
+  resetMovingMedian(&medianState);
+  TEST_ASSERT_EQUAL_UINT(0, medianState.count);
+  TEST_ASSERT_EQUAL_UINT(0, medianState.nextIndex);
+  TEST_ASSERT_FALSE(movingMedianValue(&medianState, &medianGrams));
+}
+
+void test_max_observed_ignores_isolated_peak_of_eight_grams(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+
+  TEST_ASSERT_TRUE(state.observedMax.available);
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, state.observedMax.grams);
+
+  // Un pico aislado de +8 g no desplaza la mediana de las cinco validas.
+  recordAdvanceSample(&state, validSample(18.0f), 1000);
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&state.median, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, medianGrams);
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, state.observedMax.grams);
+}
+
+void test_max_observed_ignores_two_consecutive_peaks(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, state.observedMax.grams);
+
+  // Dos picos consecutivos de +8 g no desplazan la mediana de cinco validas,
+  // de modo que el maximo observado no sube y no deja deficit artificial.
+  recordAdvanceSample(&state, validSample(18.0f), 1000);
+  recordAdvanceSample(&state, validSample(18.0f), 1200);
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&state.median, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, medianGrams);
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, state.observedMax.grams);
+
+  // El tercer pico consecutivo ya desplaza la mediana y eleva el maximo.
+  recordAdvanceSample(&state, validSample(18.0f), 1400);
+  TEST_ASSERT_TRUE(movingMedianValue(&state.median, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(18.0f, medianGrams);
+  TEST_ASSERT_EQUAL_FLOAT(18.0f, state.observedMax.grams);
+}
+
+void test_max_observed_rises_when_moving_median_rises(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, state.observedMax.grams);
+
+  // Tres lecturas de 14 g desplazan la mediana a 14 g.
+  feedValid(&state, 14.0f, 1000, 3);
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&state.median, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(14.0f, medianGrams);
+  TEST_ASSERT_EQUAL_FLOAT(14.0f, state.observedMax.grams);
+}
+
+void test_max_observed_never_decreases(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 20.0f, 0, 5);
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, state.observedMax.grams);
+
+  // La mediana baja a 5 g, pero el maximo observado se conserva.
+  feedValid(&state, 5.0f, 1000, 5);
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_TRUE(movingMedianValue(&state.median, &medianGrams));
+  TEST_ASSERT_EQUAL_FLOAT(5.0f, medianGrams);
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, state.observedMax.grams);
+}
+
+void test_stall_window_not_opened_during_grace(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+
+  TEST_ASSERT_FALSE(state.windowOpen);
+
+  // 1999 ms desde el arranque: aun dentro de la gracia de 2 s.
+  recordAdvanceSample(&state, validSample(10.0f), 1999);
+  TEST_ASSERT_FALSE(state.windowOpen);
+}
+
+void test_stall_window_opens_when_grace_expires(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+
+  TEST_ASSERT_TRUE(state.windowOpen);
+  TEST_ASSERT_EQUAL_UINT32(2000, state.windowStartMs);
+  TEST_ASSERT_EQUAL_FLOAT(10.0f, state.referenceGrams);
+}
+
+void test_stall_window_opens_with_first_moving_median_after_grace(void) {
+  StallState state = startedAdvance(0);
+
+  // Cuatro validas: todavia no existe la mediana movil.
+  feedValid(&state, 10.0f, 0, 4);
+  recordAdvanceSample(&state, invalidSample(), 900);
+
+  float medianGrams = 0.0f;
+  TEST_ASSERT_FALSE(movingMedianValue(&state.median, &medianGrams));
+  TEST_ASSERT_FALSE(state.windowOpen);
+
+  // La quinta valida llega despues de la gracia: la ventana se abre ahora.
+  recordAdvanceSample(&state, validSample(10.0f), 2200);
+
+  TEST_ASSERT_TRUE(state.windowOpen);
+  TEST_ASSERT_EQUAL_UINT32(2200, state.windowStartMs);
+}
+
+void test_stall_window_restarts_when_progress_reaches_two_grams(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+  TEST_ASSERT_EQUAL_UINT32(2000, state.windowStartMs);
+
+  // Dos lecturas de 12 g aun dejan la mediana en 10 g.
+  feedValid(&state, 12.0f, 2200, 2);
+  TEST_ASSERT_EQUAL_UINT32(2000, state.windowStartMs);
+
+  // La tercera eleva la mediana a 12 g: progreso de 2 g exactos.
+  recordAdvanceSample(&state, validSample(12.0f), 2600);
+
+  TEST_ASSERT_EQUAL_UINT32(2600, state.windowStartMs);
+  TEST_ASSERT_EQUAL_FLOAT(12.0f, state.referenceGrams);
+}
+
+void test_stall_window_not_restarted_below_two_grams(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+
+  // Mediana de 11.9 g: progreso de 1.9 g, por debajo del minimo.
+  feedValid(&state, 11.9f, 2200, 3);
+
+  float progress = 0.0f;
+  TEST_ASSERT_TRUE(stallProgress(&state, &progress));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, 1.9f, progress);
+  TEST_ASSERT_EQUAL_UINT32(2000, state.windowStartMs);
+}
+
+void test_stall_window_restarted_with_progress_above_two_grams(void) {
+  // RF-14: el reinicio se produce con cualquier progreso >= 2 g, no solo con
+  // el valor exacto; al reiniciar, la referencia se renueva con el maximo.
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+  TEST_ASSERT_EQUAL_UINT32(2000, state.windowStartMs);
+
+  // Tres lecturas de 14.9 g elevan la mediana a 14.9 g: progreso de 4.9 g.
+  feedValid(&state, 14.9f, 2200, 3);
+
+  TEST_ASSERT_EQUAL_UINT32(2600, state.windowStartMs);
+  TEST_ASSERT_EQUAL_FLOAT(14.9f, state.referenceGrams);
+  TEST_ASSERT_EQUAL_FLOAT(14.9f, state.observedMax.grams);
+
+  // Tras el reinicio el progreso se mide contra la nueva referencia.
+  float progress = 0.0f;
+  TEST_ASSERT_TRUE(stallProgress(&state, &progress));
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, progress);
+}
+
+void test_stall_window_expires_after_five_seconds(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+
+  TEST_ASSERT_FALSE(stallWindowExpired(&state, 6999));
+  TEST_ASSERT_TRUE(stallWindowExpired(&state, 7000));
+  TEST_ASSERT_FALSE(stallWindowExpired(nullptr, 7000));
+
+  // Sin ventana abierta no hay vencimiento.
+  StallState closed = startedAdvance(0);
+  TEST_ASSERT_FALSE(stallWindowExpired(&closed, 7000));
+}
+
+void test_stall_progress_is_negative_below_reference(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 20.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(20.0f), 2000);
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, state.referenceGrams);
+
+  // La mediana baja a 15 g: el progreso es negativo y la referencia no cambia.
+  feedValid(&state, 15.0f, 2200, 5);
+
+  float progress = 0.0f;
+  TEST_ASSERT_TRUE(stallProgress(&state, &progress));
+  TEST_ASSERT_FLOAT_WITHIN(0.01f, -5.0f, progress);
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, state.referenceGrams);
+}
+
+void test_stall_not_declared_with_less_than_five_valid_readings_since_advance(
+    void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+
+  // Reanudacion tras un reintento: la cuenta de validas vuelve a cero.
+  resumeAdvanceAfterRetry(&state, 5000);
+  TEST_ASSERT_EQUAL_UINT(0, state.validSinceAdvance);
+
+  // La primera valida posterior a la gracia abre la ventana (7200 ms).
+  recordAdvanceSample(&state, validSample(10.0f), 7200);
+  TEST_ASSERT_TRUE(state.windowOpen);
+  TEST_ASSERT_EQUAL_UINT32(7200, state.windowStartMs);
+
+  // Solo tres validas mas antes del vencimiento (12200 ms).
+  recordAdvanceSample(&state, invalidSample(), 7400);
+  recordAdvanceSample(&state, validSample(10.0f), 8000);
+  recordAdvanceSample(&state, invalidSample(), 8500);
+  recordAdvanceSample(&state, validSample(10.0f), 10000);
+  recordAdvanceSample(&state, invalidSample(), 11000);
+
+  // La cuarta valida llega ya vencida la ventana: no se declara atasco y la
+  // ventana se reinicia en ese instante.
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(StallOutcome::CONTINUE),
+      static_cast<int>(recordAdvanceSample(&state, validSample(10.0f), 12300)));
+  TEST_ASSERT_EQUAL_UINT(4, state.validSinceAdvance);
+  TEST_ASSERT_FALSE(state.stallPending);
+  TEST_ASSERT_TRUE(state.windowOpen);
+  TEST_ASSERT_EQUAL_UINT32(12300, state.windowStartMs);
+}
+
+void test_stall_declared_with_progress_below_two_grams_and_five_valid_readings(
+    void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+  TEST_ASSERT_EQUAL_UINT32(2000, state.windowStartMs);
+
+  // Lecturas planas durante los 5 s de la ventana.
+  for (unsigned long t = 2200; t < 7000; t += 200UL) {
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(StallOutcome::CONTINUE),
+        static_cast<int>(recordAdvanceSample(&state, validSample(10.0f), t)));
+  }
+
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(StallOutcome::STALL_DECLARED),
+      static_cast<int>(recordAdvanceSample(&state, validSample(10.0f), 7000)));
+  TEST_ASSERT_TRUE(state.stallPending);
+  TEST_ASSERT_TRUE(state.validSinceAdvance >= kMinAdvanceValidReadings);
+}
+
+void test_stall_not_declared_during_grace(void) {
+  StallState state = startedAdvance(0);
+
+  // Diez lecturas planas dentro de la gracia: nunca se abre la ventana.
+  for (unsigned long t = 0; t < kStallGraceMs; t += 200UL) {
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(StallOutcome::CONTINUE),
+        static_cast<int>(recordAdvanceSample(&state, validSample(10.0f), t)));
+  }
+
+  TEST_ASSERT_FALSE(state.windowOpen);
+  TEST_ASSERT_FALSE(state.stallPending);
+}
+
+void test_stall_pending_cleared_when_progress_reaches_two_grams(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+  for (unsigned long t = 2200; t < 7000; t += 200UL) {
+    recordAdvanceSample(&state, validSample(10.0f), t);
+  }
+  recordAdvanceSample(&state, validSample(10.0f), 7000);
+  TEST_ASSERT_TRUE(state.stallPending);
+
+  // El reintento reanuda el avance y el peso progresa 2 g sobre la referencia.
+  resumeAdvanceAfterRetry(&state, 7200);
+  feedValid(&state, 12.0f, 9200, 3);
+
+  TEST_ASSERT_FALSE(state.stallPending);
+}
+
+void test_invalid_readings_never_declare_stall(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+
+  // Lecturas invalidas durante mas de 5 s: la falta de medicion no es atasco.
+  for (unsigned long t = 2200; t <= 8000; t += 200UL) {
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(StallOutcome::CONTINUE),
+        static_cast<int>(recordAdvanceSample(&state, invalidSample(), t)));
+  }
+
+  TEST_ASSERT_FALSE(state.stallPending);
+  TEST_ASSERT_EQUAL_UINT(6, state.validSinceAdvance);
+}
+
+void test_decide_stall_action_retries_with_available_retries_and_budget(void) {
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::RETRY),
+                        static_cast<int>(decideStallAction(0, 30000)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::RETRY),
+                        static_cast<int>(decideStallAction(0, 3500)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::RETRY),
+                        static_cast<int>(decideStallAction(2, 3500)));
+}
+
+void test_decide_stall_action_gives_up_without_remaining_retries(void) {
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(3, 30000)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(4, 30000)));
+}
+
+void test_decide_stall_action_gives_up_below_minimum_retry_budget(void) {
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(0, 3499)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(2, 0)));
+}
+
+void test_decide_stall_action_retries_with_exact_minimum_budget(void) {
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::RETRY),
+                        static_cast<int>(decideStallAction(0, kMinRetryBudgetMs)));
+}
+
+void test_decide_stall_action_combines_retry_counter_and_budget(void) {
+  // RF-16: basta con que falle una de las dos condiciones para darse por vencido.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(2, 3499)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(3, 3500)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::GIVE_UP),
+                        static_cast<int>(decideStallAction(3, 30000)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(StallAction::RETRY),
+                        static_cast<int>(decideStallAction(2, 3500)));
+}
+
+// Invariante del presupuesto de reintento (RF-12, RF-16): el mínimo exigido
+// cubre el retroceso, su pausa y la gracia posterior. Protege que un reintento
+// aprobado siempre quepa completo en el presupuesto, de modo que un retroceso
+// nunca se interrumpa por falta de tiempo con los umbrales aprobados.
+void test_min_retry_budget_covers_reverse_pause_and_grace(void) {
+  TEST_ASSERT_GREATER_OR_EQUAL_UINT32(
+      static_cast<unsigned long>(kReverseMs + kPauseMs + kStallGraceMs),
+      static_cast<unsigned long>(kMinRetryBudgetMs));
+}
+
+void test_motor_budget_remaining_counts_down(void) {
+  TEST_ASSERT_EQUAL_UINT32(30000, motorBudgetRemainingMs(0, 0));
+  TEST_ASSERT_EQUAL_UINT32(29000, motorBudgetRemainingMs(0, 1000));
+  TEST_ASSERT_EQUAL_UINT32(0, motorBudgetRemainingMs(0, 30000));
+  TEST_ASSERT_EQUAL_UINT32(0, motorBudgetRemainingMs(0, 30500));
+  TEST_ASSERT_EQUAL_UINT32(1000, motorBudgetRemainingMs(1000, 30000));
+}
+
+void test_motor_budget_exhausted_at_thirty_seconds_not_before(void) {
+  TEST_ASSERT_FALSE(isMotorBudgetExhausted(0, 29999));
+  TEST_ASSERT_TRUE(isMotorBudgetExhausted(0, 30000));
+  TEST_ASSERT_TRUE(isMotorBudgetExhausted(0, 35000));
+}
+
+void test_motor_budget_tolerates_millis_rollover(void) {
+  const unsigned long start = 0xFFFFFF00UL;
+
+  // 512 ms despues del arranque, con millis() desbordado.
+  TEST_ASSERT_EQUAL_UINT32(29488, motorBudgetRemainingMs(start, 0x00000100UL));
+  TEST_ASSERT_FALSE(isMotorBudgetExhausted(start, 0x00000100UL));
+
+  // Exactamente 30000 ms despues del arranque, tambien con desbordamiento.
+  const unsigned long atLimit = (start + kMotorBudgetMs) & 0xFFFFFFFFUL;
+  TEST_ASSERT_EQUAL_UINT32(0, motorBudgetRemainingMs(start, atLimit));
+  TEST_ASSERT_TRUE(isMotorBudgetExhausted(start, atLimit));
+}
+
+void test_budget_exhausted_reason_depends_on_pending_stall(void) {
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::STALL_UNRESOLVED),
+                        static_cast<int>(budgetExhaustedReason(true)));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::NOT_REACHED),
+                        static_cast<int>(budgetExhaustedReason(false)));
+}
+
+void test_start_advance_does_not_count_retries(void) {
+  StallState state = startedAdvance(5000);
+
+  TEST_ASSERT_EQUAL_UINT(0, state.retries);
+  TEST_ASSERT_EQUAL_UINT(0, state.validSinceAdvance);
+  TEST_ASSERT_FALSE(state.windowOpen);
+  TEST_ASSERT_FALSE(state.stallPending);
+  TEST_ASSERT_FALSE(state.observedMax.available);
+  TEST_ASSERT_EQUAL_UINT(0, state.median.count);
+  TEST_ASSERT_EQUAL_UINT32(5000, state.advanceStartMs);
+
+  // Un nuevo arranque inicial reinicia el contador ya sucio.
+  state.retries = 2;
+  state.stallPending = true;
+  startAdvance(&state, 9000);
+  TEST_ASSERT_EQUAL_UINT(0, state.retries);
+  TEST_ASSERT_FALSE(state.stallPending);
+  TEST_ASSERT_EQUAL_UINT32(9000, state.advanceStartMs);
+}
+
+void test_resume_advance_after_retry_counts_retries_and_reopens_grace(void) {
+  StallState state = startedAdvance(0);
+  feedValid(&state, 10.0f, 0, 5);
+  recordAdvanceSample(&state, validSample(10.0f), 2000);
+  TEST_ASSERT_TRUE(state.windowOpen);
+
+  TEST_ASSERT_EQUAL_UINT(1, resumeAdvanceAfterRetry(&state, 8000));
+  TEST_ASSERT_EQUAL_UINT(1, state.retries);
+  TEST_ASSERT_EQUAL_UINT(0, state.validSinceAdvance);
+  TEST_ASSERT_FALSE(state.windowOpen);
+  TEST_ASSERT_EQUAL_UINT32(8000, state.advanceStartMs);
+
+  // La gracia del nuevo avance se cuenta desde la reanudacion.
+  recordAdvanceSample(&state, validSample(10.0f), 9999);
+  TEST_ASSERT_FALSE(state.windowOpen);
+
+  TEST_ASSERT_EQUAL_UINT(2, resumeAdvanceAfterRetry(&state, 12000));
+  TEST_ASSERT_EQUAL_UINT(2, state.retries);
+}
+
+void test_dispense_reason_text_for_unresolved_stall(void) {
+  TEST_ASSERT_EQUAL_STRING("atasco no resuelto",
+                           dispenseReasonText(DispenseReason::STALL_UNRESOLVED));
+}
+
+void test_format_dispense_log_includes_zero_retries(void) {
+  DispenseResult result;
+  result.requestedGrams = 50.0f;
+  result.reason = DispenseReason::COMPLETED;
+  result.baselineAvailable = true;
+  result.baselineGrams = 10.0f;
+  result.finalAvailable = true;
+  result.finalGrams = 60.0f;
+  result.incrementAvailable = true;
+  result.incrementGrams = 50.0f;
+  result.retryCount = 0;
+
+  char buffer[160];
+  formatDispenseLog(result, buffer, sizeof(buffer));
+
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "reintentos=0"));
+}
+
+void test_format_dispense_log_includes_retry_count(void) {
+  DispenseResult result;
+  result.requestedGrams = 50.0f;
+  result.reason = DispenseReason::STALL_UNRESOLVED;
+  result.baselineAvailable = true;
+  result.baselineGrams = 10.0f;
+  result.finalAvailable = true;
+  result.finalGrams = 20.0f;
+  result.incrementAvailable = true;
+  result.incrementGrams = 10.0f;
+  result.retryCount = 1;
+
+  char buffer[160];
+  formatDispenseLog(result, buffer, sizeof(buffer));
+
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "reintentos=1"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "motivo=atasco no resuelto"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "incremento=10.0 g"));
+}
+
+void test_format_dispense_log_includes_three_retries(void) {
+  DispenseResult result;
+  result.requestedGrams = 80.0f;
+  result.reason = DispenseReason::NOT_REACHED;
+  result.baselineAvailable = true;
+  result.baselineGrams = 10.0f;
+  result.finalAvailable = true;
+  result.finalGrams = 30.0f;
+  result.incrementAvailable = true;
+  result.incrementGrams = 20.0f;
+  result.retryCount = 3;
+
+  char buffer[160];
+  formatDispenseLog(result, buffer, sizeof(buffer));
+
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "reintentos=3"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "motivo=objetivo no alcanzado"));
+}
+
+void test_format_dispense_log_marks_final_and_increment_unavailable_without_readings(
+    void) {
+  // RF-12: hubo línea base pero ninguna lectura válida en el ciclo de motor.
+  DispenseResult result;
+  result.requestedGrams = 50.0f;
+  result.reason = DispenseReason::STALL_UNRESOLVED;
+  result.baselineAvailable = true;
+  result.baselineGrams = 12.3f;
+  result.finalAvailable = false;
+  result.finalGrams = 0.0f;
+  result.incrementAvailable = false;
+  result.incrementGrams = 0.0f;
+  result.retryCount = 2;
+
+  char buffer[200];
+  formatDispenseLog(result, buffer, sizeof(buffer));
+
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "linea_base=12.3 g"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "peso_final=no disponible"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "incremento=no disponible"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "reintentos=2"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "motivo=atasco no resuelto"));
+}
+
+void test_format_dispense_log_marks_baseline_unavailable_before_it_is_set(void) {
+  // RF-12: la dispensación se aborta antes de fijar la línea base.
+  DispenseResult result;
+  result.requestedGrams = 30.0f;
+  result.reason = DispenseReason::SENSOR_UNAVAILABLE;
+  result.baselineAvailable = false;
+  result.baselineGrams = 0.0f;
+  result.finalAvailable = false;
+  result.finalGrams = 0.0f;
+  result.incrementAvailable = false;
+  result.incrementGrams = 0.0f;
+  result.retryCount = 0;
+
+  char buffer[200];
+  formatDispenseLog(result, buffer, sizeof(buffer));
+
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "linea_base=no disponible"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "peso_final=no disponible"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "incremento=no disponible"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "reintentos=0"));
+  TEST_ASSERT_NOT_NULL(strstr(buffer, "motivo=sensor no disponible"));
+}
+
+void test_format_dispense_log_is_spanish_ascii_without_credentials(void) {
+  // RNF-5: español, sin emojis (solo ASCII imprimible) y sin credenciales.
+  const char *sensitiveWords[] = {"token",  "clave",   "password", "passwd",
+                                  "ssid",   "http",    "://",      "wifi",
+                                  "secret", "bearer",  "api_key"};
+  const DispenseReason reasons[] = {
+      DispenseReason::COMPLETED,      DispenseReason::NOT_REACHED,
+      DispenseReason::SENSOR_FAILURE, DispenseReason::STALL_UNRESOLVED,
+      DispenseReason::INVALID_CONFIG, DispenseReason::INVALID_AMOUNT,
+      DispenseReason::SENSOR_UNAVAILABLE};
+
+  for (unsigned i = 0; i < sizeof(reasons) / sizeof(reasons[0]); ++i) {
+    DispenseResult result;
+    result.requestedGrams = 50.0f;
+    result.reason = reasons[i];
+    result.baselineAvailable = i % 2 == 0;
+    result.baselineGrams = result.baselineAvailable ? 12.3f : 0.0f;
+    result.finalAvailable = i % 3 == 0;
+    result.finalGrams = result.finalAvailable ? 63.4f : 0.0f;
+    result.incrementAvailable = result.finalAvailable && result.baselineAvailable;
+    result.incrementGrams = result.incrementAvailable ? 51.1f : 0.0f;
+    result.retryCount = i;
+
+    char buffer[200];
+    formatDispenseLog(result, buffer, sizeof(buffer));
+
+    for (const char *cursor = buffer; *cursor != '\0'; ++cursor) {
+      const int byte = static_cast<unsigned char>(*cursor);
+      TEST_ASSERT_GREATER_OR_EQUAL_INT(0x20, byte);
+      TEST_ASSERT_LESS_THAN_INT(0x7F, byte);
+    }
+    for (unsigned j = 0; j < sizeof(sensitiveWords) / sizeof(sensitiveWords[0]);
+         ++j) {
+      TEST_ASSERT_NULL(strstr(buffer, sensitiveWords[j]));
+    }
+    TEST_ASSERT_NOT_NULL(strstr(buffer, "Despacho: "));
+    TEST_ASSERT_NOT_NULL(strstr(buffer, "motivo="));
+  }
+}
+
+void test_format_dispense_log_uses_spanish_reason_texts(void) {
+  TEST_ASSERT_EQUAL_STRING("objetivo alcanzado",
+                           dispenseReasonText(DispenseReason::COMPLETED));
+  TEST_ASSERT_EQUAL_STRING("objetivo no alcanzado",
+                           dispenseReasonText(DispenseReason::NOT_REACHED));
+  TEST_ASSERT_EQUAL_STRING("sensor no disponible",
+                           dispenseReasonText(DispenseReason::SENSOR_UNAVAILABLE));
+  TEST_ASSERT_EQUAL_STRING("fallo del sensor durante la dispensacion",
+                           dispenseReasonText(DispenseReason::SENSOR_FAILURE));
+  TEST_ASSERT_EQUAL_STRING("orden de dispensacion invalida",
+                           dispenseReasonText(DispenseReason::INVALID_AMOUNT));
+}
+
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_classify_order_reset_wifi_has_absolute_priority);
@@ -1127,5 +1826,48 @@ int main(int argc, char **argv) {
   RUN_TEST(test_verification_aborts_with_three_placeholder_readings);
   RUN_TEST(test_real_calibration_reaches_fifty_grams_target);
   RUN_TEST(test_real_calibration_get_real_increment_for_known_weight);
+  RUN_TEST(test_stall_thresholds_are_defined_once);
+  RUN_TEST(test_moving_median_absent_with_four_valid_readings);
+  RUN_TEST(test_moving_median_with_five_valid_readings);
+  RUN_TEST(test_moving_median_with_six_valid_readings_drops_the_oldest);
+  RUN_TEST(test_invalid_reading_does_not_enter_moving_median);
+  RUN_TEST(test_reset_moving_median_clears_the_window);
+  RUN_TEST(test_max_observed_ignores_isolated_peak_of_eight_grams);
+  RUN_TEST(test_max_observed_ignores_two_consecutive_peaks);
+  RUN_TEST(test_max_observed_rises_when_moving_median_rises);
+  RUN_TEST(test_max_observed_never_decreases);
+  RUN_TEST(test_stall_window_not_opened_during_grace);
+  RUN_TEST(test_stall_window_opens_when_grace_expires);
+  RUN_TEST(test_stall_window_opens_with_first_moving_median_after_grace);
+  RUN_TEST(test_stall_window_restarts_when_progress_reaches_two_grams);
+  RUN_TEST(test_stall_window_not_restarted_below_two_grams);
+  RUN_TEST(test_stall_window_restarted_with_progress_above_two_grams);
+  RUN_TEST(test_stall_window_expires_after_five_seconds);
+  RUN_TEST(test_stall_progress_is_negative_below_reference);
+  RUN_TEST(test_stall_not_declared_with_less_than_five_valid_readings_since_advance);
+  RUN_TEST(test_stall_declared_with_progress_below_two_grams_and_five_valid_readings);
+  RUN_TEST(test_stall_not_declared_during_grace);
+  RUN_TEST(test_stall_pending_cleared_when_progress_reaches_two_grams);
+  RUN_TEST(test_invalid_readings_never_declare_stall);
+  RUN_TEST(test_decide_stall_action_retries_with_available_retries_and_budget);
+  RUN_TEST(test_decide_stall_action_gives_up_without_remaining_retries);
+  RUN_TEST(test_decide_stall_action_gives_up_below_minimum_retry_budget);
+  RUN_TEST(test_decide_stall_action_retries_with_exact_minimum_budget);
+  RUN_TEST(test_decide_stall_action_combines_retry_counter_and_budget);
+  RUN_TEST(test_min_retry_budget_covers_reverse_pause_and_grace);
+  RUN_TEST(test_motor_budget_remaining_counts_down);
+  RUN_TEST(test_motor_budget_exhausted_at_thirty_seconds_not_before);
+  RUN_TEST(test_motor_budget_tolerates_millis_rollover);
+  RUN_TEST(test_budget_exhausted_reason_depends_on_pending_stall);
+  RUN_TEST(test_start_advance_does_not_count_retries);
+  RUN_TEST(test_resume_advance_after_retry_counts_retries_and_reopens_grace);
+  RUN_TEST(test_dispense_reason_text_for_unresolved_stall);
+  RUN_TEST(test_format_dispense_log_includes_zero_retries);
+  RUN_TEST(test_format_dispense_log_includes_retry_count);
+  RUN_TEST(test_format_dispense_log_includes_three_retries);
+  RUN_TEST(test_format_dispense_log_marks_final_and_increment_unavailable_without_readings);
+  RUN_TEST(test_format_dispense_log_marks_baseline_unavailable_before_it_is_set);
+  RUN_TEST(test_format_dispense_log_is_spanish_ascii_without_credentials);
+  RUN_TEST(test_format_dispense_log_uses_spanish_reason_texts);
   return UNITY_END();
 }

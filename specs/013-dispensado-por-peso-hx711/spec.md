@@ -1,6 +1,6 @@
 # Spec 013 — Dispensado por peso con celda de carga
 
-Estado: implementada (T1–T9; T10 pendiente de hardware)
+Estado: aprobada (T1–T9 y T11–T14 implementadas y revisadas); T15 (checklist físico de atasco) y T10 (checklist físico previo) pendientes.
 
 ## Contexto y objetivo
 El firmware del dispensador dispensa hoy una cantidad fija de tiempo: al recibir una
@@ -26,20 +26,34 @@ orden con `serve: true`, es decir, al entregar la orden y no al confirmar el pes
 dispensado. Esta spec reconoce esa diferencia entre stock descontado y peso entregado,
 pero no la concilia ni la corrige: queda fuera de alcance.
 
+Durante las pruebas físicas de la implementación se observó un problema nuevo: el
+servomotor se traba o se atasca con el alimento, porque la croqueta se cuña entre la
+hélice del tornillo sin fin, que es el elemento que empuja el alimento hacia la
+balanza, y el tubo que la contiene. El servomotor no dispone de realimentación de
+posición, de velocidad ni de corriente, así que el atasco no puede leerse del propio
+servo. Se detecta de forma indirecta con la misma celda de carga que ya forma parte de
+esta spec: si el servo avanza y el peso no progresa, el alimento no está avanzando. La
+resolución es mecánica y usa el mismo servo: un giro inverso corto que libera la
+croqueta cuñada, una pausa y la reanudación del avance, sin hardware adicional.
+
 El objetivo es que cada orden de dispensación entregue la cantidad solicitada, medida
 por peso, deteniendo el motor al alcanzarla, y que nunca se dispense a ciegas: si la
 celda no responde antes de iniciar, no se mueve el servo, y si falla de forma sostenida
-a mitad de la dispensación, el servo se detiene sin esperar el límite de giro. Todo
-ello con un límite máximo de 30 segundos de giro por si la celda falla o no hay
-alimento, y sin romper el aprovisionamiento BLE, la conexión WiFi ni la consulta
-periódica a la API.
+a mitad de la dispensación, el servo se detiene sin esperar el presupuesto de motor.
+Además, cuando el alimento se atasque, el sistema debe intentar desatascarlo por sí
+mismo antes de darse por vencido, para que un atasco puntual no deje la ración corta.
+Todo ello con un presupuesto máximo de 30 segundos de motor por si la celda falla, no
+hay alimento o el mecanismo se atasca, y sin romper el aprovisionamiento BLE, la
+conexión WiFi ni la consulta periódica a la API.
 
 ## Usuarios
 - **Dueño de mascota:** recibe una ración ajustada a la cantidad solicitada, sin
-  depender del tiempo de giro ni del tipo de alimento.
+  depender del tiempo de giro ni del tipo de alimento; si el tornillo sin fin se traba,
+  el dispensador lo resuelve por sí mismo en lugar de dejar la ración corta.
 - **Desarrollador / Ingeniero de hardware:** integra y calibra la celda de carga,
-  dispone de un registro serie con la línea base, el peso final y el motivo de
-  finalización para diagnosticar cada dispensación.
+  dispone de un registro serie con la línea base, el peso final, el motivo de
+  finalización y el número de reintentos para diagnosticar cada dispensación, incluidos
+  los atascos.
 
 ## Historias de usuario
 - HU-1. Como dueño de mascota, quiero que el dispensador entregue la cantidad de
@@ -48,31 +62,36 @@ periódica a la API.
   la cantidad pedida para no servir más comida de la necesaria.
 - HU-3. Como dueño de mascota, quiero que el sistema no dispense si el sensor de peso
   no funciona, para no servir una cantidad arbitraria.
-- HU-4. Como dueño de mascota, quiero que el giro del dispensador nunca dure más de 30
-  segundos, además de la ventana fija de 2 segundos de verificación previa del sensor,
-  para que un fallo no deje el motor girando indefinidamente; el ciclo completo no
-  supera los 32 segundos.
+- HU-4. Como dueño de mascota, quiero que el ciclo de motor del dispensador nunca dure
+  más de 30 segundos, incluidos los reintentos por atasco, además de la ventana fija de
+  2 segundos de verificación previa del sensor, para que un fallo no deje el motor
+  girando indefinidamente; el ciclo completo no supera los 32 segundos.
 - HU-5. Como desarrollador, quiero un registro serie con la línea base, el peso
   final, el incremento, la cantidad solicitada y el motivo de finalización para
   diagnosticar fallos.
 - HU-6. Como desarrollador, quiero ajustar la calibración con un factor configurable
   para adaptar la lectura de la celda al montaje sin comandos por puerto serie.
+- HU-7. Como dueño de mascota, quiero que el dispensador se desatasque solo cuando el
+  tornillo sin fin se traba, para que un atasco puntual no deje la ración corta.
+- HU-8. Como desarrollador, quiero saber en el registro serie si hubo atasco y cuántos
+  reintentos se ejecutaron, para distinguir un atasco de un depósito vacío o de un
+  fallo de calibración.
 
 ## Definiciones
 - **Cantidad solicitada:** valor del campo `amount` de la respuesta de la API,
   expresado en gramos.
 - **Ventana de verificación:** intervalo fijo de exactamente 2 segundos, previo al
-  giro y no reiniciable. La verificación se supera si dentro de la ventana se obtienen
+  avance y no reiniciable. La verificación se supera si dentro de la ventana se obtienen
   al menos 5 lecturas válidas y no hay 3 lecturas inválidas consecutivas; una lectura
   inválida no reinicia ni extiende la ventana.
 - **Línea base:** mediana de las lecturas válidas de la ventana de verificación, fijada
-  justo antes del giro. Si la dispensación se aborta antes de fijarla, se registra como
+  justo antes del avance. Si la dispensación se aborta antes de fijarla, se registra como
   no disponible.
 - **Mediana:** para un número impar de muestras, el valor central al ordenarlas; para un
   número par, el promedio de los dos valores centrales.
-- **Peso final:** última lectura válida en el instante de detener el servo; si hubo
-  fallo del sensor, la última lectura válida anterior al fallo; si no hubo ninguna
-  lectura válida durante el giro, se registra como no disponible.
+- **Peso final:** última lectura válida en el instante de la parada definitiva del
+  servo; si hubo fallo del sensor, la última lectura válida anterior al fallo; si no
+  hubo ninguna lectura válida durante el ciclo de motor, se registra como no disponible.
 - **Incremento de peso:** diferencia entre el peso final y la línea base. Si el peso
   final o la línea base no están disponibles, el incremento también se registra como no
   disponible.
@@ -99,9 +118,59 @@ periódica a la API.
 - **Orden inválida:** respuesta con `serve:true` y `amount` ausente, no numérico o
   negativo, y sin `reset_wifi:true`. No dispensa y registra una advertencia.
 - **Dispensación por peso:** ciclo compuesto por una ventana fija de verificación de 2
-  segundos y un giro de hasta 30 segundos; arranca el servo solo si la verificación se
-  supera, mide el incremento de peso de forma continua y detiene el servo al
-  alcanzar el objetivo o al cumplirse el límite de giro.
+  segundos y un ciclo de motor de hasta 30 segundos; arranca el servo solo si la
+  verificación se supera, mide el incremento de peso de forma continua, detiene el servo
+  al alcanzar el objetivo o al agotarse el presupuesto de motor y, si detecta un atasco
+  durante el avance, intenta resolverlo con retrocesos cortos antes de darse por vencida.
+- **Ciclo de motor:** intervalo que va desde el primer arranque del servomotor de una
+  dispensación hasta su parada definitiva. Incluye todos los avances, retrocesos y
+  pausas; no incluye la ventana de verificación.
+- **Presupuesto de motor:** 30 segundos contados desde el primer arranque del
+  servomotor. Lo consumen por igual el avance, el retroceso y la pausa. Es un tope de
+  seguridad, no un objetivo de duración.
+- **Avance:** giro del servomotor en el sentido de dispensado, que empuja el alimento
+  hacia la balanza.
+- **Retroceso:** giro del servomotor en sentido inverso durante 1,2 segundos, destinado
+  a liberar el alimento trabado entre la hélice del tornillo sin fin y el tubo.
+- **Pausa:** intervalo de 0,3 segundos con el servomotor detenido que sigue a cada
+  retroceso, antes de reanudar el avance.
+- **Reintento:** conjunto formado por un retroceso, su pausa y la reanudación del avance.
+  Se admiten como máximo 3 reintentos por dispensación. Un retroceso interrumpido por un
+  fallo del sensor o por agotamiento del presupuesto no cuenta como reintento, porque el
+  avance no llegó a reanudarse.
+- **Ventana de gracia:** 2 segundos contados desde cada arranque de avance, el inicial y
+  el de cada reintento, durante los cuales no se evalúa el atasco porque el alimento
+  todavía puede estar en tránsito hacia la balanza.
+- **Mediana móvil:** mediana de las 5 lecturas válidas más recientes del ciclo de motor,
+  recalculada tras cada lectura válida. No existe hasta que el ciclo acumula al menos 5
+  lecturas válidas.
+- **Máximo observado:** mayor valor de la mediana móvil registrado desde el primer
+  arranque del servomotor en la dispensación. Se actualiza con cada lectura válida que
+  produzca una mediana nueva, también durante el retroceso y la pausa; una lectura
+  individual atípica no lo eleva si no desplaza la mediana móvil.
+- **Progreso:** diferencia en gramos entre la mediana móvil actual y el máximo observado
+  vigente como referencia de la ventana de estancamiento en curso. Es negativo cuando el
+  peso actual está por debajo de esa referencia. La referencia se fija al abrir la ventana
+  y se renueva cada vez que la ventana se reinicia.
+- **Ventana de estancamiento:** 5 segundos contados desde que la ventana se abre o se
+  reinicia. Se abre al terminar la ventana de gracia de 2 segundos o, si en ese instante
+  todavía no existe la mediana móvil, en el momento en que exista. Se reinicia en el
+  instante en que el progreso es igual o mayor que 2 gramos, y en ese mismo instante se
+  toma como nueva referencia el máximo observado vigente. Si al terminar los 5 segundos el
+  progreso es menor que 2 gramos y hay al menos 5 lecturas válidas desde el último arranque
+  de avance, se declara atasco;
+  si hay menos de 5 lecturas válidas, no se declara y la ventana se reinicia.
+- **Atasco:** condición en la que el servomotor avanza y el peso no progresa hacia la
+  balanza, declarada al terminar una ventana de estancamiento con al menos 5 lecturas
+  válidas desde el último arranque de avance.
+- **Atasco pendiente:** atasco declarado que todavía no ha sido seguido de un progreso
+  igual o mayor que 2 gramos. Un reintento resuelve el atasco cuando, después de la
+  reanudación del avance, se registra ese progreso antes de una nueva declaración de
+  atasco.
+- **Atasco no resuelto:** atasco pendiente que no puede intentar resolverse porque no
+  quedan reintentos o porque el presupuesto restante no alcanza para el retroceso, su
+  pausa y la ventana de gracia. También es el motivo registrado cuando el presupuesto de
+  motor se agota con un atasco pendiente.
 
 ## Requisitos funcionales
 - RF-1: CUANDO la respuesta de la API indique `serve: true` y `amount` sea numérico y
@@ -117,29 +186,35 @@ periódica a la API.
   fija de verificación de exactamente 2 segundos, no reiniciable; la verificación se
   supera si dentro de la ventana se obtienen al menos 5 lecturas válidas y no hay 3
   lecturas inválidas consecutivas, y en ese caso fijará la línea base como la mediana
-  de las lecturas válidas de esa ventana justo antes de poner el servo en giro.
+  de las lecturas válidas de esa ventana justo antes de poner el servo en avance.
 - RF-4: SI al terminar la ventana fija de 2 segundos no se cumple la condición de RF-3,
   ENTONCES EL SISTEMA abortará la dispensación sin mover el servo, mantendrá el servo
   detenido y registrará el motivo «sensor no disponible»; 3 lecturas inválidas
   consecutivas dentro de la ventana la dan por no superada, y la ventana no se reinicia
   ni se extiende.
 - RF-5: CUANDO la celda entregue lecturas válidas y la línea base esté tomada, EL
-  SISTEMA pondrá el servomotor en giro continuo para dispensar alimento.
-- RF-6: MIENTRAS el servomotor esté girando, EL SISTEMA medirá el peso del alimento
-  dispensado de forma continua y calculará el incremento de peso respecto a la línea
-  base.
+  SISTEMA pondrá el servomotor en avance para dispensar alimento.
+- RF-6: MIENTRAS el ciclo de motor esté activo, EL SISTEMA medirá el peso del alimento
+  dispensado de forma continua, también durante el retroceso y la pausa, y calculará el
+  incremento de peso respecto a la línea base.
 - RF-7: CUANDO el incremento de peso sea igual o mayor que la cantidad solicitada en
-  gramos en al menos 3 lecturas consecutivas, EL SISTEMA detendrá el servomotor y dará
-  la dispensación por completada.
-- RF-8: SI transcurren 30 segundos desde el inicio del giro sin que se alcance el
-  objetivo, ENTONCES EL SISTEMA detendrá el servomotor y registrará el resultado
-  como objetivo no alcanzado, indicando el incremento de peso logrado.
-- RF-9: SI durante el giro se producen 3 lecturas inválidas consecutivas, ENTONCES EL
-  SISTEMA detendrá el servomotor sin esperar a que se cumpla el límite de 30 segundos,
-  dentro de 1 segundo desde la primera de esas 3 lecturas, y registrará el motivo
-  «fallo del sensor durante la dispensación»; con el periodo de muestreo de RNF-1 y el
-  plazo de respuesta de 100 ms, 3 lecturas inválidas consecutivas se detectan en menos
-  de 1 segundo. Una lectura inválida aislada no detiene el ciclo.
+  gramos en al menos 3 lecturas consecutivas, en cualquier instante del ciclo de motor,
+  incluidos el retroceso y la pausa, EL SISTEMA detendrá el servomotor y dará la
+  dispensación por completada; esta comprobación tiene prioridad sobre la declaración de
+  atasco de RF-14.
+- RF-8: SI se agota el presupuesto de motor de 30 segundos contados desde el primer
+  arranque del servomotor, incluidos avances, retrocesos y pausas, sin que se alcance el
+  objetivo, ENTONCES EL SISTEMA detendrá el servomotor y registrará el resultado como
+  objetivo no alcanzado, indicando el incremento de peso logrado, salvo que en ese
+  momento haya un atasco pendiente, en cuyo caso aplica RF-16 y el motivo registrado es
+  «atasco no resuelto».
+- RF-9: SI durante el ciclo de motor se producen 3 lecturas inválidas consecutivas,
+  ENTONCES EL SISTEMA detendrá el servomotor sin esperar a que se agote el presupuesto
+  de motor, dentro de 1 segundo desde la primera de esas 3 lecturas, no ejecutará ningún
+  retroceso ni reanudará el avance, y registrará el motivo «fallo del sensor durante la
+  dispensación»; con el periodo de muestreo de RNF-1 y el plazo de respuesta de 100 ms,
+  3 lecturas inválidas consecutivas se detectan en menos de 1 segundo. Una lectura
+  inválida aislada no detiene el ciclo.
 - RF-10: SI la respuesta de la API indica `reset_wifi: true`, ENTONCES EL SISTEMA
   borrará las credenciales almacenadas y reiniciará en modo de aprovisionamiento,
   sin mover el servomotor y con prioridad sobre `serve` y `amount`, tanto si `serve` es
@@ -149,13 +224,18 @@ periódica a la API.
   celda en gramos; no ofrecerá comandos de calibración por el puerto serie. SI el
   factor de calibración no es positivo, ENTONCES EL SISTEMA no dispensará y registrará
   un error de configuración.
-- RF-12: CUANDO finalice una dispensación, sea por objetivo alcanzado, por límite de
-  30 segundos, por fallo del sensor o por aborto en la verificación previa, EL SISTEMA
-  registrará por el puerto serie la línea base, el peso final medido, el incremento de
-  peso, la cantidad solicitada y el motivo de finalización; si no hubo ninguna lectura
-  válida durante el giro, el peso final y el incremento se registrarán como no
-  disponibles; si la dispensación se aborta antes de fijar la línea base, la línea base
-  se registrará como no disponible, igual que el peso final y el incremento.
+- RF-12: CUANDO finalice una dispensación, sea por objetivo alcanzado, por agotamiento
+  del presupuesto de motor, por atasco no resuelto, por fallo del sensor o por aborto en
+  la verificación previa, EL SISTEMA registrará por el puerto serie la línea base, el
+  peso final medido, el incremento de peso, la cantidad solicitada, el número de
+  reintentos ejecutados en el ciclo con el formato `reintentos=N` y el motivo de
+  finalización; si no hubo ninguna lectura válida durante el ciclo de motor, el peso
+  final y el incremento se registrarán como no disponibles; si la dispensación se aborta
+  antes de fijar la línea base, la línea base se registrará como no disponible, igual
+  que el peso final y el incremento; el número de reintentos se registra siempre, con 0
+  cuando no hubo ninguno, y un retroceso interrumpido por un fallo del sensor o por
+  agotamiento del presupuesto no se cuenta como reintento porque el avance no llegó a
+  reanudarse.
 - RF-13: EL SISTEMA conservará sin regresiones el aprovisionamiento BLE, la conexión
   y reconexión WiFi, la validación de conectividad con el servidor, el reseteo de
   credenciales y la consulta periódica a la API en el intervalo ya definido; tras
@@ -163,48 +243,100 @@ periódica a la API.
   reiniciando su temporizador, de modo que la siguiente consulta se realizará 20
   segundos después de finalizar el ciclo y no de inmediato, sin reiniciar el
   dispositivo.
+- RF-14: MIENTRAS el servomotor esté en avance, EL SISTEMA evaluará el progreso en cada
+  lectura válida como la diferencia entre la mediana móvil de las últimas 5 lecturas
+  válidas y el máximo observado vigente como referencia de la ventana de estancamiento;
+  SI el progreso es igual o mayor que 2 gramos, ENTONCES EL SISTEMA reiniciará la ventana
+  de estancamiento en ese mismo instante y tomará como nueva referencia el máximo
+  observado vigente; SI al terminar una ventana de estancamiento de 5 segundos el
+  progreso es menor que 2 gramos y hay al menos 5 lecturas válidas desde el último
+  arranque de avance, ENTONCES EL SISTEMA declarará un atasco. La ventana se abre al
+  terminar la ventana de gracia de 2 segundos o, si en ese instante todavía no existe la
+  mediana móvil, en el momento en que exista; la evaluación no se realiza durante la
+  ventana de gracia, ni durante el retroceso, ni durante la pausa.
+- RF-15: CUANDO se declare un atasco y queden reintentos y presupuesto suficiente, EL
+  SISTEMA ejecutará un retroceso de 1,2 segundos, una pausa de 0,3 segundos con el
+  servomotor detenido y reanudará el avance; el retroceso y la pausa consumen el
+  presupuesto de motor igual que el avance; el retroceso no modifica la línea base ni el
+  criterio de objetivo de RF-7, de modo que un atasco resuelto no impide alcanzar el
+  objetivo y el ciclo continúa hasta alcanzarlo o hasta agotar el presupuesto. El máximo
+  de 3 reintentos por dispensación es una red de seguridad: con los umbrales aprobados el
+  presupuesto de 30 segundos se agota antes de que se pueda declarar un cuarto atasco, por
+  lo que el límite efectivo es el presupuesto de motor y no el contador de reintentos.
+- RF-16: SI se declara un atasco y no quedan reintentos disponibles, o si el presupuesto
+  restante no alcanza para el retroceso, su pausa y la ventana de gracia, es decir, si es
+  menor que 3,5 segundos, ENTONCES EL SISTEMA detendrá el servomotor, no ejecutará ningún
+  retroceso adicional, no forzará más el giro y registrará el motivo «atasco no resuelto»
+  junto con el incremento de peso logrado; lo mismo ocurre si el presupuesto de motor se
+  agota con un atasco pendiente. En la práctica, con los umbrales aprobados el presupuesto
+  se agota antes de que se pueda declarar un cuarto atasco, de modo que esta condición
+  suele cumplirse por presupuesto y no por contador de reintentos.
+- RF-17: EL SISTEMA no ejecutará ningún retroceso sin medición fiable ni sin orden
+  válida: ante 3 lecturas inválidas consecutivas aplica RF-9 y detiene el ciclo sin
+  retroceso, y ante una orden inválida aplica RF-2 y no mueve el servomotor; además, un
+  atasco solo se declara con al menos 5 lecturas válidas desde el último arranque de
+  avance, de modo que la falta de lecturas nunca se interpreta como atasco.
 
 ## Requisitos no funcionales
 - RNF-1: Mientras la celda esté operativa, el sistema aplicará un periodo de muestreo
   máximo de 200 milisegundos, es decir, un mínimo efectivo de 5 lecturas por segundo,
-  tanto durante la ventana de verificación como durante el giro. La detección del
-  objetivo no se basa en una única lectura de 200 milisegundos: exige 3 lecturas
-  consecutivas (RF-7). En la ventana de 2 s, a 5 Hz se obtienen aproximadamente 10
-  lecturas, de las que se exigen al menos 5 válidas.
+  tanto durante la ventana de verificación como durante todo el ciclo de motor, incluidos
+  el retroceso y la pausa. La detección del objetivo no se basa en una única lectura de
+  200 milisegundos: exige 3 lecturas consecutivas (RF-7). En la ventana de 2 s, a 5 Hz
+  se obtienen aproximadamente 10 lecturas, de las que se exigen al menos 5 válidas.
 - RNF-2: El objetivo se considerará alcanzado solo cuando el incremento de peso sea
   igual o mayor que la cantidad solicitada en al menos 3 lecturas consecutivas, para
   no detener el servo por un pico de ruido o vibración.
-- RNF-3: El giro del servomotor no superará en ningún caso los 30 segundos por
-  dispensación; la ventana fija de verificación de 2 segundos es independiente y no se
-  descuenta de ese límite, por lo que el ciclo completo no supera los 32 segundos, sin
-  excepciones.
+- RNF-3: El ciclo de motor del servomotor no superará en ningún caso los 30 segundos por
+  dispensación, contados desde el primer arranque del servo e incluyendo avances,
+  retrocesos y pausas; la ventana fija de verificación de 2 segundos es independiente y
+  no se descuenta de ese límite, por lo que el ciclo completo no supera los 32 segundos,
+  sin excepciones.
 - RNF-4: No se agregarán dependencias distintas de la necesaria para leer la celda de
-  carga; el resto del firmware y su comportamiento actual se mantienen, con dos
-  excepciones explícitas: (a) el dispensado por tiempo de 10 segundos (RF-07 de la spec
-  008) queda reemplazado por el dispensado por peso descrito en esta spec; (b) el
-  temporizador de la consulta periódica se reinicia al terminar el ciclo, de modo que la
-  siguiente consulta ocurre 20 segundos después del fin y no 20 segundos después de la
-  consulta anterior.
+  carga; la detección y la resolución de atascos no añaden ninguna, porque usan el mismo
+  servomotor y la misma celda ya previstos; el resto del firmware y su comportamiento
+  actual se mantienen, con dos excepciones explícitas: (a) el dispensado por tiempo de
+  10 segundos (RF-07 de la spec 008) queda reemplazado por el dispensado por peso
+  descrito en esta spec; (b) el temporizador de la consulta periódica se reinicia al
+  terminar el ciclo, de modo que la siguiente consulta ocurre 20 segundos después del
+  fin y no 20 segundos después de la consulta anterior.
 - RNF-5: Los mensajes de registro serie estarán en español, sin emojis, y no
   incluirán credenciales ni datos sensibles.
-- RNF-6: La lógica de decisión de inicio, parada y tiempo límite será verificable con
-  pruebas automatizadas sobre lógica pura, sin requerir hardware; la exactitud del
-  pesaje se validará con una prueba física.
+- RNF-6: La lógica de decisión de inicio, parada, tiempo límite, detección de atasco y
+  resolución de atasco será verificable con pruebas automatizadas sobre lógica pura, sin
+  requerir hardware; la exactitud del pesaje y el desatasco real del mecanismo se
+  validarán con pruebas físicas.
+- RNF-7: Las diez constantes de umbral de la detección y la resolución de atascos
+  —ventana de gracia de 2 segundos, ventana de estancamiento de 5 segundos, progreso
+  mínimo de 2 gramos, tamaño de la mediana móvil de 5 lecturas válidas, mínimo de 5
+  lecturas válidas desde el último arranque de avance para declarar atasco, retroceso de
+  1,2 segundos, pausa de 0,3 segundos, máximo de 3 reintentos, presupuesto de motor de
+  30 segundos y presupuesto mínimo de reintento de 3,5 segundos— serán
+  constantes configurables del firmware, documentadas en español y definidas en un único
+  lugar, de modo que ajustarlas no requiera cambiar la lógica de decisión.
 
 ## Casos límite
-- Depósito vacío o alimento que no fluye: no se alcanza el objetivo; a los 30 s de giro
-  se detiene el servo y se registra «objetivo no alcanzado» con incremento cercano a
-  cero.
+- Depósito vacío o alimento que no fluye: el peso no progresa, por lo que la condición
+  es indistinguible de un atasco con la única medición disponible; se declaran atascos y
+  se ejecutan reintentos, y al agotarse los reintentos o el presupuesto se detiene el
+  servo y se registra «atasco no resuelto» con incremento cercano a cero. Distinguirlo
+  de un atasco real requeriría sensores que están fuera de alcance.
 - Ruido o vibración del motor que produce lecturas inestables: no se detiene el servo
-  hasta que el objetivo se sostiene en lecturas consecutivas; el límite de 30 s de
-  giro sigue vigente.
-- Cantidad solicitada mayor de la que el mecanismo puede entregar en 30 s de giro: se
-  detiene por tiempo, se registra el incremento parcial logrado y la dispensación se da
-  por no completada.
-- Alimento en caída después de detener el servo: el peso final puede superar el
-  objetivo; el registro serie permite detectar el sobrepeso.
-- Ciclo completo: 2 s de ventana fija de verificación más 30 s de giro, es decir, 32 s
-  como máximo; la verificación no consume el límite de giro.
+  hasta que el objetivo se sostiene en lecturas consecutivas; como el máximo observado
+  es el mayor de la mediana móvil de las últimas 5 lecturas válidas, un pico de ruido
+  aislado, o incluso dos, no eleva el máximo ni provoca un falso atasco, y el
+  presupuesto de motor de 30 s sigue vigente.
+- Cantidad solicitada mayor de la que el mecanismo puede entregar en el presupuesto de
+  motor de 30 segundos: se detiene por tiempo, se registra el incremento parcial logrado
+  y la dispensación se da por no completada.
+- Alimento en caída después de detener el servo: el peso físico sobre la bandeja, una vez
+  se asienta el alimento que quedaba en el tubo, puede superar el objetivo; el peso final
+  registrado es el de la parada definitiva del servo y el registro serie no mide ese
+  sobrepeso posterior. Ese sobrepeso se admite hasta el 10 % en la prueba física de
+  exactitud.
+- Ciclo completo: 2 s de ventana fija de verificación más 30 s de presupuesto de motor,
+  es decir, 32 s como máximo; el presupuesto incluye los retrocesos y las pausas, y la
+  verificación no consume ese límite.
 - Celda desconectada o sin respuesta al arranque: la ventana fija de 2 s no se supera,
   no se mueve el servo y se registra «sensor no disponible»; la línea base, el peso
   final y el incremento se registran como no disponibles.
@@ -216,24 +348,79 @@ periódica a la API.
   el mismo criterio `>= amount`; el objetivo puede alcanzarse desde la primera lectura,
   pero la parada se confirma con 3 lecturas consecutivas (RF-7).
 - Incremento de peso negativo por bandeja retirada o mascota comiendo: no cuenta para el
-  objetivo y el ciclo continúa hasta alcanzarlo o hasta el límite de 30 s de giro.
-- Línea base tan alta que la línea base más la cantidad solicitada supera los 5000 g: el
-  objetivo no puede alcanzarse dentro del rango válido de medición y el ciclo termina,
-  como máximo, por el límite de 30 s de giro; si la celda satura antes, aplica RF-9.
+  objetivo; como el progreso se mide contra el máximo observado, la bajada se interpreta
+  como estancamiento y puede declarar un atasco y un reintento, y el ciclo continúa hasta
+  alcanzar el objetivo o agotar el presupuesto de motor. El retroceso no retira alimento
+  de la bandeja, por lo que no produce dispensación negativa.
+- Línea base alta: si la línea base más la cantidad solicitada supera los 5000 g y las
+  lecturas del ciclo salen del intervalo válido 0–5000 g o la celda satura, aplica RF-9 y
+  el motivo es «fallo del sensor durante la dispensación»; si la propia línea base supera
+  los 5000 g, la verificación no se supera y el motivo es «sensor no disponible», sin
+  mover el servo. Mientras el alimento fluya y las lecturas se mantengan dentro del rango
+  válido, el peso progresa y no se declara atasco, pero el objetivo sigue siendo
+  inalcanzable por rango de medición y el ciclo termina por agotamiento del presupuesto de
+  motor con «objetivo no alcanzado».
 - Factor de calibración no positivo: error de configuración; no se dispensa y se
   registra.
-- Celda que falla a mitad de la dispensación: 3 lecturas inválidas consecutivas
-  detienen el servo dentro de 1 s desde la primera, sin esperar los 30 s, y se registra
-  el motivo.
-- Lectura inválida aislada durante el giro: no detiene el ciclo; solo 3 lecturas
-  inválidas consecutivas se consideran fallo del sensor.
-- Ninguna lectura válida durante el giro (caso defensivo): el peso final y el
+- Celda que falla a mitad de la dispensación: 3 lecturas inválidas consecutivas detienen
+  el servo dentro de 1 s desde la primera, sin esperar el presupuesto de motor, y se
+  registra el motivo. Si el fallo ocurre durante un retroceso o una pausa, tampoco se
+  reanuda el avance ni se ejecuta un retroceso adicional.
+- Lectura inválida aislada durante el ciclo de motor: no detiene el ciclo; solo 3
+  lecturas inválidas consecutivas se consideran fallo del sensor.
+- Ninguna lectura válida durante el ciclo de motor (caso defensivo): el peso final y el
   incremento se registran como no disponibles; la línea base de la verificación, la
-  cantidad solicitada y el motivo sí se registran.
+  cantidad solicitada, los reintentos y el motivo sí se registran.
+- Atasco en el primer segundo de avance: la ventana de gracia de 2 s impide declararlo
+  antes de los 2 s, de modo que la primera declaración posible ocurre a los 7 s del
+  arranque, es decir, 2 s de gracia más 5 s de estancamiento.
+- Atasco tras un reintento: cada reanudación del avance abre una ventana de gracia de 2 s
+  y una ventana de estancamiento nuevas, sin heredar los contadores anteriores.
+- Ventana sin mediana móvil al terminar la gracia: con lecturas inválidas alternas que no
+  llegan a disparar RF-9 y sin 5 lecturas válidas al terminar los 2 s de gracia, no se
+  declara atasco; la ventana de estancamiento se abre en el instante en que existe la
+  primera mediana móvil.
+- Atasco repetido: con los umbrales aprobados el presupuesto de motor de 30 s se agota
+  antes de que se pueda declarar un cuarto atasco, de modo que el tope de 3 reintentos es
+  una red de seguridad que normalmente no llega a activarse; si el presupuesto se agota
+  con un atasco pendiente, o si se declara un atasco sin reintentos disponibles, aplica
+  RF-16 y el motivo es «atasco no resuelto»; si el presupuesto se agota sin atasco
+  pendiente, el motivo es «objetivo no alcanzado».
+- Objetivo alcanzado durante la ventana de gracia: 3 lecturas consecutivas iguales o
+  mayores que el objetivo detienen el servo con «objetivo alcanzado» y sin retroceso,
+  aunque el progreso sea menor que 2 gramos; RF-7 tiene prioridad sobre RF-14.
+- Atasco justo al alcanzar el objetivo: si en la misma muestra se cumplen el objetivo y
+  el final de la ventana de estancamiento, prevalece el objetivo y no se ejecuta
+  retroceso.
+- Fallo de sensor durante el retroceso o la pausa: 3 lecturas inválidas consecutivas
+  detienen el servo dentro de 1 s desde la primera, no se ejecuta ningún retroceso
+  adicional y no se reanuda el avance; el motivo es «fallo del sensor durante la
+  dispensación».
+- Presupuesto insuficiente para el reintento: si al declararse el atasco el presupuesto
+  restante no alcanza para el retroceso, su pausa y la ventana de gracia, es decir, es
+  menor que 3,5 segundos, no se inicia el retroceso, el servo se detiene y se registra
+  «atasco no resuelto».
+- Presupuesto de motor agotado sin atasco pendiente: el motivo es «objetivo no
+  alcanzado», no «atasco no resuelto».
+- Cantidad muy pequeña alcanzada antes de la ventana de gracia: si el objetivo se cumple
+  en 3 lecturas consecutivas antes de los 2 s, la dispensación termina con «objetivo
+  alcanzado» y sin evaluar atascos.
+- Cantidad muy pequeña con flujo lento: con cantidades pequeñas y un flujo inferior a
+  0,4 g/s, el umbral de 2 g en 5 s puede declarar un atasco antes de alcanzar el objetivo;
+  el reintento no impide alcanzarlo, el registro muestra `reintentos` mayor que 0 y el
+  umbral es configurable (RNF-7).
+- Atasco con el depósito lleno y la croqueta cuñada: el retroceso de 1,2 s libera la
+  hélice, la pausa de 0,3 s deja caer el alimento suelto y la reanudación del avance
+  permite alcanzar el objetivo; el ciclo no se da por fallido.
+- Retroceso sin dispensación negativa: el giro inverso devuelve la hélice pero no retira
+  el alimento ya depositado en la bandeja; el incremento no disminuye por efecto del
+  retroceso, y una disminución solo puede provenir de la celda, es decir, de la mascota
+  o de la bandeja.
 - `serve: false` o `amount` igual a cero sin `reset_wifi:true`: reposo normal del
   backend; no se dispensa, no se mueve el servo y no se registra error.
 - `serve: true` con `amount` ausente, no numérico o negativo: no se dispensa y se
-  registra una advertencia de orden de dispensación inválida.
+  registra una advertencia de orden de dispensación inválida; tampoco se ejecuta ningún
+  retroceso.
 - `serve: true` y `reset_wifi: true` en la misma respuesta: prevalece el reseteo de
   WiFi y el servo no se mueve.
 - `reset_wifi: true` con `serve: false` o `amount` igual a cero, que es el payload real
@@ -256,6 +443,17 @@ periódica a la API.
 - Recuperación o reanudación de una dispensación interrumpida por reinicio o corte de
   energía.
 - Alertas en la aplicación móvil sobre fallos o peso parcial de una dispensación.
+- Realimentación del servomotor (encoder, sensor de corriente o de final de carrera) o
+  cualquier sensor nuevo para detectar el atasco: el servomotor no la tiene y la
+  detección se hace con la celda ya integrada.
+- Rediseño mecánico del tornillo sin fin, del tubo o del acoplamiento para evitar los
+  atascos.
+- Distinguir un depósito vacío de un atasco real mediante sensores de nivel o de
+  presencia de alimento.
+- Notificar el atasco al backend o a la aplicación móvil, y cualquier cambio en su
+  contrato o en su interfaz.
+- Ajuste automático o aprendizaje de los umbrales de detección y resolución de atascos.
+- Forzar el motor con giros alternos más allá de los 3 reintentos previstos.
 
 ## Criterios de finalización
 - `pio run` compila el firmware sin errores.
@@ -274,13 +472,18 @@ periódica a la API.
   que 3 lecturas inválidas consecutivas durante la verificación la dan por no superada
   sin reiniciarla.
 - RF-5, RF-6 y RF-7: prueba automatizada del arranque tras la verificación, del cálculo
-  del incremento de peso y de la parada por objetivo sostenido en 3 lecturas
-  consecutivas.
-- RF-8: prueba automatizada de que a los 30 s de giro se detiene el servo y se registra
-  «objetivo no alcanzado».
+  del incremento de peso, del pesaje continuo durante avance, retroceso y pausa, de la
+  parada por objetivo sostenido en 3 lecturas consecutivas y de la prioridad del
+  objetivo sobre la declaración de atasco en la misma muestra.
+- RNF-2: prueba automatizada de que una sola lectura por encima del objetivo no detiene el
+  servo y de que la parada exige 3 lecturas consecutivas iguales o mayores que el objetivo.
+- RF-8: prueba automatizada de que al agotarse el presupuesto de motor se detiene el
+  servo y se registra «objetivo no alcanzado» cuando no hay atasco pendiente, y «atasco
+  no resuelto» cuando lo hay.
 - RF-9: prueba automatizada de que 3 lecturas inválidas consecutivas detienen el servo
-  dentro de 1 s desde la primera, sin esperar los 30 s, y de que una lectura inválida
-  aislada no detiene el ciclo.
+  dentro de 1 s desde la primera, sin esperar el presupuesto de motor, de que una
+  lectura inválida aislada no detiene el ciclo y de que no se ejecuta ningún retroceso
+  tras el fallo.
 - RF-10: prueba automatizada de que `reset_wifi:true` prevalece sobre `serve:true` y el
   servo no se mueve, y de que `reset_wifi:true` con `serve:false` o `amount` igual a
   cero también reinicia las credenciales sin mover el servo.
@@ -288,28 +491,83 @@ periódica a la API.
   calibración se convierte en gramos, y de que un factor no positivo no dispensa y
   registra el error de configuración.
 - RF-12: prueba automatizada de que el registro incluye línea base, peso final,
-  incremento, cantidad solicitada y motivo; de que peso final e incremento se registran
-  como no disponibles cuando no hubo ninguna lectura válida durante el giro; y de que la
-  línea base se registra como no disponible si la dispensación se aborta antes de
-  fijarla.
+  incremento, cantidad solicitada, `reintentos=N` y motivo; de que `reintentos` vale 0,
+  1 y 3 según el ciclo; de que un retroceso interrumpido por un fallo del sensor o por
+  agotamiento del presupuesto no incrementa `reintentos`; de que peso final e incremento
+  se registran como no disponibles cuando no hubo ninguna lectura válida durante el ciclo
+  de motor; y de que la línea base se registra como no disponible si la dispensación se
+  aborta antes de fijarla.
 - RF-13: verificación de no regresión de aprovisionamiento BLE, conexión y reconexión
   WiFi, validación de conectividad con el servidor, reseteo de credenciales y consulta
   periódica mediante un checklist manual reproducible o las pruebas existentes de esas
   funciones; prueba automatizada de que, tras finalizar el ciclo, la siguiente consulta
   ocurre 20 s después del fin y no 20 s después de la consulta anterior.
-- `pio test -e native` pasa en verde con las pruebas de la lógica de decisión de
-  inicio, parada por objetivo, parada por tiempo y parada por fallo del sensor.
+- RF-14: prueba automatizada de que no se declara atasco durante la ventana de gracia de
+  2 s; de que un progreso igual o mayor que 2 g reinicia la ventana en ese mismo instante y
+  renueva la referencia, de modo que un flujo continuo no declara atasco; de que sí se
+  declara con progreso menor que 2 g al terminar los 5 s; de que no se declara con menos
+  de 5 lecturas válidas; de que la ventana se abre al existir la primera mediana móvil
+  cuando al terminar la gracia todavía no existía; de que un pico aislado de ruido hacia
+  arriba no eleva el máximo observado porque la mediana móvil lo descarta; y de que la
+  evaluación no ocurre durante el retroceso ni la pausa.
+- Detección sin falso atasco: prueba automatizada con un perfil de flujo realista por
+  encima de 0,4 g/s, es decir, por encima del umbral de 2 g cada 5 s, que no declara
+  ningún atasco y termina con «objetivo alcanzado» y `reintentos=0`.
+- RF-15: prueba automatizada sobre lógica pura, inyectando el contador de reintentos y el
+  presupuesto restante, de que con presupuesto suficiente y reintentos disponibles se
+  ejecuta la secuencia retroceso de 1,2 s, pausa de 0,3 s y reanudación del avance, de que
+  retroceso y pausa descuentan del presupuesto de motor, de que un atasco resuelto no
+  impide alcanzar el objetivo y de que el contador de reintentos es una red de seguridad
+  que no sustituye al presupuesto.
+- RF-16: prueba automatizada sobre lógica pura, inyectando el contador de reintentos
+  agotado y el presupuesto restante, de que con 0 reintentos disponibles, o con menos de
+  3,5 s de presupuesto, el servo se detiene sin ejecutar otro retroceso y se registra
+  «atasco no resuelto» con el incremento logrado; no se verifica de extremo a extremo.
+- RF-17: prueba de integración sobre lógica pura y servicio, con un servo simulado, de que
+  no se invoca el retroceso cuando el ciclo termina por `SENSOR_FAILURE` ni cuando la
+  orden es inválida, y de que la falta de lecturas nunca se interpreta como atasco. No
+  duplica los criterios de RF-2 ni de RF-9: aquellos verifican la clasificación de la
+  orden y la parada por fallo del sensor, este verifica la ausencia de la acción de
+  retroceso.
+- RNF-1: revisión de código del bucle del servicio, verificando que el periodo de 200 ms
+  se impone con vencimientos absolutos y no con esperas relativas, tanto en la verificación
+  como en el ciclo de motor, incluidos retroceso y pausa; el ciclo puro cuenta además con
+  una prueba nativa del periodo, con reloj virtual, que comprueba que entre lecturas
+  consecutivas no pasan más de 200 ms en las tres fases, y su cumplimiento efectivo sobre
+  el hardware se confirma con la prueba física de frecuencia.
+- RNF-3: prueba automatizada de que la suma de avances, retrocesos y pausas nunca supera
+  30 s y de que el ciclo completo no supera 32 s, con independencia del número de
+  reintentos.
+- RNF-7: revisión de que las diez constantes de umbral están documentadas en
+  español, definidas en un único lugar y consumidas por la lógica sin valores duplicados.
+- `pio test -e native` pasa en verde con las pruebas de la lógica de decisión de inicio,
+  parada por objetivo, parada por tiempo, parada por fallo del sensor, detección de
+  atasco y resolución de atasco.
 - Prueba física con un peso patrón: con una cantidad solicitada de 50 g, el incremento
   de peso medido está entre 50 g y 55 g, es decir, con un sobrepeso máximo del 10 %.
-- Prueba física de frecuencia: durante la ventana de verificación y el giro se observa
-  un periodo de muestreo máximo de 200 ms, es decir, al menos 5 lecturas por segundo de
-  forma efectiva.
+- Prueba física de frecuencia: durante la ventana de verificación y el ciclo de motor se
+  observa un periodo de muestreo máximo de 200 ms, es decir, al menos 5 lecturas por
+  segundo de forma efectiva.
 - Prueba física de fallo: con el módulo HX711 desconectado del ESP32 (DT/SCK;
   idealmente también VCC/GND) al arranque el servo no se mueve; desconectando el
   módulo a mitad de la dispensación el servo se detiene antes de los 30 s, dentro de
   1 s desde la primera de las 3 lecturas inválidas consecutivas. Desconectar solo la
   celda con el módulo alimentado puede dar lecturas plausibles y no es una prueba
   determinista.
+- Prueba física de atasco inducido: con el servo en avance, bloquear la hélice del
+  tornillo sin fin o introducir una croqueta cuñada; se observa el retroceso de 1,2 s, la
+  pausa de 0,3 s y la reanudación del avance, y si el bloqueo persiste el ciclo termina
+  con «atasco no resuelto», el servo queda detenido y el registro muestra el incremento
+  logrado y el número de reintentos ejecutados. Se compara el peso de la bandeja antes y
+  después del retroceso para comprobar que no disminuye por efecto del giro inverso.
+- Prueba física de atasco resuelto: liberando el bloqueo durante un reintento, la
+  dispensación alcanza el objetivo, el motivo registrado es «objetivo alcanzado» y
+  `reintentos` es mayor que 0.
+- Prueba física de dispensación normal sin falso atasco: dispensación con alimento real y
+  sin bloqueo inducido; el motivo registrado es «objetivo alcanzado» y `reintentos=0`, es
+  decir, el umbral de 2 g en 5 s no declara un atasco en un flujo normal.
+- No regresión: las pruebas nativas existentes siguen en verde y las comprobaciones
+  físicas previas de exactitud, frecuencia y fallo de sensor siguen cumpliéndose.
 - RNF-4: checklist manual reproducible de no regresión que cubra aprovisionamiento BLE,
   conexión y reconexión WiFi, validación de conectividad con el servidor, reseteo de
   credenciales y consulta periódica con el temporizador reiniciado al fin del ciclo, y
@@ -322,7 +580,7 @@ periódica a la API.
   y reconexión WiFi, validación de conectividad con el servidor, reseteo de credenciales
   y consulta periódica siguen funcionando como antes de la integración.
 - El registro serie de cada dispensación incluye línea base, peso final, incremento,
-  cantidad solicitada y motivo de finalización.
+  cantidad solicitada, número de reintentos y motivo de finalización.
 
 ## Dudas abiertas
 - Ninguna.

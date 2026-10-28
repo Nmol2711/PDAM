@@ -19,8 +19,9 @@ constexpr unsigned long kSamplePeriodMs = 200;
 // Plazo máximo de respuesta de una lectura de la celda.
 constexpr unsigned long kReadTimeoutMs = 100;
 
-// Tiempo máximo de giro del servomotor desde su arranque.
-constexpr unsigned long kMaxRotationMs = 30000;
+// Presupuesto de motor: tope de seguridad del ciclo de giro (30 s) contado
+// desde el primer arranque del servo; lo consumen avance, retroceso y pausa.
+constexpr unsigned long kMotorBudgetMs = 30000;
 
 // Lecturas válidas mínimas dentro de la ventana de verificación.
 constexpr unsigned kMinValidReadings = 5;
@@ -42,6 +43,41 @@ constexpr long kRawSaturationMax = 8388607L;
 // Muestras válidas que se conservan para calcular la mediana.
 constexpr unsigned kMedianBufferSize = 16;
 
+// --- Umbrales de detección y resolución de atascos (RF-14 a RF-17, RNF-7) ---
+// Se definen únicamente aquí; ajustarlos no exige cambiar la lógica de decisión.
+
+// Ventana de gracia desde cada arranque de avance: el alimento puede estar aún
+// en tránsito hacia la balanza y el atasco no se evalúa.
+constexpr unsigned long kStallGraceMs = 2000;
+
+// Ventana de estancamiento: si el progreso no alcanza el mínimo en este plazo
+// se declara atasco.
+constexpr unsigned long kStallWindowMs = 5000;
+
+// Progreso mínimo en gramos que indica que el alimento avanza.
+constexpr float kMinProgressGrams = 2.0f;
+
+// Lecturas válidas que forman la mediana móvil del progreso.
+constexpr unsigned kMovingMedianSize = 5;
+
+// Lecturas válidas mínimas desde el último arranque de avance para declarar un
+// atasco: la falta de medición nunca se interpreta como atasco (RF-17).
+constexpr unsigned kMinAdvanceValidReadings = 5;
+
+// Retroceso de desatasco y pausa posterior con el servomotor detenido (RF-15).
+constexpr unsigned long kReverseMs = 1200;
+constexpr unsigned long kPauseMs = 300;
+
+// Reintentos máximos por dispensación; red de seguridad del presupuesto.
+constexpr unsigned kMaxStallRetries = 3;
+
+// Presupuesto restante mínimo para iniciar un reintento: retroceso, pausa y
+// ventana de gracia (RF-16).
+constexpr unsigned long kMinRetryBudgetMs = 3500;
+
+// Ángulo del retroceso de desatasco (RF-15).
+constexpr int kReverseAngleDegrees = 180;
+
 namespace dispensing {
 
 // Acción a ejecutar a partir de la respuesta de la API (RF-1, RF-2, RF-10).
@@ -53,6 +89,7 @@ enum class DispenseReason {
   NOT_REACHED,
   SENSOR_UNAVAILABLE,
   SENSOR_FAILURE,
+  STALL_UNRESOLVED,
   INVALID_CONFIG,
   INVALID_AMOUNT
 };
@@ -74,6 +111,7 @@ struct DispenseResult {
   float finalGrams;
   bool incrementAvailable;
   float incrementGrams;
+  unsigned retryCount; // reintentos ejecutados en el ciclo (0 si no hubo)
 };
 
 // reset_wifi tiene prioridad absoluta; después decide serve y amount.
@@ -311,7 +349,7 @@ inline RotationOutcome recordRotationSample(RotationState *state,
     return state->outcome;
   }
 
-  if (nowMs - state->startMs >= kMaxRotationMs) {
+  if (nowMs - state->startMs >= kMotorBudgetMs) {
     state->finished = true;
     state->outcome = RotationOutcome::TIME_LIMIT;
     return state->outcome;
@@ -383,6 +421,244 @@ inline void fillDispenseMeasurements(DispenseResult *result,
   }
 }
 
+// --- Deteccion y resolucion de atascos (RF-14, RF-15, RF-16, RF-17) ---
+
+// Diferencia en 32 bits entre dos instantes de millis(); tolera el
+// desbordamiento del contador tambien en el entorno nativo.
+inline unsigned long elapsedMs(unsigned long sinceMs, unsigned long nowMs) {
+  return static_cast<unsigned long>(static_cast<std::uint32_t>(nowMs) -
+                                    static_cast<std::uint32_t>(sinceMs));
+}
+
+// Mediana movil de las lecturas validas mas recientes del ciclo de motor.
+struct MovingMedianState {
+  float values[kMovingMedianSize];
+  unsigned count;     // lecturas validas recibidas desde el arranque del ciclo
+  unsigned nextIndex; // posicion circular de la proxima insercion
+};
+
+// Reinicia la mediana movil al arrancar el ciclo de motor.
+inline void resetMovingMedian(MovingMedianState *state) {
+  if (state == nullptr) {
+    return;
+  }
+  for (unsigned i = 0; i < kMovingMedianSize; ++i) {
+    state->values[i] = 0.0f;
+  }
+  state->count = 0;
+  state->nextIndex = 0;
+}
+
+// Inserta solo lecturas validas; una invalida no entra en la mediana.
+inline bool pushMovingMedian(MovingMedianState *state,
+                             const WeightSample &sample) {
+  if (state == nullptr || !isReadingValid(sample)) {
+    return false;
+  }
+  state->values[state->nextIndex] = sample.grams;
+  state->nextIndex = (state->nextIndex + 1) % kMovingMedianSize;
+  ++state->count;
+  return true;
+}
+
+// Mediana actual; no existe hasta acumular kMovingMedianSize validas.
+inline bool movingMedianValue(const MovingMedianState *state, float *out) {
+  if (state == nullptr || out == nullptr || state->count < kMovingMedianSize) {
+    return false;
+  }
+  return median(state->values, kMovingMedianSize, out);
+}
+
+// Maximo observado: mayor mediana movil registrada en el ciclo de motor.
+struct ObservedMaxState {
+  bool available;
+  float grams;
+};
+
+// Eleva el maximo solo si la mediana lo supera y nunca lo reduce, de modo que
+// un pico aislado no deja un deficit artificial (RF-14).
+inline bool updateMaxObserved(ObservedMaxState *state, float medianGrams) {
+  if (state == nullptr) {
+    return false;
+  }
+  if (state->available && !(medianGrams > state->grams)) {
+    return false;
+  }
+  state->available = true;
+  state->grams = medianGrams;
+  return true;
+}
+
+// Estado acumulado de la deteccion de atascos. El instante entra por parametro:
+// la logica no lee millis() ni depende de Arduino.
+struct StallState {
+  MovingMedianState median;
+  ObservedMaxState observedMax;
+  unsigned validSinceAdvance;   // validas desde el ultimo arranque de avance
+  unsigned retries;             // reintentos contados al reanudar el avance
+  unsigned long advanceStartMs; // instante del ultimo arranque de avance
+  bool windowOpen;              // ventana de estancamiento abierta
+  unsigned long windowStartMs;  // apertura o ultimo reinicio de la ventana
+  float referenceGrams;         // referencia vigente del progreso
+  bool stallPending;            // atasco declarado sin progreso posterior
+};
+
+// Arranque inicial del avance: reinicia mediana, maximo, ventana y contadores.
+// No incrementa el contador de reintentos (RF-12, RF-14).
+inline void startAdvance(StallState *state, unsigned long nowMs) {
+  if (state == nullptr) {
+    return;
+  }
+  resetMovingMedian(&state->median);
+  state->observedMax.available = false;
+  state->observedMax.grams = 0.0f;
+  state->validSinceAdvance = 0;
+  state->retries = 0;
+  state->advanceStartMs = nowMs;
+  state->windowOpen = false;
+  state->windowStartMs = 0;
+  state->referenceGrams = 0.0f;
+  state->stallPending = false;
+}
+
+// Reanudacion del avance tras la pausa de un reintento: abre una gracia nueva,
+// cierra la ventana y cuenta el reintento (RF-15). Devuelve el acumulado.
+inline unsigned resumeAdvanceAfterRetry(StallState *state,
+                                        unsigned long nowMs) {
+  if (state == nullptr) {
+    return 0;
+  }
+  ++state->retries;
+  state->validSinceAdvance = 0;
+  state->advanceStartMs = nowMs;
+  state->windowOpen = false;
+  state->windowStartMs = 0;
+  return state->retries;
+}
+
+// Abre o reinicia la ventana de estancamiento en el instante dado y toma como
+// referencia el maximo observado vigente (RF-14).
+inline void armStallWindow(StallState *state, unsigned long nowMs) {
+  if (state == nullptr) {
+    return;
+  }
+  state->windowOpen = true;
+  state->windowStartMs = nowMs;
+  state->referenceGrams =
+      state->observedMax.available ? state->observedMax.grams : 0.0f;
+}
+
+// La ventana vence a los 5 s de su apertura o ultimo reinicio.
+inline bool stallWindowExpired(const StallState *state, unsigned long nowMs) {
+  if (state == nullptr || !state->windowOpen) {
+    return false;
+  }
+  return elapsedMs(state->windowStartMs, nowMs) >= kStallWindowMs;
+}
+
+// Progreso = mediana movil actual - referencia vigente; puede ser negativo.
+inline bool stallProgress(const StallState *state, float *out) {
+  if (state == nullptr || out == nullptr) {
+    return false;
+  }
+  float medianGrams = 0.0f;
+  if (!movingMedianValue(&state->median, &medianGrams)) {
+    return false;
+  }
+  *out = medianGrams - state->referenceGrams;
+  return true;
+}
+
+// Resultado de evaluar una lectura valida durante el avance.
+enum class StallOutcome { CONTINUE, STALL_DECLARED };
+
+// Evalua el progreso en una lectura de avance (RF-14, RF-17).
+// Sin mediana movil no hay ventana ni declaracion, y la gracia no se evalua. Un
+// progreso >= 2 g limpia el atasco pendiente y reinicia la ventana; al vencer la
+// ventana solo se declara atasco con las validas minimas desde el arranque.
+inline StallOutcome recordAdvanceSample(StallState *state,
+                                        const WeightSample &sample,
+                                        unsigned long nowMs) {
+  if (state == nullptr) {
+    return StallOutcome::CONTINUE;
+  }
+
+  // Una lectura invalida no entra en la mediana ni se interpreta como atasco.
+  if (!pushMovingMedian(&state->median, sample)) {
+    return StallOutcome::CONTINUE;
+  }
+  ++state->validSinceAdvance;
+
+  float medianGrams = 0.0f;
+  if (!movingMedianValue(&state->median, &medianGrams)) {
+    return StallOutcome::CONTINUE;
+  }
+  updateMaxObserved(&state->observedMax, medianGrams);
+
+  // Durante la gracia el alimento puede estar aun en transito hacia la balanza.
+  if (elapsedMs(state->advanceStartMs, nowMs) < kStallGraceMs) {
+    return StallOutcome::CONTINUE;
+  }
+
+  if (!state->windowOpen) {
+    armStallWindow(state, nowMs);
+  }
+
+  if (medianGrams - state->referenceGrams >= kMinProgressGrams) {
+    state->stallPending = false;
+    armStallWindow(state, nowMs);
+    return StallOutcome::CONTINUE;
+  }
+
+  if (!stallWindowExpired(state, nowMs)) {
+    return StallOutcome::CONTINUE;
+  }
+
+  // Sin las validas minimas desde el arranque la falta de medicion no es un
+  // atasco: la ventana se reinicia (RF-17).
+  if (state->validSinceAdvance < kMinAdvanceValidReadings) {
+    armStallWindow(state, nowMs);
+    return StallOutcome::CONTINUE;
+  }
+
+  state->stallPending = true;
+  return StallOutcome::STALL_DECLARED;
+}
+
+// Accion a tomar cuando se declara un atasco (RF-15, RF-16).
+enum class StallAction { RETRY, GIVE_UP };
+
+// Reintenta solo si quedan reintentos y el presupuesto restante alcanza para el
+// retroceso, su pausa y la gracia; en cualquier otro caso se da por vencido.
+inline StallAction decideStallAction(unsigned retriesDone,
+                                     unsigned long remainingBudgetMs) {
+  if (retriesDone < kMaxStallRetries && remainingBudgetMs >= kMinRetryBudgetMs) {
+    return StallAction::RETRY;
+  }
+  return StallAction::GIVE_UP;
+}
+
+// Milisegundos de presupuesto de motor restantes (0 si ya vencio).
+inline unsigned long motorBudgetRemainingMs(unsigned long startMs,
+                                            unsigned long nowMs) {
+  const unsigned long elapsed = elapsedMs(startMs, nowMs);
+  if (elapsed >= kMotorBudgetMs) {
+    return 0;
+  }
+  return kMotorBudgetMs - elapsed;
+}
+
+// El presupuesto se agota a los 30 000 ms exactos, no antes (RNF-3).
+inline bool isMotorBudgetExhausted(unsigned long startMs, unsigned long nowMs) {
+  return elapsedMs(startMs, nowMs) >= kMotorBudgetMs;
+}
+
+// Motivo unico al agotarse el presupuesto de motor (RF-8, RF-16).
+inline DispenseReason budgetExhaustedReason(bool stallPending) {
+  return stallPending ? DispenseReason::STALL_UNRESOLVED
+                      : DispenseReason::NOT_REACHED;
+}
+
 // Vencimiento del temporizador periodico. La resta se hace en 32 bits para
 // reproducir el rollover de millis() del ESP32 tambien en el entorno nativo.
 inline bool isCheckDue(unsigned long lastCheckMs, unsigned long nowMs,
@@ -404,6 +680,8 @@ inline const char *dispenseReasonText(DispenseReason reason) {
     return "sensor no disponible";
   case DispenseReason::SENSOR_FAILURE:
     return "fallo del sensor durante la dispensacion";
+  case DispenseReason::STALL_UNRESOLVED:
+    return "atasco no resuelto";
   case DispenseReason::INVALID_CONFIG:
     return "configuracion invalida: factor de calibracion no positivo";
   case DispenseReason::INVALID_AMOUNT:
@@ -445,9 +723,9 @@ inline void formatDispenseLog(const DispenseResult &result, char *buffer,
 
   std::snprintf(buffer, size,
                 "Despacho: solicitado=%.1f g, linea_base=%s, peso_final=%s, "
-                "incremento=%s, motivo=%s",
+                "incremento=%s, reintentos=%u, motivo=%s",
                 result.requestedGrams, baseline, finalWeight, increment,
-                dispenseReasonText(result.reason));
+                result.retryCount, dispenseReasonText(result.reason));
 }
 
 } // namespace dispensing
