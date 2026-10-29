@@ -1,16 +1,16 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **Spec 014 cerrada y validada (2026-10-29) con hardware real:** software (S2–S6, S8), S7,
-  P-T8-A y P-T9-A a P-T9-D aprobadas; 41 RF con trazabilidad en `test_traceability_rf.py`.
+* **Spec 014 implementada; repetición de P-T9-B pendiente (2026-10-29):** todo aprobado salvo
+  esa repetición, bloqueada por un corte de luz; firmware corregido ya flasheado y escenario
+  preparado. S2–S6, S8 y S7, P-T8-A, P-T9-A, P-T9-C y P-T9-D aprobadas; 41 RF con trazabilidad.
   Specs 001–013 cerradas; rama `pruebas/endpoint-fijo-hx711` pendiente de merge a `main`.
 * **Cifras:** `pytest` 530 + 541 subtests; `flutter test` 412/412; `flutter analyze` 0 errores
   (95 avisos); `pio test -e native` 165/165; `pio run` SUCCESS; base de desarrollo reseteada.
-* **Físicas:** orden 3, 22,23 g medidos y descontados (4637,16 → 4614,93 g) con HTTP 200 al
-  intento 1; orden 4, atasco no resuelto (−6,28 g) sin descuento. P-T9-B conservó el pendiente
-  y lo reenvió con cierre único, pero el reenvío iba después de la primera consulta: ahora es al
-  arrancar, antes de consultar y aunque el servidor no responda (P-T9-B se repite); P-T9-C no
-  reintentó ni dejó pendiente; P-T9-D cerró `sin_reporte`.
+* **Físicas:** orden 3, 22,23 g medidos y descontados (4637,16 → 4614,93 g); orden 4, atasco no
+  resuelto (−6,28 g) sin descuento. P-T9-B conservó el pendiente y lo reenvió con cierre único,
+  pero el reenvío iba después de la primera consulta; ya es al arrancar y la repetición quedó
+  pendiente por corte de luz. P-T9-C no reintentó ni dejó pendiente; P-T9-D cerró `sin_reporte`.
 
 ## Decisiones clave
 * Orden con ID y estados pendiente/cerrada; el stock se descuenta al cerrar con éxito, nunca al

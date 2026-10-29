@@ -430,7 +430,8 @@ por un intercalado determinista que no depende del planificador.
 
 Las cinco pruebas que solo podía ejecutar el usuario se ejecutaron el 2026-10-29 con el
 ESP32, la celda y el móvil reales. Con ellas, la spec 014 pasa de «implementada (pendiente de
-pruebas físicas)» a **implementada y validada**. El detalle de cada ejecución está en el
+pruebas físicas)» a **implementada**, con la repetición de P-T9-B pendiente por el corte de
+luz. El detalle de cada ejecución está en el
 [informe de pruebas](../../docs/informes/informe-pruebas-spec-014-2026-10-29.md) §12.
 
 | Prueba | Resultado | Evidencia |
@@ -474,3 +475,10 @@ minutos de `encolar_comida` no recupera ocurrencias perdidas. La rama
 `pruebas/endpoint-fijo-hx711` sigue pendiente de merge a `main`. Este cierre sustituye al
 «Riesgo abierto» de la sección anterior sobre las pruebas físicas pendientes; el resto de
 deudas y riesgos de esa sección se mantiene.
+
+> **Nota de pausa (2026-10-29):** la repetición de P-T9-B con el firmware corregido quedó
+> interrumpida por un corte de electricidad. El firmware ya está corregido y flasheado en el
+> ESP32 de pruebas, y el escenario (API detenida a los 2 s de `serve:true`, reinicio y reenvío
+> del pendiente) quedó preparado para retomarla. Hasta entonces, la spec 014 queda
+> **implementada** y el resultado de P-T9-B es **No concluyente**: la primera ejecución se
+> aprobó con matiz y la repetición sigue pendiente.

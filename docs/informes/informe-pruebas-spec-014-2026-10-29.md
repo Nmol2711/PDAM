@@ -10,7 +10,7 @@
 | Tareas | [Tasks 014](../../specs/014-logs-y-validacion-dispensado/tasks.md) |
 | Subsistema | Backend (FastAPI) + App (Flutter) + Firmware (ESP32) |
 | Alcance | Migración de `logs`, órdenes con plazo y descuento al confirmar, reporte del dispositivo, consulta filtrada y paginada, caché sin conexión, reabastecimiento idempotente y no regresión de las specs 011, 012 y 013 |
-| Estado | **Aprobado: software (28 casos), S7, P-T8-A y P-T9-A a P-T9-D** |
+| Estado | **Aprobado salvo P-T9-B, pendiente de repetición por corte de luz** |
 | Commit de referencia | `fd4c047` en la rama `pruebas/endpoint-fijo-hx711` — «feat(spec-014): registro tipado de actividad y descuento al confirmar» |
 | Informe relacionado | [Pruebas de hardware de la spec 013](informe-pruebas-hardware-spec-013-2026-10-23.md) |
 
@@ -23,7 +23,9 @@
 > router. La evidencia está resumida en las filas del §12: líneas del monitor serie, códigos
 > HTTP de cada intento, esperas medidas y cifras de stock y de historial. Las transcripciones
 > en bruto no se versionan porque contienen datos de la red local; el §12 transcribe los
-> valores observados. Con las cinco pruebas físicas aprobadas, la spec 014 queda cerrada.
+> valores observados. La primera ejecución de P-T9-B se aprobó con matiz, pero su repetición
+> con el firmware corregido quedó interrumpida por un corte de luz, así que la spec 014 queda
+> implementada con esa repetición pendiente.
 
 ---
 
@@ -866,7 +868,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | S8 | 2026-10-29 | Agente | Aprobada | `s8.log` | Con `origen=sincronizacion_sin_conexion` y el mismo `operation_id`, un único incremento (2649,6 → 2949,6), una fila en `refill_operations` y un solo `dispenser_refilled`; sin identificador el servidor no deduplica (dos envíos, dos incrementos), limitación declarada |
 | P-T8-A | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Comprobación en el Samsung A15: los registros aparecen, los cuatro filtros y la paginación funcionan y el registro nuevo se reflejó al levantar la API | Confirmado por el usuario en el móvil real; la aprobación se basa en su comprobación directa, sin captura ni medición del tamaño de letra |
 | P-T9-A | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Dos ciclos reales con `Reporte de fin de ciclo: intento 1, HTTP 200` al primer intento. Orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g. Orden 4: atasco no resuelto, −6,28 g medidos y sin descuento, stock 4614,93 g | La orden 1 (344,75 g medidos) se descarta como evidencia porque el usuario manipuló la celda al no tener la bandeja colocada; no es un fallo del sistema. El resumen del monitor mostraba «no disponible» y se corrigió en `f10802d`; el firmware reflasheado se verificó en el ciclo siguiente, que imprimió `order_id=5` y el motivo real |
-| P-T9-B | 2026-10-29 | Agente | Aprobada | Tres intentos con la API caída: 15:51:47 HTTP −1, espera de 5 s, 15:52:02 HTTP −1, espera de 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1 y vuelta a BLE con el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g) | Matiz aceptado por el usuario: el reinicio se retrasó más de 5 min, así que el barrido ya había cerrado la orden 5 como `sin_reporte`; el reenvío llegó 0,8 s después y se aceptó como orden ya cerrada. La prueba acredita la persistencia en NVS y el cierre único, no el orden entre el reenvío y la primera consulta. **Corregido el 2026-10-29:** el pendiente se reenviaba dentro de `STATE_NORMAL`, después de la validación y de la primera consulta, y no se intentaba si la validación fallaba; ahora se intenta justo después de conectar el WiFi y antes de cualquier consulta, aunque el servidor no responda, una sola vez por arranque. **La prueba se repetirá** con el firmware corregido |
+| P-T9-B | 2026-10-29 | Agente | No concluyente | Tres intentos con la API caída: 15:51:47 HTTP −1, espera de 5 s, 15:52:02 HTTP −1, espera de 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1 y vuelta a BLE con el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g) | Primera ejecución aprobada con matiz; repetición con el firmware corregido interrumpida por corte de luz el 2026-10-29. Pendiente de repetir |
 | P-T9-C | 2026-10-29 | Agente | Aprobada | El reenvío de P-T9-B recibió 200 de orden ya cerrada y el firmware descartó el reporte sin reintentar (ninguna línea `Reintentando el reporte en ...`); tras reiniciar de nuevo, la placa **no** mostró `Reporte pendiente encontrado en NVS` | Confirmado por el usuario en el arranque del equipo: no hay reintento ni pendiente que sobreviva al segundo reinicio |
 | P-T9-D | 2026-10-29 | Agente | Aprobada | La orden 5 se cerró sola a los ~5 min como `feeding_dispensed` con causa `sin_reporte`, sin descuento y sin exigir reporte; el stock siguió en 4614,93 g | Evidencia del servidor, que es donde vive el comportamiento pedido para firmware antiguo; no se flasheó una build sin la llamada al reporte porque no hace falta para acreditar RF-40 |
 
@@ -912,7 +914,7 @@ firmware corregido se flasheó en el ESP32 de pruebas el 2026-10-29 (`pio run --
 |---|---|---|
 | Una entrega incompleta o un reporte tardío no descuentan stock | El stock del servidor queda por encima del real; solo se corrige con un reabastecimiento o un ajuste manual futuro, fuera de alcance | Desvío documentado en la spec y en `tasks.md`; no hay ajustes automáticos |
 | Sin `operation_id` el servidor no puede deduplicar reenvíos | Un cliente antiguo duplicaría la cantidad al sincronizar el mismo pendiente | La app lo envía siempre y lo persiste con el pendiente; la limitación está en la spec |
-| La persistencia del reporte en NVS y el reenvío tras reinicio solo se acreditan con P-T9-B | La suite nativa cubre la política de timeout y reintentos, no `Preferences` | Acreditada en P-T9-B el 2026-10-29 (§12); la suite nativa sigue sin cubrir `Preferences` |
+| La persistencia del reporte en NVS y el reenvío tras reinicio solo se acreditan con P-T9-B | La suite nativa cubre la política de timeout y reintentos, no `Preferences` | Acreditada en la primera ejecución de P-T9-B el 2026-10-29 (§12); la repetición quedó pendiente por corte de luz y la suite nativa sigue sin cubrir `Preferences` |
 | La ventana de 10 minutos de `encolar_comida` no recupera ocurrencias | Si el proceso cae más tiempo, la comida de ese hueco no se encola | Documentado en T5; el barrido corre cada 30 s |
 
 ### 13.2 Riesgos abiertos
@@ -922,13 +924,14 @@ firmware corregido se flasheó en el ESP32 de pruebas el 2026-10-29 (`pio run --
 | Los umbrales de la 013 solo son válidos para este montaje (celda, cableado y croqueta de ~3 cm) | Atascos mecánicos frecuentes y exactitud dependiente del montaje | No se ajustaron umbrales; si se cambia el montaje, se repiten P2/P3 de la 013 antes de confiar en la 014 |
 | La rama `pruebas/endpoint-fijo-hx711` con la 013 cerrada sigue sin fusionar a `main` | El código validado no está en la rama principal | Merge pendiente, fuera del alcance de este informe; el commit de referencia es `fd4c047` |
 
-Riesgo cerrado el 2026-10-29: las cinco pruebas físicas y en dispositivo (P-T8-A y P-T9-A a
-P-T9-D) están ejecutadas y aprobadas, con su evidencia en el §12 y en el cierre de
-`tasks.md`. No queda ninguna prueba de esta spec sin ejecutar. El matiz de P-T9-B —el
-reinicio llegó después de que el barrido cerrara la orden 5, y el reenvío se aceptó como
-orden ya cerrada— fue aceptado por el usuario y motivó una corrección del firmware: el
-reenvío del pendiente ahora precede a la primera consulta y se intenta aunque el servidor no
-responda al arrancar. Por eso P-T9-B se repite con el firmware corregido.
+Riesgo parcialmente cerrado el 2026-10-29: P-T8-A, P-T9-A, P-T9-C y P-T9-D están ejecutadas
+y aprobadas, con su evidencia en el §12 y en el cierre de `tasks.md`. P-T9-B quedó **No
+concluyente**: su primera ejecución se aprobó con matiz —el reinicio llegó después de que el
+barrido cerrara la orden 5 y el reenvío se aceptó como orden ya cerrada—, lo que motivó una
+corrección del firmware (el reenvío del pendiente ahora precede a la primera consulta y se
+intenta aunque el servidor no responda al arrancar), pero la repetición con ese firmware quedó
+interrumpida por un corte de luz el 2026-10-29. El firmware corregido ya está flasheado y el
+escenario preparado para retomarla.
 
 ### 13.3 Cuándo se puede decir que «todo funciona»
 
@@ -939,10 +942,11 @@ Solo cuando se cumplan las tres condiciones a la vez:
 3. Las cinco pruebas físicas y en dispositivo aprobadas: P-T8-A, P-T9-A, P-T9-B, P-T9-C y
    P-T9-D.
 
-**Las tres condiciones se cumplen a 2026-10-29:** las cinco suites están en verde (§3), S2 a
-S8 están aprobadas (§12) y P-T8-A y P-T9-A a P-T9-D también (§12). Por eso la spec 014 se
-actualiza a «implementada y validada (2026-10-29)» y `tasks.md` recoge el cierre de las
-pruebas físicas. Las deudas aceptadas del §13.1 siguen vigentes tal como están descritas:
+**A 2026-10-29 las tres condiciones se cumplen salvo P-T9-B:** las cinco suites están en
+verde (§3), S2 a S8 están aprobadas (§12) y P-T8-A, P-T9-A, P-T9-C y P-T9-D también (§12);
+P-T9-B sigue pendiente de repetir por el corte de luz. Por eso la spec 014 se actualiza a
+«implementada (pendiente de repetir P-T9-B por corte de luz)» y `tasks.md` recoge la pausa de
+las pruebas físicas. Las deudas aceptadas del §13.1 siguen vigentes tal como están descritas:
 una entrega incompleta o un reporte tardío no descuentan stock, un cliente sin
 `operation_id` no se puede deduplicar y la ventana de 10 minutos de `encolar_comida` no
 recupera ocurrencias perdidas. Ninguna prueba manual sustituye a una automatizada, ni al

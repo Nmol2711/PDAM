@@ -1,6 +1,6 @@
 # Spec 014 — Registro de actividad y validación del descuento de stock
 
-**Estado:** implementada y validada (2026-10-29)
+**Estado:** implementada (pendiente de repetir P-T9-B por corte de luz)
 **Fecha de revisión:** 2026-10-28
 
 ## Contexto y objetivo
