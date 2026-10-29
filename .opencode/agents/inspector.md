@@ -2,7 +2,6 @@
 name: inspector
 description: Inspector de Seguridad - busca claves, tokens, contraseñas hardcodeadas y vulnerabilidades en el código sin modificar nada.
 mode: subagent
-model: openrouter/openrouter/auto
 permissions:
   - action: edit
     resource: "*"
