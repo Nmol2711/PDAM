@@ -28,3 +28,10 @@ ENV/
 
 # Herramientas de agentes
 .cline/
+
+# Subidas de usuario en tiempo de ejecución
+api/static/pets/*
+!api/static/pets/064a0f1d-28d8-4a15-91ee-70fe31f16e3d.jpg
+!api/static/pets/176a1013-21da-41f2-9b8b-cd0e14b57094.jpg
+!api/static/pets/6dd2abe1-1826-4695-9532-cc7dfca90b8e.png
+!api/static/pets/c3ee6339-29d3-4d4c-8f17-5b1be596b50c.jpg
