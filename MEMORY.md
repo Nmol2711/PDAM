@@ -7,6 +7,8 @@
   analyze` 0 errores (95 avisos); `pio test -e native` 157/157; `pio run` SUCCESS (RAM
   64 444 B, 19,7 %; Flash 2 030 750 B, 64,6 %). Dependencia nueva: `flutter_localizations`.
   Specs 001–013 cerradas; hardware real de 005 sin probar.
+* **2026-10-29:** base de desarrollo reseteada y vacía, con respaldo en
+  `/tmp/opencode/pdam-pre-014.db`; el login ya no trae credenciales precargadas.
 
 ## Decisiones clave (Spec 014)
 * Orden con ID y estados pendiente/cerrada; el stock se descuenta al cerrar con éxito, nunca al
@@ -25,12 +27,10 @@
 * Reabastecimiento: 400 con registro en transacción aparte; la app envía `operation_id` y el
   servidor deduplica por `(user_id, operation_id)`. `current_food_grams` del cliente se ignora
   sin error y no cuenta como campo modificado (RF-23).
-* Comida programada bloqueada: espera en `dispensing_queue` a que la orden cierre o venza y el
-  dispensador esté activo. `pending_dispensing` solo se consume si ya estaba puesta.
+* Comida programada bloqueada: espera en `dispensing_queue` a que la orden cierre o venza; `pending_dispensing` solo se consume si ya estaba puesta.
 * Borrado de mascota con dispensador: 409 `pet_has_dispenser`. Firmware: timeout de 10 s, reintentos
   5/15 s, pendiente en NVS, descarte deliberado de 2xx/4xx y monitor sin MAC (solo orden, motivo y longitud).
-* App: `locale: es` del SDK; los logs locales no se sincronizan (`isSynced = true`; el servidor
-  no guarda `type: "log"`) y `LogState` usa solo `isOffline` como señal de caché.
+* App: `locale: es` del SDK; los logs locales no se sincronizan (`isSynced = true`) y `LogState` usa solo `isOffline` como señal de caché.
 
 ## Decisiones clave (Specs 011 y 013)
 * Atasco por mediana móvil de 5 válidas, ventana de 5 s, presupuesto de motor de 30 s y 3

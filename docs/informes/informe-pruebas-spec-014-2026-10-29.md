@@ -10,17 +10,17 @@
 | Tareas | [Tasks 014](../../specs/014-logs-y-validacion-dispensado/tasks.md) |
 | Subsistema | Backend (FastAPI) + App (Flutter) + Firmware (ESP32) |
 | Alcance | Migración de `logs`, órdenes con plazo y descuento al confirmar, reporte del dispositivo, consulta filtrada y paginada, caché sin conexión, reabastecimiento idempotente y no regresión de las specs 011, 012 y 013 |
-| Estado | **Automatizado en verde; pendiente la ejecución manual y física** |
+| Estado | **Software aprobado (28 casos); pendiente S7 y las pruebas físicas** |
 | Commit de referencia | `fd4c047` en la rama `pruebas/endpoint-fijo-hx711` — «feat(spec-014): registro tipado de actividad y descuento al confirmar» |
 | Informe relacionado | [Pruebas de hardware de la spec 013](informe-pruebas-hardware-spec-013-2026-10-23.md) |
 
 > Este documento es un procedimiento de prueba con registro de resultados. Las cifras del
 > §3 corresponden a la validación global registrada en `tasks.md` (auditoría del 2026-10-29)
 > y se repiten aquí como criterio de éxito: una ejecución posterior debe dar cifras iguales
-> o superiores y ningún fallo. Las pruebas manuales (§5, S2 a S8) y las físicas (§9) **no se
-> han ejecutado** al redactar este informe: quedan como pendientes con su criterio en el
-> registro del §12. No se ha modificado código, specs ni firmware para escribir este
-> documento.
+> o superiores y ningún fallo. Al redactar este informe no se había ejecutado ninguna prueba
+> manual; el 2026-10-29 se ejecutó el bloque de software S2–S6 y S8 (28 casos, 0 fallos), con
+> los resultados del §12 y la evidencia en `/tmp/opencode/pruebas-014/`. S7 y las pruebas
+> físicas (§9) siguen pendientes.
 
 ---
 
@@ -851,19 +851,19 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 
 | ID | Fecha | Ejecutor | Resultado | Evidencia | Observaciones |
 |---|---|---|---|---|---|
-| S1 | | | | | |
-| S2 | | | | | |
-| S3 | | | | | |
-| S4 | | | | | |
-| S5 | | | | | |
-| S6 | | | | | |
-| S7 | | | | | |
-| S8 | | | | | |
-| P-T8-A | | | | | |
-| P-T9-A | | | | | |
-| P-T9-B | | | | | |
-| P-T9-C | | | | | |
-| P-T9-D | | | | | |
+| S1 | 2026-10-29 | Agente | Aprobada | Auditoría del §3: `pytest` 530 passed + 541 subtests, `flutter test` 412/412, `flutter analyze` 0 errores (95 avisos), `pio test -e native` 157/157, `pio run` SUCCESS | Cifras iguales o superiores a las del §3; ningún fallo ni omisión |
+| S2 | 2026-10-29 | Agente | Aprobada | `s2-despues-primera.txt`, `s2-despues-segunda.txt`, `s2-consulta.json`, `s2-aborto.log` (`/tmp/opencode/pruebas-014/`) | Ejecutada sobre una base legada reconstruida desde una **copia aislada**, no sobre la base de desarrollo: 18 columnas, 4 históricos con `description`/`created_at` conservados, 8 índices y las 3 tablas nuevas; la segunda apertura no remigró; el criterio de aborto pasó con `TestMigracionSegura` (1 passed, 0,44 s) |
+| S3 | 2026-10-29 | Agente | Aprobada | `s3.log` (23 casos S3.1–S3.23) | 23/23 sobre una **copia aislada**; los 4 históricos de la copia son del 1–3 de septiembre, así que S3.4/S3.5 con fechas de octubre dan `total=0` y se añadieron las variantes S3.4b/S3.5b sobre septiembre (4 ítems, con `Z` y con UTC−05:00); stock 1200 → 2700 g con idempotencia por `operation_id`; todos los rechazos de negocio 400 con `detail={code,message}` |
+| S4 | 2026-10-29 | Agente | Aprobada | `s4.log`, `s4.rep1`–`s4.rep3` | Copia aislada; la entrega no descuenta (2700 g), el cierre con 50,0 solicitados y 50,4 medidos descuenta 50,4 y deja 2649,6 g; los dos reenvíos responden 200 con `ya_cerrada=true`, sin segundo registro ni segundo descuento |
+| S5 | 2026-10-29 | Agente | Aprobada | `s5.log` | **5/5** ejecuciones de `test_orders_concurrency.py` con 6 passed y 0 failed (1,09–1,30 s) y `TestExclusionMutuaConElReporte` con 4 passed; cumple el criterio de 5 de 5 |
+| S6 | 2026-10-29 | Agente | Aprobada | `s6.log` | p95 **16,5 ms** con 10 000 registros y cuatro filtros; 15,7 ms en la primera página sin filtros; índice compuesto `ix_logs_user_id_created_at` presente; criterio p95 < 1000 ms cumplido |
+| S7 | — | — | No ejecutada | — | Requiere el móvil real y detener la API (§5 S7); no ejecutada |
+| S8 | 2026-10-29 | Agente | Aprobada | `s8.log` | Con `origen=sincronizacion_sin_conexion` y el mismo `operation_id`, un único incremento (2649,6 → 2949,6), una fila en `refill_operations` y un solo `dispenser_refilled`; sin identificador el servidor no deduplica (dos envíos, dos incrementos), limitación declarada |
+| P-T8-A | — | — | No ejecutada | — | Requiere el Samsung A15 con letra al 130 % (§9.1) |
+| P-T9-A | — | — | No ejecutada | — | Requiere el ESP32 y una dispensación real (§9.2) |
+| P-T9-B | — | — | No ejecutada | — | Requiere red caída y reinicio del dispositivo (§9.3) |
+| P-T9-C | — | — | No ejecutada | — | Requiere un reporte descartado y reinicio (§9.4) |
+| P-T9-D | — | — | No ejecutada | — | Requiere un firmware sin reporte y el vencimiento de 5 min (§9.5) |
 
 Valores admitidos en «Resultado»: **Aprobada**, **Fallida**, **No concluyente**,
 **No ejecutada**. En «Evidencia» se anota el nombre del log, la captura o la prueba
