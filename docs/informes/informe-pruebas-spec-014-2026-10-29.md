@@ -10,7 +10,7 @@
 | Tareas | [Tasks 014](../../specs/014-logs-y-validacion-dispensado/tasks.md) |
 | Subsistema | Backend (FastAPI) + App (Flutter) + Firmware (ESP32) |
 | Alcance | Migración de `logs`, órdenes con plazo y descuento al confirmar, reporte del dispositivo, consulta filtrada y paginada, caché sin conexión, reabastecimiento idempotente y no regresión de las specs 011, 012 y 013 |
-| Estado | **Software aprobado (28 casos); pendiente S7 y las pruebas físicas** |
+| Estado | **P-T9-A aprobada; pendientes P-T9-B, P-T9-C, P-T9-D, P-T8-A y S7** |
 | Commit de referencia | `fd4c047` en la rama `pruebas/endpoint-fijo-hx711` — «feat(spec-014): registro tipado de actividad y descuento al confirmar» |
 | Informe relacionado | [Pruebas de hardware de la spec 013](informe-pruebas-hardware-spec-013-2026-10-23.md) |
 
@@ -860,7 +860,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | S7 | — | — | No ejecutada | — | Requiere el móvil real y detener la API (§5 S7); no ejecutada |
 | S8 | 2026-10-29 | Agente | Aprobada | `s8.log` | Con `origen=sincronizacion_sin_conexion` y el mismo `operation_id`, un único incremento (2649,6 → 2949,6), una fila en `refill_operations` y un solo `dispenser_refilled`; sin identificador el servidor no deduplica (dos envíos, dos incrementos), limitación declarada |
 | P-T8-A | — | — | No ejecutada | — | Requiere el Samsung A15 con letra al 130 % (§9.1) |
-| P-T9-A | — | — | No ejecutada | — | Requiere el ESP32 y una dispensación real (§9.2) |
+| P-T9-A | 2026-10-29 | Usuario (hardware real) | Aprobada | Monitor serie: `Reporte de fin de ciclo: intento 1, HTTP 200` en los dos ciclos; la línea de resumen mostraba `order_id=no disponible` y se corrigió en esta iteración, que ya imprime `order_id=3, motivo=objetivo_alcanzado, longitud=135 bytes`. Historial `feeding_dispensed` de la orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g, `reintentos` 0. Orden 4: `intento 1, HTTP 200` con motivo `atasco_no_resuelto`, −6,28 g medidos y sin descuento, stock 4614,93 g, `reintentos` 2 | Un ciclo previo (orden 1, 344,75 g medidos) se descarta como evidencia porque el usuario manipuló la celda al no tener la bandeja colocada; no es un fallo del sistema y no se cambia el comportamiento |
 | P-T9-B | — | — | No ejecutada | — | Requiere red caída y reinicio del dispositivo (§9.3) |
 | P-T9-C | — | — | No ejecutada | — | Requiere un reporte descartado y reinicio (§9.4) |
 | P-T9-D | — | — | No ejecutada | — | Requiere un firmware sin reporte y el vencimiento de 5 min (§9.5) |
@@ -868,6 +868,18 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 Valores admitidos en «Resultado»: **Aprobada**, **Fallida**, **No concluyente**,
 **No ejecutada**. En «Evidencia» se anota el nombre del log, la captura o la prueba
 automatizada concreta, sin datos sensibles.
+
+**Corrección derivada de P-T9-A (2026-10-29).** Durante la prueba el servidor respondió
+200 y procesó bien los dos reportes, pero la línea de resumen del monitor mostraba
+`order_id=no disponible, motivo=no disponible`: el resumen releía el cuerpo con un
+`StaticJsonDocument<192>` en el que no caben los seis miembros del reporte, así que la
+lectura fallaba y caía al texto de reserva. El resumen pasa a formatearse con los datos del
+`ReporteCiclo` (`reporting::formatearResumenCiclo`), sin releer el JSON, y el reenvío desde
+la NVS recupera orden y motivo con `reporting::extraerResumenReporte`. El cuerpo JSON, la
+política de reintentos y el orden de los mensajes no cambian. Pruebas nuevas en
+`test_report_utils.cpp` (6): `pio test -e native` pasa de 157 a **163/163** y `pio run`
+sigue en SUCCESS (RAM 64 444 B, 19,7 %; Flash 2 024 874 B, 64,4 %). El firmware corregido se
+flasheó en el ESP32 de pruebas el 2026-10-29 (`pio run --target upload`, hash verificado).
 
 ---
 

@@ -1,5 +1,6 @@
 #include <unity.h>
 
+#include <cstdio>
 #include <cstring>
 
 #include "config/report_utils.h"
@@ -277,6 +278,98 @@ void test_codigos_definitivos_del_catalogo() {
   TEST_ASSERT_FALSE(reporting::esCodigoDescartable(nullptr));
 }
 
+// --- Resumen del monitor serie (RF-36) ---
+
+void test_el_resumen_muestra_la_orden_y_el_motivo_del_ciclo() {
+  const reporting::ReporteCiclo reporte = reporteCompleto();
+  char resumen[160];
+  reporting::formatearResumenCiclo(reporte, 118, resumen, sizeof(resumen));
+  TEST_ASSERT_EQUAL_STRING("Reporte a enviar: order_id=12, "
+                           "motivo=objetivo_alcanzado, longitud=118 bytes",
+                           resumen);
+}
+
+void test_el_resumen_sin_identificador_de_orden_lo_declara_no_disponible() {
+  const reporting::ReporteCiclo reporte = reporting::reporteVacio(
+      dispensing::DispenseReason::SENSOR_UNAVAILABLE);
+  char resumen[160];
+  reporting::formatearResumenCiclo(reporte, 60, resumen, sizeof(resumen));
+  TEST_ASSERT_EQUAL_STRING("Reporte a enviar: order_id=no disponible, "
+                           "motivo=sensor_no_disponible, longitud=60 bytes",
+                           resumen);
+}
+
+void test_el_resumen_no_repite_la_mac_ni_el_cuerpo() {
+  reporting::ReporteCiclo reporte = reporteCompleto();
+  reporte.motivo = dispensing::DispenseReason::STALL_UNRESOLVED;
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:EE:FF", reporte,
+                                                   json, sizeof(json)));
+
+  char resumen[160];
+  reporting::formatearResumenCiclo(reporte, std::strlen(json), resumen,
+                                   sizeof(resumen));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, "order_id=12"));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, "motivo=atasco_no_resuelto"));
+  char longitud[32];
+  std::snprintf(longitud, sizeof(longitud), "longitud=%lu bytes",
+                static_cast<unsigned long>(std::strlen(json)));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, longitud));
+  TEST_ASSERT_NULL(std::strstr(resumen, "AA:BB:CC"));
+  TEST_ASSERT_NULL(std::strstr(resumen, "gramos_medidos"));
+}
+
+void test_el_resumen_de_un_pendiente_recupera_orden_y_motivo() {
+  reporting::ReporteCiclo reporte = reporteCompleto();
+  reporte.motivo = dispensing::DispenseReason::SENSOR_FAILURE;
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:EE:FF", reporte,
+                                                   json, sizeof(json)));
+
+  long orden = -1;
+  bool ordenDisponible = true;
+  char motivo[32];
+  TEST_ASSERT_TRUE(reporting::extraerResumenReporte(
+      json, &orden, &ordenDisponible, motivo, sizeof(motivo)));
+  TEST_ASSERT_TRUE(ordenDisponible);
+  TEST_ASSERT_EQUAL_INT(12, static_cast<int>(orden));
+  TEST_ASSERT_EQUAL_STRING("fallo_sensor_dispensacion", motivo);
+
+  char resumen[160];
+  reporting::formatearResumenReporte(orden, ordenDisponible, motivo,
+                                     std::strlen(json), resumen,
+                                     sizeof(resumen));
+  TEST_ASSERT_NOT_NULL(std::strstr(
+      resumen, "order_id=12, motivo=fallo_sensor_dispensacion"));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, "longitud="));
+}
+
+void test_el_resumen_de_un_pendiente_sin_orden_no_inventa_un_numero() {
+  const reporting::ReporteCiclo reporte = reporting::reporteVacio(
+      dispensing::DispenseReason::INVALID_AMOUNT);
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:EE:FF", reporte,
+                                                   json, sizeof(json)));
+
+  long orden = 7;
+  bool ordenDisponible = true;
+  char motivo[32];
+  TEST_ASSERT_TRUE(reporting::extraerResumenReporte(
+      json, &orden, &ordenDisponible, motivo, sizeof(motivo)));
+  TEST_ASSERT_FALSE(ordenDisponible);
+  TEST_ASSERT_EQUAL_STRING("orden_invalida", motivo);
+}
+
+void test_el_resumen_ignora_un_cuerpo_inexistente() {
+  long orden = 7;
+  bool ordenDisponible = true;
+  char motivo[16] = "x";
+  TEST_ASSERT_FALSE(reporting::extraerResumenReporte(
+      nullptr, &orden, &ordenDisponible, motivo, sizeof(motivo)));
+  TEST_ASSERT_FALSE(ordenDisponible);
+  TEST_ASSERT_EQUAL_STRING("", motivo);
+}
+
 // --- Política de reintentos (RF-37) ---
 
 void test_la_politica_conserva_timeout_y_esperas() {
@@ -313,6 +406,12 @@ int main(int argc, char **argv) {
   RUN_TEST(test_un_400_no_enumerado_tambien_se_descarta);
   RUN_TEST(test_los_5xx_y_los_errores_de_red_se_reintentan);
   RUN_TEST(test_codigos_definitivos_del_catalogo);
+  RUN_TEST(test_el_resumen_muestra_la_orden_y_el_motivo_del_ciclo);
+  RUN_TEST(test_el_resumen_sin_identificador_de_orden_lo_declara_no_disponible);
+  RUN_TEST(test_el_resumen_no_repite_la_mac_ni_el_cuerpo);
+  RUN_TEST(test_el_resumen_de_un_pendiente_recupera_orden_y_motivo);
+  RUN_TEST(test_el_resumen_de_un_pendiente_sin_orden_no_inventa_un_numero);
+  RUN_TEST(test_el_resumen_ignora_un_cuerpo_inexistente);
   RUN_TEST(test_la_politica_conserva_timeout_y_esperas);
   RUN_TEST(test_se_reintenta_solo_mientras_queden_intentos);
   return UNITY_END();

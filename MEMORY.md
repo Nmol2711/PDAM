@@ -2,13 +2,13 @@
 
 ## Estado actual
 * **Spec 014 implementada (2026-10-28), pendiente de pruebas físicas:** 41 RF con prueba
-  automatizada y trazabilidad en `test_traceability_rf.py`; quedan P-T8-A a P-T9-D en `tasks.md`.
-* **Auditoría 2026-10-29:** `pytest` 530 + 541 subtests; `flutter test` 412/412; `flutter
-  analyze` 0 errores (95 avisos); `pio test -e native` 157/157; `pio run` SUCCESS (RAM
-  64 444 B, 19,7 %; Flash 2 030 750 B, 64,6 %). Dependencia nueva: `flutter_localizations`.
-  Specs 001–013 cerradas; hardware real de 005 sin probar.
-* **2026-10-29:** base de desarrollo reseteada y vacía, con respaldo en
-  `/tmp/opencode/pdam-pre-014.db`; el login ya no trae credenciales precargadas.
+  automatizada y trazabilidad en `test_traceability_rf.py`; quedan P-T8-A, P-T9-B/C/D. Specs 001–013 cerradas.
+* **P-T9-A aprobada con hardware real el 2026-10-29:** orden 3 con 17,27 g solicitados y 22,23 g
+  medidos y descontados (4637,16 → 4614,93 g) y orden 4 con atasco y sin descuento, ambas con
+  HTTP 200 al intento 1; la orden 1 (344,75 g) no es evidencia válida (el usuario manipuló la celda).
+* **Auditoría 2026-10-29:** `pytest` 530 + 541 subtests; `flutter test` 412/412; `flutter analyze`
+  0 errores (95 avisos); `pio test -e native` 163/163 (157 + 6 del resumen); `pio run` SUCCESS.
+  Base de desarrollo reseteada (respaldo `/tmp/opencode/pdam-pre-014.db`); login sin credenciales.
 
 ## Decisiones clave (Spec 014)
 * Orden con ID y estados pendiente/cerrada; el stock se descuenta al cerrar con éxito, nunca al
@@ -29,7 +29,8 @@
   sin error y no cuenta como campo modificado (RF-23).
 * Comida programada bloqueada: espera en `dispensing_queue` a que la orden cierre o venza; `pending_dispensing` solo se consume si ya estaba puesta.
 * Borrado de mascota con dispensador: 409 `pet_has_dispenser`. Firmware: timeout de 10 s, reintentos
-  5/15 s, pendiente en NVS, descarte deliberado de 2xx/4xx y monitor sin MAC (solo orden, motivo y longitud).
+  5/15 s, pendiente en NVS, descarte deliberado de 2xx/4xx y monitor sin MAC (orden, motivo y
+  longitud formateados desde el `ReporteCiclo`, nunca releyendo el JSON).
 * App: `locale: es` del SDK; los logs locales no se sincronizan (`isSynced = true`) y `LogState` usa solo `isOffline` como señal de caché.
 
 ## Decisiones clave (Specs 011 y 013)
@@ -43,13 +44,12 @@
 * No descontar stock al entregar ni omitir el filtro `fecha`; no comparar `Schedule.time` contra
   UTC. No consumir cola, bandera ni stock con asignación ORM: usar `UPDATE` y `rowcount`.
 * No aplicar stock desde el cliente ni añadir `skip` por zona horaria: inyectar el desplazamiento
-  (`zona`, `offsetInicio`/`offsetFin`).
-* La migración de `logs` e índices corre una vez por archivo y proceso (`BASES_MIGRADAS`); tras
-  alterar el esquema por fuera de SQLAlchemy, usar `database.olvidar_migraciones(ruta)`.
+  (`zona`, `offsetInicio`/`offsetFin`). La migración de `logs` corre una vez por archivo y proceso
+  (`BASES_MIGRADAS`); tras alterar el esquema por fuera de SQLAlchemy, usar `olvidar_migraciones`.
 
 ## Deuda aceptada y riesgos
 * Entrega incompleta o reporte tardío no descuentan stock (queda por encima del real). La ventana
   de 10 min de `encolar_comida` no recupera ocurrencias si el proceso cae más. Ruta con typo
   `/dispenserscheck-taks/{mac}`.
 * Persistencia del reporte en NVS y reenvío tras reinicio: solo P-T9-B. Calibración válida solo para
-  este montaje; P3 sin instrumento independiente y rama `pruebas/endpoint-fijo-hx711` sin merge a `main`.
+  este montaje; P3 sin instrumento independiente, hardware real de 005 sin probar y rama `pruebas/endpoint-fijo-hx711` sin merge a `main`.
