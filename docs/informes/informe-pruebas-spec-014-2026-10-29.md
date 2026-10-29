@@ -898,9 +898,9 @@ reintentos y el pendiente se conserva en NVS, y el flujo continúa sin volver a 
 elimina el reenvío de `STATE_NORMAL` para no duplicarlo. La política de reintentos, el cuerpo del
 reporte, la NVS y el aprovisionamiento BLE no cambian. Pruebas nuevas en `test_report_utils.cpp`
 (2): `pio test -e native` pasa de 163 a **165/165** y `pio run` sigue en SUCCESS. **P-T9-B se
-repetirá** con este firmware para acreditar que el reenvío precede al barrido del servidor; el
-flasheo no se pudo ejecutar en esta sesión porque no había ningún dispositivo serie USB conectado
-(`/dev/ttyUSB0` inexistente), así que la placa debe flashearse antes de repetir la prueba.
+repetirá** con este firmware para acreditar que el reenvío precede al barrido del servidor. El
+firmware corregido se flasheó en el ESP32 de pruebas el 2026-10-29 (`pio run --target upload`,
+«Hash of data verified», 2 058 240 bytes) y la placa quedó lista para repetir P-T9-B.
 
 ---
 
