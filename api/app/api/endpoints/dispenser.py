@@ -1,6 +1,7 @@
-from typing import List
-from fastapi import APIRouter, Depends, File, Form, HTTPException, status
+from typing import Any, List
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import ValidationError
 from app.core.security import verify_secret_key_qr
 from app.db.database import get_db
 from app.api.deps import CurrentUser
@@ -14,8 +15,10 @@ from app.schemas.schemas import (
     DispenserWiFiResetResponse,
     DispenserRefillRequest,
 )
+from app.schemas.reports import DispenserReportRequest, DispenserReportResponse
+from app.domain.catalogos import ErrorDominio
 
-from app.services import pet_service, dispenser_service
+from app.services import pet_service, dispenser_service, order_service
 from app.models import models
 
 router = APIRouter()
@@ -31,9 +34,6 @@ def create_dispenser(
         db=db, pet_id=dispenser.pet_id, user_id=current_user.id
     )
 
-    print(
-        f"mac_address: {dispenser.mac_address} and secret_key: {dispenser.secret_key_qr}"
-    )
     if not verify_secret_key_qr(dispenser.secret_key_qr):
         raise HTTPException(
             status_code=403,
@@ -41,7 +41,9 @@ def create_dispenser(
         )
 
     return dispenser_service.create_new_dispenser(
-        db=db, new_dispenser=DispenserCreate.model_validate(dispenser.model_dump())
+        db=db,
+        new_dispenser=DispenserCreate.model_validate(dispenser.model_dump()),
+        user_id=current_user.id,
     )
 
 
@@ -71,7 +73,10 @@ def update_dispenser(
     )
 
     return dispenser_service.update_dispenser(
-        db=db, dispenser_id=dispenser_id, dispenser_update=dispenser_to_update
+        db=db,
+        dispenser_id=dispenser_id,
+        dispenser_update=dispenser_to_update,
+        user_id=current_user.id,
     )
 
 
@@ -87,6 +92,36 @@ def check_dispenser_taks_test(address_mac: str, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/reports", response_model=DispenserReportResponse)
+def report_dispensing_result(
+    cuerpo: Any = Body(default=None), db: Session = Depends(get_db)
+):
+    """Cierre de una orden con el reporte de fin de ciclo del dispositivo.
+
+    Sin token: la autenticación es la MAC registrada del dispensador (RF-14,
+    RF-21). Los rechazos de negocio son 400 con `detail={code,message}`; un fallo
+    de escritura es 5xx para que el firmware reintente (RF-1).
+
+    El cuerpo se recibe como `Any` y se valida aquí: un cuerpo que no sea un
+    objeto JSON (lista, cadena o vacío) responde 400 y nunca 422. El catálogo de
+    errores no tiene un código para el cuerpo mal formado y no se inventa uno: se
+    usa `motivo_invalido`, que es el rechazo del contrato del reporte.
+    """
+    if not isinstance(cuerpo, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorDominio("motivo_invalido").detail,
+        )
+
+    reporte = DispenserReportRequest.model_validate(cuerpo)
+    try:
+        return order_service.procesar_reporte(db=db, reporte=reporte)
+    except ErrorDominio as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=error.detail
+        )
+
+
 @router.delete("/{pet_id}")
 def delete_dispenser_by_pet(
     current_user: CurrentUser, pet_id: int, db: Session = Depends(get_db)
@@ -94,7 +129,9 @@ def delete_dispenser_by_pet(
 
     pet_service.obtener_mascota_por_id(db=db, pet_id=pet_id, user_id=current_user.id)
 
-    return dispenser_service.delete_dispenser(db=db, pet_id=pet_id)
+    return dispenser_service.delete_dispenser(
+        db=db, pet_id=pet_id, user_id=current_user.id
+    )
 
 
 @router.post("/{id}/reset-wifi", response_model=DispenserWiFiResetResponse)
@@ -110,16 +147,26 @@ def reset_dispenser_wifi(
     pet_service.obtener_mascota_por_id(
         db=db, pet_id=dispenser.pet_id, user_id=current_user.id
     )
-    return dispenser_service.reset_wifi_credentials(db=db, dispenser_id=id)
+    return dispenser_service.reset_wifi_credentials(
+        db=db, dispenser_id=id, user_id=current_user.id
+    )
 
 
 @router.post("/{dispenser_id}/refill", response_model=Dispenser)
 def refill_dispenser_endpoint(
     current_user: CurrentUser,
     dispenser_id: int,
-    refill_request: DispenserRefillRequest,
+    cuerpo: Any = Body(default=None),
     db: Session = Depends(get_db),
 ):
+    """Reabastece el dispensador (RF-11, RF-12, RF-22, RF-23).
+
+    El cuerpo se recibe como `Any` y se valida aquí: un cuerpo que no sea un
+    objeto JSON responde 400 con `cantidad_invalida` y nunca 422. La cantidad y la
+    capacidad se validan en el servicio, que responde 400 con el código del
+    catálogo, deja el stock intacto y registra el fallo. Un `operation_id`
+    repetido no vuelve a sumar ni a registrar.
+    """
     dispenser = (
         db.query(models.Dispenser).filter(models.Dispenser.id == dispenser_id).first()
     )
@@ -131,7 +178,25 @@ def refill_dispenser_endpoint(
     pet_service.obtener_mascota_por_id(
         db=db, pet_id=dispenser.pet_id, user_id=current_user.id
     )
+
+    if not isinstance(cuerpo, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorDominio("cantidad_invalida").detail,
+        )
+
+    try:
+        refill_request = DispenserRefillRequest.model_validate(cuerpo)
+    except ValidationError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorDominio("cantidad_invalida").detail,
+        )
+
     return dispenser_service.refill_dispenser(
-        db=db, dispenser_id=dispenser_id, refill_data=refill_request
+        db=db,
+        dispenser_id=dispenser_id,
+        refill_data=refill_request,
+        user_id=current_user.id,
     )
 

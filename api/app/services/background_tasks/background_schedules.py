@@ -1,42 +1,27 @@
-from datetime import datetime, timedelta
+"""Barrido periódico del servidor (spec 014, RF-19, RF-25, RNF-3).
+
+Un único ciclo ejecuta primero el cierre de las órdenes vencidas y después el
+encolado de las comidas programadas. Se retiró el job anterior de 60 s que
+activaba `dispensers.pending_dispensing`: esa bandera ya no es fuente de verdad,
+porque la comida programada vive en `dispensing_queue` y se entrega en la
+consulta del dispositivo. El resto de tareas programadas del proyecto no cambia.
+"""
+
+from datetime import datetime
+from typing import Optional
+
 from sqlalchemy.orm import Session
-from app.models.models import Dispenser, Schedule
 
-def check_and_activate_scheduled_feedings(db: Session):
-    # Obtener la hora actual del servidor (solo hora y minutos)
-    hour = datetime.now()
-    current_time = hour.time()
-    
-    # Definir el margen de tiempo 
-    marge_minutes = (hour - timedelta(minutes=10)).time()
-    print("Ejecucion en segundo plano")
+from app.services import order_service
 
-    try:
-        # Buscar todos los horarios que correspondan al rango actual
-        # Dependiendo de si guardas 'time' como String o Time en SQL, adaptamos el filtro.
-        # Aquí asumimos que está en un formato comparable dentro del rango de 10 min.
-        active_schedules = db.query(Schedule).filter(
-            Schedule.time <= current_time,
-            Schedule.time >= marge_minutes  
-        ).all()
 
-        for schedule in active_schedules:
-            # 3. Buscar el dispensador asociado a la mascota de ese horario
-            dispenser = db.query(Dispenser).filter(
-                Dispenser.pet_id == schedule.pet_id,
-                Dispenser.is_active == True,
-                Dispenser.pending_dispensing == False 
-            ).first()
+def ejecutar_barrido(db: Session, ahora: Optional[datetime] = None) -> dict:
+    """Cierra los vencimientos y encola las ocurrencias, en ese orden.
 
-            # 4. Si el dispensador existe y está libre, activar la comida
-            if dispenser:
-                dispenser.pending_dispensing = True
-                # Nota: Si necesitas pasar la cantidad (amount), podrías guardarla en una columna
-                # temporal o usarla para calcular los segundos de giro dinámicamente aquí.
-                print(f"⏰ Horario cumplido para mascota {schedule.pet_id}. Dispensador activado.")
-        
-        db.commit()
-
-    except Exception as e:
-        db.rollback()
-        print(f"Error en el planificador de comidas: {str(e)}")
+    El orden importa: una orden que acaba de vencer libera el bloqueo antes de
+    que se encole la comida que coincidía con ella (RF-19, RF-25). El instante
+    se inyecta para poder probar las fronteras con un reloj falso.
+    """
+    cerradas = order_service.cerrar_vencidas(db, ahora=ahora)
+    encoladas = order_service.encolar_comida(db, ahora=ahora)
+    return {"cerradas": cerradas, "encoladas": encoladas}

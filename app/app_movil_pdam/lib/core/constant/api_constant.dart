@@ -18,6 +18,7 @@ class ApiConstants {
 
   static const String schedules = "$baseUrl/schedules/";
   static const String logs = "$baseUrl/logs/";
+  static const String logsCatalog = "$baseUrl/logs/catalog";
 
   static const String dispenser = "$baseUrl/dispensers/";
   static const String sync = "$baseUrl/sync/";

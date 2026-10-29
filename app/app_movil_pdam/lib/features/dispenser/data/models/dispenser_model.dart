@@ -17,6 +17,7 @@ class DispenserModel extends Dispenser {
     super.currentFoodGrams,
     super.isOfflineCached,
     super.pendingRefillGrams,
+    super.pendingRefillId,
   });
 
   factory DispenserModel.fromJson(Map<String, dynamic> json) {
@@ -27,7 +28,8 @@ class DispenserModel extends Dispenser {
       isActive: json['is_active'] as bool? ?? false,
       petId: json['pet_id'] as int?,
       name: json['name'] as String? ?? '',
-      currentFoodGrams: (json['current_food_grams'] as num?)?.toDouble() ?? 5000.0,
+      currentFoodGrams:
+          (json['current_food_grams'] as num?)?.toDouble() ?? 5000.0,
       pendingRefillGrams: 0.0,
     );
   }
@@ -44,6 +46,7 @@ class DispenserModel extends Dispenser {
       currentFoodGrams: local.currentFoodGrams,
       isOfflineCached: local.isOfflineCached,
       pendingRefillGrams: local.pendingRefillGrams,
+      pendingRefillId: local.pendingRefillId,
     );
   }
 
@@ -57,6 +60,7 @@ class DispenserModel extends Dispenser {
       ..currentFoodGrams = currentFoodGrams
       ..isOfflineCached = isOfflineCached
       ..pendingRefillGrams = pendingRefillGrams
+      ..pendingRefillId = pendingRefillId
       ..updatedAt = DateTime.now()
       ..isSynced = true;
     return local;

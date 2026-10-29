@@ -25,7 +25,16 @@
 #define CHARACTERISTIC_UUID_PASS   "1eb67500-8e45-4df9-bffd-a3e973e87c0e"
 
 // Configuración de la API
+// Consulta de orden pendiente. La ruta real del servidor se compone con el
+// prefijo del router y su ruta sin barra inicial (`/dispensers` +
+// `check-taks/{mac}`), de ahí el typo `dispenserscheck-taks` y la falta de barra
+// entre `dispensers` y `check`: firmware y datasource de la app usan esa misma
+// URL y el contrato del servidor no se cambia.
 const char* const BASE_URL = "http://192.168.1.58:8000/dispenserscheck-taks/";
+
+// Reporte de fin de ciclo (`POST /dispensers/reports`, §5.2 del plan 014).
+// Mismo host que la consulta, con la ruta del contrato.
+const char* const REPORTS_URL = "http://192.168.1.58:8000/dispensers/reports";
 
 // Configuración del Hardware (ServoMotor MG966R en Pin 4)
 const int servoPin = 4;

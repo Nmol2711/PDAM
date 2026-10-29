@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+from pydantic import BaseModel
+from typing import Any, Optional
 
 class DispenserBase(BaseModel):
     mac_address: str
@@ -21,8 +21,15 @@ class DispenserUpdate(BaseModel):
     pet_id: Optional[int] = None
     mac_address: Optional[str] = None
     is_active: Optional[bool] = None
-    pending_dispensing: Optional[bool] = None
+    # Se sigue aceptando por compatibilidad, pero se ignora sin error: el stock
+    # solo lo calcula el servidor y la respuesta devuelve su valor (RF-23).
     current_food_grams: Optional[float] = None
+
+    # `pending_dispensing` ya no forma parte del contrato de actualización
+    # (spec 014, T5): la comida programada vive en la cola del servidor. Pydantic
+    # ignora el campo extra, así que un cliente antiguo que lo envíe no recibe un
+    # 422 pero tampoco cambia la bandera. Solo se consume si ya estaba puesta en
+    # la base, como compatibilidad con datos anteriores.
 
 class Dispenser(DispenserBase):
     id: int
@@ -34,8 +41,19 @@ class Dispenser(DispenserBase):
         from_attributes = True
 
 class DispenserRefillRequest(BaseModel):
-    amount: float = Field(..., gt=0)
-    unit: str = Field(default="g")
+    """Solicitud de reabastecimiento (RFC-12 de la spec 012 y RF-11 de la 014).
+
+    La cantidad y la unidad se declaran como `Any` a propósito: la validación vive
+    en el servicio para que un valor cero, negativo o no numérico responda 400 del
+    catálogo y nunca un 422 del esquema. `operation_id` hace idempotente la
+    sincronización sin conexión y `origen` marca el camino por el que llegó el
+    reabastecimiento (`servidor` o `sincronizacion_sin_conexion`).
+    """
+
+    amount: Any = None
+    unit: Any = "g"
+    operation_id: Any = None
+    origen: Any = None
 
     class Config:
         from_attributes = True

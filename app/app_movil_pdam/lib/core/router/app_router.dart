@@ -155,7 +155,6 @@ class AppRouter {
           .state; // O como manejes tu AuthState
 
       if (authState is AuthRegister) {
-        print("Retornando al login");
         return '/login';
       }
 

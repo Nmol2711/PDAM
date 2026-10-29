@@ -21,6 +21,11 @@ class Dispenser extends Equatable {
   /// Es un dato local de sincronización; el servidor no lo devuelve.
   final double pendingRefillGrams;
 
+  /// Identificador de la operación de reabastecimiento pendiente (RF-11).
+  /// Se genera una vez y se reutiliza en cada reenvío para que el servidor
+  /// deduplique; sin él, un reenvío volvería a sumar el stock.
+  final String? pendingRefillId;
+
   const Dispenser({
     required this.id,
     required this.macAddress,
@@ -32,6 +37,7 @@ class Dispenser extends Equatable {
     this.currentFoodGrams = 5000.0,
     this.isOfflineCached = false,
     this.pendingRefillGrams = 0.0,
+    this.pendingRefillId,
   });
 
   /// Alias de compatibilidad con las vistas del flujo BLE, que hablan de
@@ -54,6 +60,7 @@ class Dispenser extends Equatable {
     currentFoodGrams,
     isOfflineCached,
     pendingRefillGrams,
+    pendingRefillId,
   ];
 
   Dispenser copyWith({
@@ -67,6 +74,8 @@ class Dispenser extends Equatable {
     double? currentFoodGrams,
     bool? isOfflineCached,
     double? pendingRefillGrams,
+    String? pendingRefillId,
+    bool clearPendingRefillId = false,
   }) {
     return Dispenser(
       id: id ?? this.id,
@@ -79,6 +88,9 @@ class Dispenser extends Equatable {
       currentFoodGrams: currentFoodGrams ?? this.currentFoodGrams,
       isOfflineCached: isOfflineCached ?? this.isOfflineCached,
       pendingRefillGrams: pendingRefillGrams ?? this.pendingRefillGrams,
+      pendingRefillId: clearPendingRefillId
+          ? null
+          : (pendingRefillId ?? this.pendingRefillId),
     );
   }
 }

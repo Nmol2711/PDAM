@@ -17,6 +17,17 @@ SEPARADORES = {":", "-", ".", " "}
 # Forma canónica: exactamente 12 dígitos hexadecimales en mayúsculas.
 PATRON_MAC_NORMALIZADA = r"[0-9A-F]{12}"
 
+# Prefijo literal de la MAC parcial: exactamente dos asteriscos, idéntico para
+# cualquier dirección sin importar cuántos octetos tenga la original.
+PREFIJO_MAC_PARCIAL = "**"
+
+# Solo dígitos hexadecimales en mayúsculas: lo que deja `normalize_mac`.
+PATRON_HEXADECIMAL = r"[0-9A-F]+"
+
+# Forma de una MAC ya enmascarada: el prefijo literal y los dos últimos octetos,
+# o el prefijo suelto cuando no había octetos que conservar.
+PATRON_MAC_PARCIAL = r"\*\*(?::[0-9A-F]{2}:[0-9A-F]{2})?"
+
 # Códigos de error estables del contrato de la API (AC-4). El cliente clasifica
 # por `detail.code`, nunca por el texto del mensaje.
 CODE_MAC_ALREADY_REGISTERED = "mac_already_registered"
@@ -63,6 +74,47 @@ def is_valid_normalized_mac(valor: str | None) -> bool:
         return False
 
     return re.fullmatch(PATRON_MAC_NORMALIZADA, valor) is not None
+
+
+def es_mac_parcial(valor: str | None) -> bool:
+    """Indica si `valor` ya está en la forma enmascarada `**:AB:1F` (o `**`).
+
+    Se usa para no volver a enmascarar una instantánea que ya guarda la MAC
+    parcial: `mask_mac` es idempotente y una segunda pasada la conserva tal cual
+    en lugar de degradarla al prefijo suelto (RF-3, RNF-1).
+    """
+    if not isinstance(valor, str):
+        return False
+
+    return (
+        re.fullmatch(PATRON_MAC_PARCIAL, valor.strip(), re.IGNORECASE) is not None
+    )
+
+
+def mask_mac(raw: str | None) -> str:
+    """Devuelve la MAC parcial de `raw`, con el formato `**:AB:1F`.
+
+    Normaliza primero con el mismo criterio que el resto del sistema y conserva
+    solo los dos últimos octetos, en mayúsculas y separados por dos puntos. El
+    prefijo es siempre el literal `**`, aunque la dirección original tenga más
+    octetos, de modo que la MAC completa nunca se guarda ni se devuelve
+    (RF-3, RNF-1).
+
+    Si no hay al menos dos octetos hexadecimales no hay nada que mostrar y
+    devuelve solo el prefijo, sin inventar octetos. La operación es idempotente:
+    una dirección ya enmascarada se devuelve tal cual, de modo que una
+    instantánea parcial (la de una orden cuyo dispensador se eliminó) no se
+    convierte en el prefijo suelto al registrarla otra vez.
+    """
+    if es_mac_parcial(raw):
+        return raw.strip().upper()
+
+    normalizada = normalize_mac(raw)
+
+    if len(normalizada) < 4 or re.fullmatch(PATRON_HEXADECIMAL, normalizada) is None:
+        return PREFIJO_MAC_PARCIAL
+
+    return f"{PREFIJO_MAC_PARCIAL}:{normalizada[-4:-2]}:{normalizada[-2:]}"
 
 
 def validate_mac_or_raise(raw: str | None) -> str:

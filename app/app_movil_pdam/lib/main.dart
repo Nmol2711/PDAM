@@ -1,4 +1,5 @@
 import 'package:app_movil_pdam/core/router/app_router.dart';
+import 'package:app_movil_pdam/core/localization/app_localization.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
 import 'package:app_movil_pdam/core/offline/isar_service.dart';
@@ -65,6 +66,11 @@ class MainApp extends StatelessWidget {
                 themeMode: themeMode,
                 debugShowCheckedModeBanner: false,
                 title: "PDAM",
+                // Español también en los textos del SDK: el selector de rango
+                // de fechas del historial sale en español (spec 014, T10).
+                locale: idiomaPorDefecto,
+                supportedLocales: idiomasAdmitidos,
+                localizationsDelegates: delegadosDeLocalizacion,
               );
             },
           );

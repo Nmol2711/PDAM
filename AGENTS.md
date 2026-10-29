@@ -19,6 +19,7 @@ Sistema encargado de dispensadar alimento seco para mascotas (Perros y Gatos). P
      api/
      ├── app/
      │   ├── db/
+     │   ├── domain/
      │   ├── models/
      │   ├── schemas/
      │   ├── services/
@@ -34,6 +35,8 @@ Sistema encargado de dispensadar alimento seco para mascotas (Perros y Gatos). P
      - **`app/`**: Directorio principal donde se aloja el código fuente y la lógica de la aplicación.
 
      - **`db/`**: Contiene la configuración de la base de datos y la gestión de la conexión.
+
+     - **`domain/`**: Lógica pura del backend sin dependencia del framework ni de la base de datos (catálogos cerrados, cálculo de stock, tiempos, validación de consultas y reglas de cierre).
 
      - **`models/`**: Define los modelos de datos (por ejemplo, tablas de SQLAlchemy u ORM) para interactuar con la base de datos.
 

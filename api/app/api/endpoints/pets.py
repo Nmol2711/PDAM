@@ -32,7 +32,6 @@ def crear_mascota(
         reproductive_status=reproductive_status,
         path_url=path_url
     )
-    print(f"Pet Creada con exito f{pet}")
     return pet_service.crear_mascota(db=db, pet=pet, user_id=current_user.id)
 
 @router.get("/", response_model=List[schemas.Pet])
