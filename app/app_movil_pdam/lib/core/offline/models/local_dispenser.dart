@@ -23,6 +23,11 @@ class LocalDispenser {
   /// Persistir el delta permite sobrevivir al cierre de la app (RNF-7).
   double pendingRefillGrams = 0.0;
 
+  /// Identificador de la operación de reabastecimiento pendiente (RF-11).
+  /// Se genera una vez y se repite en cada reenvío para que el servidor
+  /// deduplique; sin él, un reenvío volvería a sumar el stock.
+  String? pendingRefillId;
+
   late DateTime updatedAt;
   late bool isSynced;
 }

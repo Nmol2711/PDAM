@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   dartz: ^0.10.1
   dio: ^5.9.2
   flutter_secure_storage: ^10.3.1

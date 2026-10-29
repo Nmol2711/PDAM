@@ -39,6 +39,7 @@ class TestProtectedEndpoints(BaseApiTests):
             "/pets/1",
             "/dispensers/1",
             "/logs/",
+            "/logs/catalog",
             "/schedules/",
             "/schedules/1?pet_id=1",
             "/schedules/pet/1",
@@ -53,13 +54,18 @@ class TestProtectedEndpoints(BaseApiTests):
         routes = [
             ("/pets/", {"name": "Milo", "species": "perro", "birth_date": "2023-01-01", "weight": 5.2, "reproductive_status": False}),
             ("/dispensers/", {"pet_id": 1, "mac_address": "AA:BB:CC:DD:EE:FF", "secret_key_qr": "abc123"}),
-            ("/logs/", {"description": "prueba", "type": "info"}),
             ("/schedules/", {"time": "08:00", "amount": 50}),
         ]
 
         for route, payload in routes:
             with self.subTest(route=route):
                 self.assert_route_requires_auth("post", route, json=payload)
+
+    def test_el_post_de_logs_ya_no_existe(self):
+        # T6 retira el alta libre de registros: solo el servidor escribe historial.
+        response = self.client.post("/logs/", json={"description": "prueba"})
+
+        self.assertEqual(response.status_code, 405)
 
     def test_put_routes_require_authentication(self):
         routes = [

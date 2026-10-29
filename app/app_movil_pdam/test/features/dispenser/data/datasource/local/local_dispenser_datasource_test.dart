@@ -163,6 +163,59 @@ void main() {
       expect(saved?.pendingRefillGrams, 500.0);
       expect(saved?.currentFoodGrams, 1500.0);
     });
+
+    test('guarda, conserva y limpia pendingRefillId (RF-11)', () async {
+      Dispenser dispenser({double stock = 1200.0}) => Dispenser(
+        id: 8,
+        macAddress: 'AB:BB:CC:DD:EE:FF',
+        pendingDispensing: false,
+        isActive: true,
+        petId: 6,
+        currentFoodGrams: stock,
+      );
+
+      // Persistir: el identificador de la operación se guarda con el pendiente.
+      await datasource.saveLocalDispenser(
+        dispenser(),
+        pendingRefillId: 'operacion-1',
+      );
+      var saved = await datasource.getLocalDispenserByPet(6);
+      expect(saved?.pendingRefillId, 'operacion-1');
+
+      // Conservar: un refresco normal no lo borra.
+      await datasource.saveLocalDispenser(dispenser(stock: 1180.0));
+      saved = await datasource.getLocalDispenserByPet(6);
+      expect(saved?.pendingRefillId, 'operacion-1');
+      expect(saved?.currentFoodGrams, 1180.0);
+
+      // Limpiar: la cadena vacía lo elimina tras la respuesta definitiva.
+      await datasource.saveLocalDispenser(
+        dispenser(stock: 1680.0),
+        pendingRefillId: '',
+      );
+      saved = await datasource.getLocalDispenserByPet(6);
+      expect(saved?.pendingRefillId, isNull);
+    });
+
+    test('pendingRefillId sobrevive al cierre y reapertura de Isar (RF-11)', () async {
+      await datasource.saveLocalDispenser(
+        Dispenser(
+          id: 10,
+          macAddress: 'AC:BB:CC:DD:EE:FF',
+          pendingDispensing: false,
+          isActive: true,
+          petId: 7,
+          currentFoodGrams: 1500.0,
+        ),
+        pendingRefillId: 'operacion-2',
+      );
+
+      await IsarService.close();
+      final reopened = LocalDispenserDatasourceImpl(testDirectory: tempDir.path);
+      final saved = await reopened.getLocalDispenserByPet(7);
+
+      expect(saved?.pendingRefillId, 'operacion-2');
+    });
   });
 
   group('Limpieza de huérfanos', () {
@@ -269,7 +322,7 @@ void main() {
       await isar.writeTxn(() async {
         final pet = LocalPet(); pet.id = 1; pet.remoteId = 1; pet.userId = 'default_user'; pet.name = 'P'; pet.species = 'canino'; pet.birthDate = DateTime(2020,1,1).toIso8601String(); pet.weight = 5; pet.reproductiveStatus = false; pet.isSynced = true; pet.updatedAt = DateTime.now(); await isar.localPets.put(pet);
         final sched = LocalSchedule(); sched.id = 1; sched.remoteId = 1; sched.petRemoteId = 1; sched.userId = 'default_user'; sched.time = '09:00'; sched.amount = 100; sched.isSynced = true; sched.updatedAt = DateTime.now(); await isar.localSchedules.put(sched);
-        final log = LocalLog(); log.id = 1; log.remoteId = 1; log.petRemoteId = 1; log.userId = 'default_user'; log.event = 'test'; log.timestamp = DateTime.now(); log.isSynced = true; await isar.localLogs.put(log);
+        final log = LocalLog(); log.id = 1; log.remoteId = 1; log.petRemoteId = 1; log.userId = 'default_user'; log.description = 'test'; log.timestamp = DateTime.now(); log.isSynced = true; await isar.localLogs.put(log);
         final d = LocalDispenser(); d.id = 10; d.remoteId = null; d.petRemoteId = 5; d.macAddress = 'AA:BB:CC:DD:EE:FF'; d.isSynced = false; d.isActive = false; d.pendingDispensing = false; d.updatedAt = DateTime.now(); await isar.localDispensers.put(d);
       });
 

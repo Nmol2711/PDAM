@@ -2,11 +2,16 @@
 #include "../config/dispensing_utils.h"
 #include "../services/wifi_service.h"
 #include "../services/api_service.h"
+#include "../services/report_service.h"
 #include <WiFi.h>
 #include <Preferences.h>
 
 static DeviceState currentState = STATE_CHECK_NVS;
 static unsigned long lastCheckTime = 0;
+
+// Reporte pendiente reenviado una sola vez por arranque (RF-37). Si vuelve a
+// fallar queda en NVS para el siguiente reinicio; no se reintenta en cada ciclo.
+static bool pendingReportRetried = false;
 
 extern String serverUrl;
 
@@ -75,6 +80,13 @@ void runDispenserTask() {
     }
 
     case STATE_NORMAL: {
+      // RF-37: al entrar en estado normal, y antes de consultar el servidor, se
+      // reenvía el reporte que quedó pendiente de un arranque anterior.
+      if (!pendingReportRetried) {
+        pendingReportRetried = true;
+        reporting::reenviarReportePendiente(REPORTS_URL);
+      }
+
       if (dispensing::isCheckDue(lastCheckTime, millis(), CHECK_INTERVAL)) {
         if (WiFi.status() == WL_CONNECTED) {
           checkDispenserAction(serverUrl);

@@ -131,21 +131,9 @@ class AutoScheduleResponse(BaseModel):
         from_attributes = True
 
 # --- SCHEMAS DE LOGS (HISTORIAL) ---
-class ActivityLogBase(BaseModel):
-    event: str
-    pet_id: Optional[int] = None
-
-class ActivityLogCreate(ActivityLogBase):
-    pass
-
-class ActivityLog(ActivityLogBase):
-    id: int
-    timestamp: datetime
-    user_id: int
-    pet_id: Optional[int] = None
-
-    class Config:
-        from_attributes = True
+# La consulta del historial vive en `app/schemas/logs.py` desde la T7 de la spec
+# 014: sobre paginado, etiquetas en español y catálogo de filtros. El alta viaja
+# solo por `activity_service`, así que no existe un esquema de creación.
 
 # --- SCHEMAS DE DASHBOARD ---
 class DashboardSummary(BaseModel):

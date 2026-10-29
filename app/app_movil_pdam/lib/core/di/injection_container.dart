@@ -53,6 +53,7 @@ import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/update_sch
 import 'package:app_movil_pdam/features/logs/data/datasource/local/local_log_datasource.dart';
 import 'package:app_movil_pdam/features/logs/data/datasource/remote/log_remote_datasource.dart';
 import 'package:app_movil_pdam/features/logs/data/repository_impl/log_repository_impl.dart';
+import 'package:app_movil_pdam/features/logs/domain/use_case/get_log_catalog_uc.dart';
 import 'package:app_movil_pdam/features/logs/domain/repository/log_repositories.dart';
 import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
@@ -229,6 +230,9 @@ Future<void> setup() async {
   sl.registerLazySingleton(
     () => GetLogsUc(repository: sl<LogRepositories>()),
   );
+  sl.registerLazySingleton(
+    () => GetLogCatalogUc(repository: sl<LogRepositories>()),
+  );
 
   // Dispenser
   sl.registerLazySingleton(
@@ -301,7 +305,10 @@ Future<void> setup() async {
   );
 
   sl.registerLazySingleton(
-    () => LogBloc(getLogsUc: sl<GetLogsUc>()),
+    () => LogBloc(
+      getLogsUc: sl<GetLogsUc>(),
+      getLogCatalogUc: sl<GetLogCatalogUc>(),
+    ),
   );
 
   sl.registerFactory(

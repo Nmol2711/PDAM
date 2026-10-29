@@ -23,8 +23,17 @@ abstract class DispenserRemoteDatasource {
   Future<Dispenser> updateDispenserMac(int dispenserId, int petId, String macAddress);
 
   /// Suma alimento al stock del dispensador en el servidor (RF-7). El servidor
-  /// aplica el tope de capacidad y devuelve el estado actualizado.
-  Future<Dispenser> refillDispenser(int dispenserId, double amount, String unit);
+  /// aplica el tope de capacidad y devuelve el estado actualizado. El
+  /// identificador de operación es obligatorio para que deduplique reenvíos
+  /// (RF-11); `origen` distingue el reabastecimiento directo del que llega de
+  /// la sincronización sin conexión.
+  Future<Dispenser> refillDispenser(
+    int dispenserId,
+    double amount,
+    String unit, {
+    required String operationId,
+    String origen = 'servidor',
+  });
 }
 
 class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
@@ -181,12 +190,19 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
   Future<Dispenser> refillDispenser(
     int dispenserId,
     double amount,
-    String unit,
-  ) async {
+    String unit, {
+    required String operationId,
+    String origen = 'servidor',
+  }) async {
     try {
       final response = await _dioClient.dio.post(
         '${ApiConstants.dispenser}$dispenserId/refill',
-        data: {'amount': amount, 'unit': unit},
+        data: {
+          'amount': amount,
+          'unit': unit,
+          'operation_id': operationId,
+          'origen': origen,
+        },
       );
       return DispenserModel.fromJson(response.data);
     } on DioException catch (e) {

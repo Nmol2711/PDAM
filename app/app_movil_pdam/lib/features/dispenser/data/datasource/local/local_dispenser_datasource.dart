@@ -15,6 +15,7 @@ abstract class LocalDispenserDatasource {
     bool isSynced = true,
     String? secretKeyQr,
     double? pendingRefillGrams,
+    String? pendingRefillId,
   });
   Future<void> deleteLocalDispenser(int petId);
   Future<int?> getRemoteIdByDeviceId(String deviceId);
@@ -76,6 +77,7 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
     bool isSynced = true,
     String? secretKeyQr,
     double? pendingRefillGrams,
+    String? pendingRefillId,
   }) async {
     final isar = await _getIsar();
     await isar.writeTxn(() async {
@@ -106,6 +108,11 @@ class LocalDispenserDatasourceImpl implements LocalDispenserDatasource {
       local.pendingRefillGrams = pendingRefillGrams ??
           existing?.pendingRefillGrams ??
           dispenser.pendingRefillGrams;
+      // Mismo criterio para el identificador de la operación pendiente: `null`
+      // conserva el previo y la cadena vacía lo limpia (RF-11).
+      local.pendingRefillId = pendingRefillId == null
+          ? (existing?.pendingRefillId ?? dispenser.pendingRefillId)
+          : (pendingRefillId.isEmpty ? null : pendingRefillId);
       local.updatedAt = DateTime.now();
       local.isSynced = isSynced;
       await isar.localDispensers.put(local);

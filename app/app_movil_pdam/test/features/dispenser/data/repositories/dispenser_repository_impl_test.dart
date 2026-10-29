@@ -45,6 +45,8 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
   int? refillDispenserId;
   double? refillAmount;
   String? refillUnit;
+  String? refillOperationId;
+  String? refillOrigen;
   Dispenser? refillResult;
   Object? refillThrowObject;
 
@@ -103,8 +105,10 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
   Future<Dispenser> refillDispenser(
     int dispenserId,
     double amount,
-    String unit,
-  ) async {
+    String unit, {
+    required String operationId,
+    String origen = 'servidor',
+  }) async {
     if (refillThrowObject != null) {
       throw refillThrowObject!;
     }
@@ -121,6 +125,8 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
     refillDispenserId = dispenserId;
     refillAmount = amount;
     refillUnit = unit;
+    refillOperationId = operationId;
+    refillOrigen = origen;
     return refillResult ??
         Dispenser(
           id: dispenserId,
@@ -168,6 +174,8 @@ class MockLocalDispenserDatasource implements LocalDispenserDatasource {
   bool savedSynced = true;
   String? savedSecret;
   double? savedPendingRefillGrams;
+  String? savedPendingRefillId;
+  final List<String?> savedPendingRefillIds = [];
   Dispenser? localReturn;
   int? remoteId;
   int saveCount = 0;
@@ -198,12 +206,22 @@ class MockLocalDispenserDatasource implements LocalDispenserDatasource {
     bool isSynced = true,
     String? secretKeyQr,
     double? pendingRefillGrams,
+    String? pendingRefillId,
   }) async {
     final resolvedPending = pendingRefillGrams ??
         savedDispenser?.pendingRefillGrams ??
         dispenser.pendingRefillGrams;
-    savedDispenser = dispenser.copyWith(pendingRefillGrams: resolvedPending);
+    final resolvedId = pendingRefillId == null
+        ? (savedDispenser?.pendingRefillId ?? dispenser.pendingRefillId)
+        : (pendingRefillId.isEmpty ? null : pendingRefillId);
+    savedDispenser = dispenser.copyWith(
+      pendingRefillGrams: resolvedPending,
+      pendingRefillId: resolvedId,
+      clearPendingRefillId: resolvedId == null,
+    );
     savedPendingRefillGrams = resolvedPending;
+    savedPendingRefillId = resolvedId;
+    savedPendingRefillIds.add(resolvedId);
     savedSynced = isSynced;
     savedSecret = secretKeyQr;
     saveCount++;
@@ -477,6 +495,63 @@ void main() {
       expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
     });
 
+    test('envía el identificador guardado y el origen de sincronización (RF-11)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+        pendingRefillGrams: 500.0,
+        pendingRefillId: 'operacion-guardada',
+      );
+      remoteDatasource.refillResult = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1500.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(remoteDatasource.refillOperationId, 'operacion-guardada');
+      expect(remoteDatasource.refillOrigen, 'sincronizacion_sin_conexion');
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+      expect(localDatasource.savedDispenser?.pendingRefillId, isNull);
+    });
+
+    test('genera y persiste el identificador si el pendiente no lo tiene (RF-11)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+        pendingRefillGrams: 500.0,
+      );
+      remoteDatasource.refillResult = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1500.0,
+      );
+
+      await repository.refreshDispensers();
+
+      expect(remoteDatasource.refillOperationId, isNotNull);
+      expect(remoteDatasource.refillOperationId, isNotEmpty);
+      expect(
+        localDatasource.savedPendingRefillIds,
+        contains(remoteDatasource.refillOperationId),
+      );
+    });
+
     test('si el servidor rechaza el pendiente reconcilia y lo limpia (RF-12)', () async {
       syncService.setHasConnection(true);
       localDatasource.remoteId = 7;
@@ -489,7 +564,7 @@ void main() {
         pendingRefillGrams: 500.0,
       );
       remoteDatasource.refillThrowObject = const ApiException(
-        code: 'refill_exceeds_capacity',
+        code: 'supera_capacidad',
         message: 'El reabastecimiento supera el límite de 5 kg',
         status: 400,
       );
@@ -555,6 +630,84 @@ void main() {
       expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
     });
 
+    test('envía siempre un identificador de operación con conexión (RF-11)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refillFood('7', 500.0);
+
+      expect(remoteDatasource.refillOperationId, isNotNull);
+      expect(remoteDatasource.refillOperationId, isNotEmpty);
+      expect(remoteDatasource.refillOrigen, 'servidor');
+    });
+
+    test('offline persiste el identificador junto al pendiente (RF-11)', () async {
+      syncService.setHasConnection(false);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refillFood('7', 500.0);
+
+      final id = localDatasource.savedDispenser?.pendingRefillId;
+      expect(id, isNotNull);
+      expect(id, isNotEmpty);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+    });
+
+    test('un segundo reabastecimiento offline reutiliza el identificador (RF-11)', () async {
+      syncService.setHasConnection(false);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+
+      await repository.refillFood('7', 200.0);
+      final primero = localDatasource.savedDispenser?.pendingRefillId;
+      await repository.refillFood('7', 300.0);
+
+      expect(primero, isNotNull);
+      expect(localDatasource.savedDispenser?.pendingRefillId, primero);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+    });
+
+    test('un fallo no-límite conserva el mismo identificador para reenviar (RF-11)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+      );
+      remoteDatasource.shouldThrow = true;
+
+      await repository.refillFood('7', 500.0);
+
+      final id = localDatasource.savedDispenser?.pendingRefillId;
+      expect(id, isNotNull);
+      expect(id, isNotEmpty);
+      expect(id, localDatasource.savedPendingRefillId);
+      expect(localDatasource.savedDispenser?.pendingRefillGrams, 500.0);
+    });
+
     test('online envía también el pendiente acumulado (RF-12)', () async {
       syncService.setHasConnection(true);
       localDatasource.remoteId = 7;
@@ -579,6 +732,25 @@ void main() {
       expect(remoteDatasource.refillAmount, 1000.0);
       expect(localDatasource.savedDispenser?.currentFoodGrams, 2000.0);
       expect(localDatasource.savedDispenser?.pendingRefillGrams, 0.0);
+    });
+
+    test('online con un pendiente previo reutiliza su identificador (RF-11)', () async {
+      syncService.setHasConnection(true);
+      localDatasource.remoteId = 7;
+      localDatasource.savedDispenser = Dispenser(
+        id: 7,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: true,
+        petId: 1,
+        currentFoodGrams: 1000.0,
+        pendingRefillGrams: 500.0,
+        pendingRefillId: 'operacion-previa',
+      );
+
+      await repository.refillFood('7', 500.0);
+
+      expect(remoteDatasource.refillOperationId, 'operacion-previa');
+      expect(remoteDatasource.refillAmount, 1000.0);
     });
 
     test('offline aplica el stock local y deja el delta pendiente (RF-11)', () async {
@@ -647,7 +819,7 @@ void main() {
         currentFoodGrams: 1000.0,
       );
       remoteDatasource.refillThrowObject = const ApiException(
-        code: 'refill_exceeds_capacity',
+        code: 'supera_capacidad',
         message: 'El reabastecimiento supera el límite de 5 kg',
         status: 400,
       );
