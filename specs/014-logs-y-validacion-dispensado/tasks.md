@@ -448,6 +448,26 @@ el backend; la orden 5 se cerró así sin intervención del dispositivo y sin to
 es exactamente lo pedido para firmware antiguo. La alternativa de flashear esa build queda
 descartada por innecesaria, no por imposibilidad.
 
+### Corrección de RF-37 derivada de las pruebas físicas (2026-10-29)
+
+Las pruebas físicas mostraron que el orden del reenvío no cumplía RF-37 en dos casos: el
+pendiente se reenviaba dentro de `STATE_NORMAL`, es decir después de `validateServerConnectivity`
+y de la primera consulta, así que si la orden vencía durante la caída el servidor la cerraba como
+`sin_reporte` antes de recibir el reporte; y si la validación del servidor fallaba, el flujo
+saltaba a aprovisionamiento BLE sin intentar el reenvío aunque el pendiente estuviera en NVS.
+
+Corregido en el firmware: el reenvío del pendiente se intenta justo después de conectar el WiFi y
+antes de validar el servidor y de la primera consulta, una sola vez por arranque
+(`tocaReenviarPendiente` en `report_utils.h`) y aunque el servidor no responda. Si falla, se
+aplican los reintentos de RF-37 y el pendiente se conserva en NVS para el siguiente reinicio; el
+flujo continúa después con la validación y el paso a estado normal o a aprovisionamiento BLE sin
+volver a intentarlo en ese arranque. Se eliminó el reenvío de `STATE_NORMAL` para no duplicarlo.
+No cambian la política de reintentos, el cuerpo del reporte, la NVS ni el aprovisionamiento BLE.
+
+**P-T9-B se repetirá** con este firmware para acreditar que el reenvío llega antes que el barrido
+del servidor; el resultado anterior se mantiene como evidencia de la persistencia en NVS y del
+cierre único, no del orden.
+
 Las deudas aceptadas de la spec siguen vigentes: una entrega incompleta o un reporte tardío no
 descuentan stock, un cliente sin `operation_id` no se puede deduplicar y la ventana de 10
 minutos de `encolar_comida` no recupera ocurrencias perdidas. La rama

@@ -5,14 +5,14 @@
   P-T8-A y P-T9-A a P-T9-D aprobadas; 41 RF con trazabilidad en `test_traceability_rf.py`.
   Specs 001–013 cerradas; rama `pruebas/endpoint-fijo-hx711` pendiente de merge a `main`.
 * **Cifras:** `pytest` 530 + 541 subtests; `flutter test` 412/412; `flutter analyze` 0 errores
-  (95 avisos); `pio test -e native` 163/163; `pio run` SUCCESS; base de desarrollo reseteada.
-* **Físicas:** orden 3, 17,27 g solicitados y 22,23 g medidos y descontados (4637,16 →
-  4614,93 g) con HTTP 200 al intento 1; orden 4, atasco no resuelto (−6,28 g) sin descuento.
-  P-T9-B conservó el pendiente en NVS y lo reenvió tras el reinicio con un cierre único;
-  P-T9-C no reintentó ni dejó pendiente; P-T9-D se acreditó en el servidor (`sin_reporte` a
-  los ~5 min, sin descuento). La orden 1 (344,75 g) no es evidencia: el usuario manipuló la celda.
+  (95 avisos); `pio test -e native` 165/165; `pio run` SUCCESS; base de desarrollo reseteada.
+* **Físicas:** orden 3, 22,23 g medidos y descontados (4637,16 → 4614,93 g) con HTTP 200 al
+  intento 1; orden 4, atasco no resuelto (−6,28 g) sin descuento. P-T9-B conservó el pendiente
+  y lo reenvió con cierre único, pero el reenvío iba después de la primera consulta: ahora es al
+  arrancar, antes de consultar y aunque el servidor no responda (P-T9-B se repite); P-T9-C no
+  reintentó ni dejó pendiente; P-T9-D cerró `sin_reporte`.
 
-## Decisiones clave (Spec 014)
+## Decisiones clave
 * Orden con ID y estados pendiente/cerrada; el stock se descuenta al cerrar con éxito, nunca al
   entregar, y se descuenta lo medido acotado a 0. El éxito compara contra los solicitados de la
   orden; si medidos < solicitados, `entrega_incompleta` sin descuento.
@@ -32,10 +32,10 @@
 * Borrado de mascota con dispensador: 409 `pet_has_dispenser`. Firmware: timeout de 10 s, reintentos
   5/15 s, pendiente en NVS, descarte deliberado de 2xx/4xx y monitor sin MAC (orden, motivo y
   longitud formateados desde el `ReporteCiclo`, nunca releyendo el JSON; corregido en `f10802d`).
+* **RF-37:** el pendiente se reenvía al arrancar, tras el WiFi y antes de validar el servidor y de
+  la primera consulta, aunque no responda y una vez por arranque; sin reenvío en `STATE_NORMAL`.
 * App: `locale: es` del SDK; los logs locales no se sincronizan (`isSynced = true`) y `LogState` usa solo `isOffline` como señal de caché.
-
-## Decisiones clave (Specs 011 y 013)
-* Atasco por mediana móvil de 5 válidas, ventana de 5 s, presupuesto de motor de 30 s y 3
+* Atasco (011/013): mediana móvil de 5 válidas, ventana de 5 s, presupuesto de motor de 30 s y 3
   reintentos; retroceso a 180° de 1,2 s; verificación de 2 s; reposo en `serve:false`.
 
 ## Errores a evitar
@@ -46,10 +46,10 @@
 * No aplicar stock desde el cliente ni añadir `skip` por zona horaria: inyectar el desplazamiento
   (`zona`, `offsetInicio`/`offsetFin`). La migración de `logs` corre una vez por archivo y proceso
   (`BASES_MIGRADAS`); tras alterar el esquema por fuera de SQLAlchemy, usar `olvidar_migraciones`.
+* No reenviar el pendiente después de consultar ni duplicarlo en dos estados: llegaría tarde.
 
 ## Deuda aceptada y riesgos
 * Entrega incompleta o reporte tardío no descuentan stock (queda por encima del real). La ventana
   de 10 min de `encolar_comida` no recupera ocurrencias si el proceso cae más. Un cliente sin
   `operation_id` duplica reenvíos. Ruta con typo `/dispenserscheck-taks/{mac}`.
-* Calibración válida solo para este montaje; P3 sin instrumento independiente y hardware real de
-  005 sin probar.
+* Calibración válida solo para este montaje; P3 sin instrumento independiente y hardware de 005 sin probar.

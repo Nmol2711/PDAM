@@ -442,7 +442,10 @@ el dispositivo reintente. Ningún rechazo de negocio responde 422.
 - **RF-37:** SI el envío del reporte no obtiene respuesta en 10 segundos o falla por un
   error de red, ENTONCES EL SISTEMA reintentará hasta dos veces más, la primera a los 5
   segundos y la segunda a los 15 segundos del fallo anterior, conservará el reporte
-  pendiente en memoria no volátil y lo reenviará tras un reinicio del dispositivo.
+  pendiente en memoria no volátil y lo reenviará tras un reinicio del dispositivo. El
+  reenvío del pendiente se intentará una sola vez al arrancar, justo después de conectar a
+  la red WiFi y antes de cualquier consulta al servidor, con independencia de que el
+  servidor responda o no.
 - **RF-38:** EL SISTEMA conservará sin cambios la ventana de verificación de 2 segundos, la
   ventana de gracia de 2 segundos, la ventana de estancamiento de 5 segundos, el presupuesto
   de motor de 30 segundos, las tolerancias de detección y resolución de atascos y el

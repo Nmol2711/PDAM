@@ -722,7 +722,7 @@ reporte es válida pero el cierre es un fallo de dispensación: se registra como
 | 4 | Espera del segundo reintento | `Reintentando el reporte en 15000 ms...` | 15 s | | |
 | 5 | Tercer envío | `Reporte de fin de ciclo: intento 3, HTTP <código>` | +15 s | | |
 | 6 | Se agota la política | `Reporte sin respuesta valida tras los reintentos: se conserva pendiente para reenviarlo tras un reinicio.` | al terminar el intento 3 | | |
-| 7 | Reinicio del dispositivo | arranque normal; si entra en aprovisionamiento, el reenvío ocurre al volver a `STATE_NORMAL` | a los pocos segundos del arranque | | |
+| 7 | Reinicio del dispositivo | arranque normal: tras conectar el WiFi se intenta el reenvío **antes** de validar el servidor y de la primera consulta; después el flujo sigue a estado normal o a aprovisionamiento BLE sin repetir el intento | a los pocos segundos del arranque | | |
 | 8 | Reenvío del pendiente | `Reporte pendiente encontrado en NVS` y `Reporte de fin de ciclo: intento 1, HTTP 200` | inmediato tras el arranque con red | | |
 | 9 | Cierre único | Un solo registro `feeding_dispensed` y un único descuento | — | | |
 
@@ -866,7 +866,7 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | S8 | 2026-10-29 | Agente | Aprobada | `s8.log` | Con `origen=sincronizacion_sin_conexion` y el mismo `operation_id`, un único incremento (2649,6 → 2949,6), una fila en `refill_operations` y un solo `dispenser_refilled`; sin identificador el servidor no deduplica (dos envíos, dos incrementos), limitación declarada |
 | P-T8-A | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Comprobación en el Samsung A15: los registros aparecen, los cuatro filtros y la paginación funcionan y el registro nuevo se reflejó al levantar la API | Confirmado por el usuario en el móvil real; la aprobación se basa en su comprobación directa, sin captura ni medición del tamaño de letra |
 | P-T9-A | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Dos ciclos reales con `Reporte de fin de ciclo: intento 1, HTTP 200` al primer intento. Orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g. Orden 4: atasco no resuelto, −6,28 g medidos y sin descuento, stock 4614,93 g | La orden 1 (344,75 g medidos) se descarta como evidencia porque el usuario manipuló la celda al no tener la bandeja colocada; no es un fallo del sistema. El resumen del monitor mostraba «no disponible» y se corrigió en `f10802d`; el firmware reflasheado se verificó en el ciclo siguiente, que imprimió `order_id=5` y el motivo real |
-| P-T9-B | 2026-10-29 | Agente | Aprobada | Tres intentos con la API caída: 15:51:47 HTTP −1, espera de 5 s, 15:52:02 HTTP −1, espera de 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1 y vuelta a BLE con el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g) | Matiz aceptado por el usuario: el reinicio se retrasó más de 5 min, así que el barrido ya había cerrado la orden 5 como `sin_reporte`; el reenvío llegó 0,8 s después y se aceptó como orden ya cerrada. La prueba se aprueba tal como quedó ejecutada |
+| P-T9-B | 2026-10-29 | Agente | Aprobada | Tres intentos con la API caída: 15:51:47 HTTP −1, espera de 5 s, 15:52:02 HTTP −1, espera de 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1 y vuelta a BLE con el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g) | Matiz aceptado por el usuario: el reinicio se retrasó más de 5 min, así que el barrido ya había cerrado la orden 5 como `sin_reporte`; el reenvío llegó 0,8 s después y se aceptó como orden ya cerrada. La prueba acredita la persistencia en NVS y el cierre único, no el orden entre el reenvío y la primera consulta. **Corregido el 2026-10-29:** el pendiente se reenviaba dentro de `STATE_NORMAL`, después de la validación y de la primera consulta, y no se intentaba si la validación fallaba; ahora se intenta justo después de conectar el WiFi y antes de cualquier consulta, aunque el servidor no responda, una sola vez por arranque. **La prueba se repetirá** con el firmware corregido |
 | P-T9-C | 2026-10-29 | Agente | Aprobada | El reenvío de P-T9-B recibió 200 de orden ya cerrada y el firmware descartó el reporte sin reintentar (ninguna línea `Reintentando el reporte en ...`); tras reiniciar de nuevo, la placa **no** mostró `Reporte pendiente encontrado en NVS` | Confirmado por el usuario en el arranque del equipo: no hay reintento ni pendiente que sobreviva al segundo reinicio |
 | P-T9-D | 2026-10-29 | Agente | Aprobada | La orden 5 se cerró sola a los ~5 min como `feeding_dispensed` con causa `sin_reporte`, sin descuento y sin exigir reporte; el stock siguió en 4614,93 g | Evidencia del servidor, que es donde vive el comportamiento pedido para firmware antiguo; no se flasheó una build sin la llamada al reporte porque no hace falta para acreditar RF-40 |
 
@@ -885,6 +885,22 @@ política de reintentos y el orden de los mensajes no cambian. Pruebas nuevas en
 `test_report_utils.cpp` (6): `pio test -e native` pasa de 157 a **163/163** y `pio run`
 sigue en SUCCESS (RAM 64 444 B, 19,7 %; Flash 2 024 874 B, 64,4 %). El firmware corregido se
 flasheó en el ESP32 de pruebas el 2026-10-29 (`pio run --target upload`, hash verificado).
+
+**Corrección derivada de P-T9-B (2026-10-29).** La ejecución aprobada puso de manifiesto que el
+orden del reenvío no cumplía RF-37: el pendiente se reenviaba dentro de `STATE_NORMAL`, es decir
+después de `validateServerConnectivity` y de la primera consulta, de modo que si la orden vencía
+durante la caída el servidor la cerraba como `sin_reporte` antes de recibir el reporte; y si la
+validación fallaba, el flujo saltaba a aprovisionamiento BLE sin intentar el reenvío aunque el
+pendiente estuviera en NVS. El reenvío pasa a intentarse justo después de conectar el WiFi y
+antes de validar el servidor y de la primera consulta, una sola vez por arranque
+(`reporting::tocaReenviarPendiente`) y aunque el servidor no responda; si falla se aplican los
+reintentos y el pendiente se conserva en NVS, y el flujo continúa sin volver a intentarlo. Se
+elimina el reenvío de `STATE_NORMAL` para no duplicarlo. La política de reintentos, el cuerpo del
+reporte, la NVS y el aprovisionamiento BLE no cambian. Pruebas nuevas en `test_report_utils.cpp`
+(2): `pio test -e native` pasa de 163 a **165/165** y `pio run` sigue en SUCCESS. **P-T9-B se
+repetirá** con este firmware para acreditar que el reenvío precede al barrido del servidor; el
+flasheo no se pudo ejecutar en esta sesión porque no había ningún dispositivo serie USB conectado
+(`/dev/ttyUSB0` inexistente), así que la placa debe flashearse antes de repetir la prueba.
 
 ---
 
@@ -910,7 +926,9 @@ Riesgo cerrado el 2026-10-29: las cinco pruebas físicas y en dispositivo (P-T8-
 P-T9-D) están ejecutadas y aprobadas, con su evidencia en el §12 y en el cierre de
 `tasks.md`. No queda ninguna prueba de esta spec sin ejecutar. El matiz de P-T9-B —el
 reinicio llegó después de que el barrido cerrara la orden 5, y el reenvío se aceptó como
-orden ya cerrada— fue aceptado por el usuario y no cambia el comportamiento implementado.
+orden ya cerrada— fue aceptado por el usuario y motivó una corrección del firmware: el
+reenvío del pendiente ahora precede a la primera consulta y se intenta aunque el servidor no
+responda al arrancar. Por eso P-T9-B se repite con el firmware corregido.
 
 ### 13.3 Cuándo se puede decir que «todo funciona»
 

@@ -30,6 +30,16 @@ inline bool hayReintentoDisponible(unsigned intentosHechos) {
   return intentosHechos < kReportMaxAttempts;
 }
 
+// Indica si toca intentar el reenvío del pendiente en este arranque (RF-37).
+//
+// El reenvío se intenta una sola vez por arranque, justo después de conectar el
+// WiFi y antes de cualquier consulta al servidor. Depende solo de la bandera del
+// arranque: aunque el envío falle (servidor caído), no se repite en este
+// arranque y el reporte queda en NVS para el siguiente reinicio.
+inline bool tocaReenviarPendiente(bool yaReenviadoEnEsteArranque) {
+  return !yaReenviadoEnEsteArranque;
+}
+
 // Motivo del reporte por cada fin de ciclo (RF-36).
 //
 // Los dos cierres que rechazan la orden antes de tocar el hardware no tienen una

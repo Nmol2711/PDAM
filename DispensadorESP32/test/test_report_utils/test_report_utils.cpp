@@ -386,6 +386,23 @@ void test_se_reintenta_solo_mientras_queden_intentos() {
   TEST_ASSERT_FALSE(reporting::hayReintentoDisponible(3));
 }
 
+// --- Reenvío del pendiente al arrancar (RF-37) ---
+
+void test_el_pendiente_se_reenvia_una_sola_vez_por_arranque() {
+  // Primer intento del arranque: toca reenviar.
+  TEST_ASSERT_TRUE(reporting::tocaReenviarPendiente(false));
+  // Ya se intentó (haya ido bien o mal): no se repite en este arranque.
+  TEST_ASSERT_FALSE(reporting::tocaReenviarPendiente(true));
+}
+
+void test_el_reenvio_no_depende_de_la_respuesta_del_servidor() {
+  // El reenvío se decide por el arranque, no por el resultado: tras un fallo la
+  // bandera ya está puesta y el pendiente queda en NVS para el siguiente
+  // reinicio. La función solo recibe la bandera, no el resultado del envío.
+  const bool reintentadoTrasFallo = true;
+  TEST_ASSERT_FALSE(reporting::tocaReenviarPendiente(reintentadoTrasFallo));
+}
+
 int main(int argc, char **argv) {
   UNITY_BEGIN();
   RUN_TEST(test_cada_motivo_tiene_su_codigo_del_catalogo);
@@ -414,5 +431,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_el_resumen_ignora_un_cuerpo_inexistente);
   RUN_TEST(test_la_politica_conserva_timeout_y_esperas);
   RUN_TEST(test_se_reintenta_solo_mientras_queden_intentos);
+  RUN_TEST(test_el_pendiente_se_reenvia_una_sola_vez_por_arranque);
+  RUN_TEST(test_el_reenvio_no_depende_de_la_respuesta_del_servidor);
   return UNITY_END();
 }
