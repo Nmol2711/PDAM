@@ -10,17 +10,20 @@
 | Tareas | [Tasks 014](../../specs/014-logs-y-validacion-dispensado/tasks.md) |
 | Subsistema | Backend (FastAPI) + App (Flutter) + Firmware (ESP32) |
 | Alcance | Migración de `logs`, órdenes con plazo y descuento al confirmar, reporte del dispositivo, consulta filtrada y paginada, caché sin conexión, reabastecimiento idempotente y no regresión de las specs 011, 012 y 013 |
-| Estado | **P-T9-A aprobada; pendientes P-T9-B, P-T9-C, P-T9-D, P-T8-A y S7** |
+| Estado | **Aprobado: software (28 casos), S7, P-T8-A y P-T9-A a P-T9-D** |
 | Commit de referencia | `fd4c047` en la rama `pruebas/endpoint-fijo-hx711` — «feat(spec-014): registro tipado de actividad y descuento al confirmar» |
 | Informe relacionado | [Pruebas de hardware de la spec 013](informe-pruebas-hardware-spec-013-2026-10-23.md) |
 
-> Este documento es un procedimiento de prueba con registro de resultados. Las cifras del
+> Este documento es el procedimiento de prueba con registro de resultados. Las cifras del
 > §3 corresponden a la validación global registrada en `tasks.md` (auditoría del 2026-10-29)
 > y se repiten aquí como criterio de éxito: una ejecución posterior debe dar cifras iguales
-> o superiores y ningún fallo. Al redactar este informe no se había ejecutado ninguna prueba
-> manual; el 2026-10-29 se ejecutó el bloque de software S2–S6 y S8 (28 casos, 0 fallos), con
-> los resultados del §12 y la evidencia en `/tmp/opencode/pruebas-014/`. S7 y las pruebas
-> físicas (§9) siguen pendientes.
+> o superiores y ningún fallo. El 2026-10-29 se ejecutó el bloque de software S2–S6 y S8
+> (28 casos, 0 fallos), con los resultados del §12, y también las pruebas manuales y físicas
+> que quedaban: S7 y P-T8-A en el móvil real, y P-T9-A a P-T9-D con el ESP32, la celda y el
+> router. La evidencia está resumida en las filas del §12: líneas del monitor serie, códigos
+> HTTP de cada intento, esperas medidas y cifras de stock y de historial. Las transcripciones
+> en bruto no se versionan porque contienen datos de la red local; el §12 transcribe los
+> valores observados. Con las cinco pruebas físicas aprobadas, la spec 014 queda cerrada.
 
 ---
 
@@ -55,9 +58,11 @@ reporte sobreviva a una red caída y a un reinicio (P-T9-B), que un descarte no 
 (P-T9-C), que un firmware sin reporte cierre por plazo (P-T9-D) y que el historial se vea
 sin desbordamientos en el móvil real (P-T8-A).
 
-Hasta que esas cinco pruebas se ejecuten, la spec queda «implementada (pendiente de pruebas
-físicas)», como ya registra `tasks.md`. Las suites en verde no sustituyen a ninguna de
-ellas (RNF-6).
+Antes de ejecutarse esas cinco pruebas, la spec quedó «implementada (pendiente de pruebas
+físicas)», como registraba `tasks.md`. Ya están ejecutadas y aprobadas (2026-10-29) y la spec
+figura como «implementada y validada». Las suites en verde no sustituyen a ninguna de ellas
+(RNF-6); por eso la evidencia física se registra aparte en el §12 y en el cierre de
+`tasks.md`.
 
 ### 2.1 Qué cambia respecto de la línea base
 
@@ -826,22 +831,22 @@ Rellenar la columna «Resultado» al ejecutar cada criterio.
 
 | # | Criterio | Cómo se comprueba | Resultado |
 |---|---|---|---|
-| C1 | Las cinco comprobaciones automatizadas están en verde con las cifras del §3 | §5 S1 | |
-| C2 | La migración conserva los históricos, deja 18 columnas y es idempotente | §5 S2 | |
-| C3 | Los filtros, la paginación y los rechazos 400 del catálogo responden según el contrato | §5 S3 | |
-| C4 | Un reporte con medidos ≥ solicitados descuenta lo medido y un duplicado no repite el efecto | §5 S4 | |
-| C5 | Dos reportes simultáneos y el reporte contra el barrido producen un único cierre y un único descuento | §5 S5 | |
-| C6 | El p95 de la consulta con 10 000 registros y cuatro filtros es inferior a 1 s | §5 S6 | |
-| C7 | Sin conexión, el historial muestra la caché con aviso, filtros y paginación, sin borrar la lista | §5 S7 | |
-| C8 | El mismo pendiente sincronizado dos veces con el mismo `operation_id` suma una sola vez | §5 S8 | |
-| C9 | El historial se ve sin desbordamientos en el móvil con letra al 130 % | §9.1 P-T8-A | |
-| C10 | El servidor recibe el reporte tras una dispensación real y la orden se cierra una vez | §9.2 P-T9-A | |
-| C11 | El reporte sobrevive a una red caída, se conserva en NVS y se reenvía tras el reinicio | §9.3 P-T9-B | |
-| C12 | Un reporte descartado no se reenvía tras el reinicio | §9.4 P-T9-C | |
-| C13 | Una orden de un firmware sin reporte se cierra por plazo con `sin_reporte` y sin descuento | §9.5 P-T9-D | |
-| C14 | Las specs 011, 012 y 013 no presentan regresiones | §10 | |
-| C15 | No se añadieron dependencias externas nuevas (RNF-4) | Revisión de `requirements.txt`, `pubspec.yaml` y `platformio.ini` | |
-| C16 | Los 41 RF tienen prueba automatizada y los cinco con efecto físico o visual tienen su procedimiento manual | `tests/test_traceability_rf.py` y §9 | |
+| C1 | Las cinco comprobaciones automatizadas están en verde con las cifras del §3 | §5 S1 | Aprobado (§3 y §12, S1) |
+| C2 | La migración conserva los históricos, deja 18 columnas y es idempotente | §5 S2 | Aprobado (§12, S2) |
+| C3 | Los filtros, la paginación y los rechazos 400 del catálogo responden según el contrato | §5 S3 | Aprobado (§12, S3) |
+| C4 | Un reporte con medidos ≥ solicitados descuenta lo medido y un duplicado no repite el efecto | §5 S4 | Aprobado (§12, S4) |
+| C5 | Dos reportes simultáneos y el reporte contra el barrido producen un único cierre y un único descuento | §5 S5 | Aprobado (§12, S5) |
+| C6 | El p95 de la consulta con 10 000 registros y cuatro filtros es inferior a 1 s | §5 S6 | Aprobado (§12, S6: p95 16,5 ms) |
+| C7 | Sin conexión, el historial muestra la caché con aviso, filtros y paginación, sin borrar la lista | §5 S7 | Aprobado (§12, S7) |
+| C8 | El mismo pendiente sincronizado dos veces con el mismo `operation_id` suma una sola vez | §5 S8 | Aprobado (§12, S8) |
+| C9 | El historial se ve sin desbordamientos en el móvil con letra al 130 % | §9.1 P-T8-A | Aprobado (§12, P-T8-A) |
+| C10 | El servidor recibe el reporte tras una dispensación real y la orden se cierra una vez | §9.2 P-T9-A | Aprobado (§12, P-T9-A) |
+| C11 | El reporte sobrevive a una red caída, se conserva en NVS y se reenvía tras el reinicio | §9.3 P-T9-B | Aprobado (§12, P-T9-B) |
+| C12 | Un reporte descartado no se reenvía tras el reinicio | §9.4 P-T9-C | Aprobado (§12, P-T9-C) |
+| C13 | Una orden de un firmware sin reporte se cierra por plazo con `sin_reporte` y sin descuento | §9.5 P-T9-D | Aprobado (§12, P-T9-D) |
+| C14 | Las specs 011, 012 y 013 no presentan regresiones | §10 | Aprobado (§3 A1–A4: ninguna suite de las specs previas en rojo) |
+| C15 | No se añadieron dependencias externas nuevas (RNF-4) | Revisión de `requirements.txt`, `pubspec.yaml` y `platformio.ini` | Aprobado (§3, notas de dependencias) |
+| C16 | Los 41 RF tienen prueba automatizada y los cinco con efecto físico o visual tienen su procedimiento manual | `tests/test_traceability_rf.py` y §9 | Aprobado (41/41 y las cinco pruebas manuales del §12) |
 
 ---
 
@@ -857,13 +862,13 @@ Rellenar únicamente después de ejecutar cada prueba. No completar con valores 
 | S4 | 2026-10-29 | Agente | Aprobada | `s4.log`, `s4.rep1`–`s4.rep3` | Copia aislada; la entrega no descuenta (2700 g), el cierre con 50,0 solicitados y 50,4 medidos descuenta 50,4 y deja 2649,6 g; los dos reenvíos responden 200 con `ya_cerrada=true`, sin segundo registro ni segundo descuento |
 | S5 | 2026-10-29 | Agente | Aprobada | `s5.log` | **5/5** ejecuciones de `test_orders_concurrency.py` con 6 passed y 0 failed (1,09–1,30 s) y `TestExclusionMutuaConElReporte` con 4 passed; cumple el criterio de 5 de 5 |
 | S6 | 2026-10-29 | Agente | Aprobada | `s6.log` | p95 **16,5 ms** con 10 000 registros y cuatro filtros; 15,7 ms en la primera página sin filtros; índice compuesto `ix_logs_user_id_created_at` presente; criterio p95 < 1000 ms cumplido |
-| S7 | — | — | No ejecutada | — | Requiere el móvil real y detener la API (§5 S7); no ejecutada |
+| S7 | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Historial del móvil con la API apagada: los registros se sirvieron desde la caché Isar y apareció el aviso de datos locales | Confirmado por el usuario; con el servidor detenido la app mostró los registros de la caché con el aviso de datos locales |
 | S8 | 2026-10-29 | Agente | Aprobada | `s8.log` | Con `origen=sincronizacion_sin_conexion` y el mismo `operation_id`, un único incremento (2649,6 → 2949,6), una fila en `refill_operations` y un solo `dispenser_refilled`; sin identificador el servidor no deduplica (dos envíos, dos incrementos), limitación declarada |
-| P-T8-A | — | — | No ejecutada | — | Requiere el Samsung A15 con letra al 130 % (§9.1) |
-| P-T9-A | 2026-10-29 | Usuario (hardware real) | Aprobada | Monitor serie: `Reporte de fin de ciclo: intento 1, HTTP 200` en los dos ciclos; la línea de resumen mostraba `order_id=no disponible` y se corrigió en esta iteración, que ya imprime `order_id=3, motivo=objetivo_alcanzado, longitud=135 bytes`. Historial `feeding_dispensed` de la orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g, `reintentos` 0. Orden 4: `intento 1, HTTP 200` con motivo `atasco_no_resuelto`, −6,28 g medidos y sin descuento, stock 4614,93 g, `reintentos` 2 | Un ciclo previo (orden 1, 344,75 g medidos) se descarta como evidencia porque el usuario manipuló la celda al no tener la bandeja colocada; no es un fallo del sistema y no se cambia el comportamiento |
-| P-T9-B | — | — | No ejecutada | — | Requiere red caída y reinicio del dispositivo (§9.3) |
-| P-T9-C | — | — | No ejecutada | — | Requiere un reporte descartado y reinicio (§9.4) |
-| P-T9-D | — | — | No ejecutada | — | Requiere un firmware sin reporte y el vencimiento de 5 min (§9.5) |
+| P-T8-A | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Comprobación en el Samsung A15: los registros aparecen, los cuatro filtros y la paginación funcionan y el registro nuevo se reflejó al levantar la API | Confirmado por el usuario en el móvil real; la aprobación se basa en su comprobación directa, sin captura ni medición del tamaño de letra |
+| P-T9-A | 2026-10-29 | Usuario (hardware/app real) | Aprobada | Dos ciclos reales con `Reporte de fin de ciclo: intento 1, HTTP 200` al primer intento. Orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g. Orden 4: atasco no resuelto, −6,28 g medidos y sin descuento, stock 4614,93 g | La orden 1 (344,75 g medidos) se descarta como evidencia porque el usuario manipuló la celda al no tener la bandeja colocada; no es un fallo del sistema. El resumen del monitor mostraba «no disponible» y se corrigió en `f10802d`; el firmware reflasheado se verificó en el ciclo siguiente, que imprimió `order_id=5` y el motivo real |
+| P-T9-B | 2026-10-29 | Agente | Aprobada | Tres intentos con la API caída: 15:51:47 HTTP −1, espera de 5 s, 15:52:02 HTTP −1, espera de 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1 y vuelta a BLE con el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g) | Matiz aceptado por el usuario: el reinicio se retrasó más de 5 min, así que el barrido ya había cerrado la orden 5 como `sin_reporte`; el reenvío llegó 0,8 s después y se aceptó como orden ya cerrada. La prueba se aprueba tal como quedó ejecutada |
+| P-T9-C | 2026-10-29 | Agente | Aprobada | El reenvío de P-T9-B recibió 200 de orden ya cerrada y el firmware descartó el reporte sin reintentar (ninguna línea `Reintentando el reporte en ...`); tras reiniciar de nuevo, la placa **no** mostró `Reporte pendiente encontrado en NVS` | Confirmado por el usuario en el arranque del equipo: no hay reintento ni pendiente que sobreviva al segundo reinicio |
+| P-T9-D | 2026-10-29 | Agente | Aprobada | La orden 5 se cerró sola a los ~5 min como `feeding_dispensed` con causa `sin_reporte`, sin descuento y sin exigir reporte; el stock siguió en 4614,93 g | Evidencia del servidor, que es donde vive el comportamiento pedido para firmware antiguo; no se flasheó una build sin la llamada al reporte porque no hace falta para acreditar RF-40 |
 
 Valores admitidos en «Resultado»: **Aprobada**, **Fallida**, **No concluyente**,
 **No ejecutada**. En «Evidencia» se anota el nombre del log, la captura o la prueba
@@ -891,16 +896,21 @@ flasheó en el ESP32 de pruebas el 2026-10-29 (`pio run --target upload`, hash v
 |---|---|---|
 | Una entrega incompleta o un reporte tardío no descuentan stock | El stock del servidor queda por encima del real; solo se corrige con un reabastecimiento o un ajuste manual futuro, fuera de alcance | Desvío documentado en la spec y en `tasks.md`; no hay ajustes automáticos |
 | Sin `operation_id` el servidor no puede deduplicar reenvíos | Un cliente antiguo duplicaría la cantidad al sincronizar el mismo pendiente | La app lo envía siempre y lo persiste con el pendiente; la limitación está en la spec |
-| La persistencia del reporte en NVS y el reenvío tras reinicio solo se acreditan con P-T9-B | La suite nativa cubre la política de timeout y reintentos, no `Preferences` | P-T9-B en el §9.3 y en el registro del §12 |
+| La persistencia del reporte en NVS y el reenvío tras reinicio solo se acreditan con P-T9-B | La suite nativa cubre la política de timeout y reintentos, no `Preferences` | Acreditada en P-T9-B el 2026-10-29 (§12); la suite nativa sigue sin cubrir `Preferences` |
 | La ventana de 10 minutos de `encolar_comida` no recupera ocurrencias | Si el proceso cae más tiempo, la comida de ese hueco no se encola | Documentado en T5; el barrido corre cada 30 s |
 
 ### 13.2 Riesgos abiertos
 
 | Riesgo | Impacto | Cómo se controla |
 |---|---|---|
-| P-T8-A y P-T9-A a P-T9-D pendientes de ejecución física | La spec queda «implementada (pendiente de pruebas físicas)» | Este informe es el procedimiento; el cierre exige las cinco aprobadas |
 | Los umbrales de la 013 solo son válidos para este montaje (celda, cableado y croqueta de ~3 cm) | Atascos mecánicos frecuentes y exactitud dependiente del montaje | No se ajustaron umbrales; si se cambia el montaje, se repiten P2/P3 de la 013 antes de confiar en la 014 |
 | La rama `pruebas/endpoint-fijo-hx711` con la 013 cerrada sigue sin fusionar a `main` | El código validado no está en la rama principal | Merge pendiente, fuera del alcance de este informe; el commit de referencia es `fd4c047` |
+
+Riesgo cerrado el 2026-10-29: las cinco pruebas físicas y en dispositivo (P-T8-A y P-T9-A a
+P-T9-D) están ejecutadas y aprobadas, con su evidencia en el §12 y en el cierre de
+`tasks.md`. No queda ninguna prueba de esta spec sin ejecutar. El matiz de P-T9-B —el
+reinicio llegó después de que el barrido cerrara la orden 5, y el reenvío se aceptó como
+orden ya cerrada— fue aceptado por el usuario y no cambia el comportamiento implementado.
 
 ### 13.3 Cuándo se puede decir que «todo funciona»
 
@@ -911,10 +921,14 @@ Solo cuando se cumplan las tres condiciones a la vez:
 3. Las cinco pruebas físicas y en dispositivo aprobadas: P-T8-A, P-T9-A, P-T9-B, P-T9-C y
    P-T9-D.
 
-Con las tres, y sin regresiones en el §10, se puede actualizar el estado de la spec 014 y
-`tasks.md`. Si falta cualquiera de las pruebas físicas, la spec se queda como está y la
-prueba pendiente se registra como «No ejecutada»; ninguna prueba manual sustituye a una
-automatizada, ni al contrario (RNF-6).
+**Las tres condiciones se cumplen a 2026-10-29:** las cinco suites están en verde (§3), S2 a
+S8 están aprobadas (§12) y P-T8-A y P-T9-A a P-T9-D también (§12). Por eso la spec 014 se
+actualiza a «implementada y validada (2026-10-29)» y `tasks.md` recoge el cierre de las
+pruebas físicas. Las deudas aceptadas del §13.1 siguen vigentes tal como están descritas:
+una entrega incompleta o un reporte tardío no descuentan stock, un cliente sin
+`operation_id` no se puede deduplicar y la ventana de 10 minutos de `encolar_comida` no
+recupera ocurrencias perdidas. Ninguna prueba manual sustituye a una automatizada, ni al
+contrario (RNF-6).
 
 ---
 

@@ -425,3 +425,32 @@ por un intercalado determinista que no depende del planificador.
 - **Suite:** `cd api && pytest` → 530 passed + 541 subtests (antes del cambio 528 + 541: se
   retira una prueba con barrera y se añaden tres deterministas). No se modificó ningún archivo
   de producción, ni Flutter, ni firmware.
+
+## Cierre de las pruebas físicas (2026-10-29)
+
+Las cinco pruebas que solo podía ejecutar el usuario se ejecutaron el 2026-10-29 con el
+ESP32, la celda y el móvil reales. Con ellas, la spec 014 pasa de «implementada (pendiente de
+pruebas físicas)» a **implementada y validada**. El detalle de cada ejecución está en el
+[informe de pruebas](../../docs/informes/informe-pruebas-spec-014-2026-10-29.md) §12.
+
+| Prueba | Resultado | Evidencia |
+|---|---|---|
+| P-T9-A — reporte real de fin de ciclo (RF-36) | Aprobada | Dos ciclos con `Reporte de fin de ciclo: intento 1, HTTP 200` sin reintentos. Orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g. Orden 4: atasco no resuelto, −6,28 g medidos y sin descuento, stock 4614,93 g. La orden 1 (344,75 g) se descarta porque el usuario manipuló la celda al no tener bandeja. El resumen del monitor mostraba «no disponible» y se corrigió en `f10802d`; el firmware reflasheado se verificó en el ciclo siguiente con `order_id=5` y su motivo |
+| P-T9-B — red caída con reinicio (RF-37) | Aprobada | Con la API detenida 2 s después de `serve:true` de la orden 5: 15:51:47 HTTP −1, espera 5 s, 15:52:02 HTTP −1, espera 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1, vuelta a BLE y el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g). Matiz aceptado: el reinicio llegó más de 5 min después, el barrido ya había cerrado la orden 5 como `sin_reporte` y el reenvío, 0,8 s posterior, se aceptó como orden ya cerrada |
+| P-T9-C — descarte definitivo (RF-39) | Aprobada | El reenvío de P-T9-B recibió 200 de orden ya cerrada y el firmware descartó el reporte sin reintentar; tras reiniciar de nuevo, la placa **no** mostró `Reporte pendiente encontrado en NVS` (confirmado por el usuario) |
+| P-T9-D — firmware antiguo (RF-40) | Aprobada | La orden 5 se cerró sola a los ~5 min como `sin_reporte`, sin descuento y sin exigir reporte. No se flasheó una build sin la llamada al reporte porque el comportamiento bajo prueba es del servidor y quedó acreditado del lado del servidor |
+| P-T8-A — historial en el móvil (RF-33) | Aprobada | En el Samsung A15 los registros aparecen, los cuatro filtros y la paginación funcionan y el registro nuevo se reflejó al levantar la API (confirmado por el usuario) |
+| S7 — app sin conexión (RF-34, RF-35) | Aprobada | Con la API apagada, la app mostró los registros de la caché con el aviso de datos locales (confirmado por el usuario) |
+
+Nota: P-T9-D se acreditó con evidencia del servidor. El procedimiento del informe ofrecía
+flashear una build sin la llamada al reporte, pero el plazo y el cierre `sin_reporte` viven en
+el backend; la orden 5 se cerró así sin intervención del dispositivo y sin tocar el stock, que
+es exactamente lo pedido para firmware antiguo. La alternativa de flashear esa build queda
+descartada por innecesaria, no por imposibilidad.
+
+Las deudas aceptadas de la spec siguen vigentes: una entrega incompleta o un reporte tardío no
+descuentan stock, un cliente sin `operation_id` no se puede deduplicar y la ventana de 10
+minutos de `encolar_comida` no recupera ocurrencias perdidas. La rama
+`pruebas/endpoint-fijo-hx711` sigue pendiente de merge a `main`. Este cierre sustituye al
+«Riesgo abierto» de la sección anterior sobre las pruebas físicas pendientes; el resto de
+deudas y riesgos de esa sección se mantiene.
