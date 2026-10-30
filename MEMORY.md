@@ -1,8 +1,9 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **Spec 015 cerrada (T1–T10 + correcciones finales, 2026-10-30).** Specs 001–014 cerradas; rama
-  `pruebas/endpoint-fijo-hx711` sin merge.
+* **Specs 001–015 cerradas.** La 014 quedó implementada y validada el 2026-10-30 (repetición de
+  P-T9-B aprobada); la 015 se cerró con T1–T10 y correcciones finales. La rama
+  `pruebas/endpoint-fijo-hx711` sigue sin merge.
 * **Cifras:** `pytest` 685 pruebas y 848 subpruebas; `flutter test` 737/737; `flutter analyze` 0 errores
   (103 avisos); 25 RF y 10 RNF de la 015 con prueba existente.
 
@@ -47,4 +48,7 @@
   fueran de otra cuenta: se asume una sola cuenta; bloquear sin conexión excede RNF-10.
 * Entrega incompleta o reporte tardío no descuentan stock; la ventana de 10 min de `encolar_comida` no
   recupera ocurrencias si el proceso cae; cliente sin `operation_id` duplica; typo `/dispenserscheck-taks/{mac}`.
+* **Riesgo abierto de la 013:** acepta 0 g como línea base tras un arranque; en la repetición de
+  P-T9-B midió 364,66 g para 17,27 g. El ciclo inválido se anuló en la base de desarrollo (orden 6 y
+  su log borrados, stock 4614,93 g; copia en `/tmp/opencode/pdam-antes-limpieza-2026-10-30.db`).
 * Intermitencia preexistente de las dos pruebas de rendimiento con umbral ≤100 ms: fallan por carga, no por regresión.

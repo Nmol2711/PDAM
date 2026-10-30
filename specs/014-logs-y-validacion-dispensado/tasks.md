@@ -386,8 +386,9 @@ Ninguna bloquea la suite automatizada, pero sí el cierre «sin reservas» de la
   reintentos, no `Preferences`.
 - **Deuda aceptada:** la ventana de 10 min de `encolar_comida` no recupera ocurrencias si el
   proceso cae más tiempo; se documentó en T5.
-- **Riesgo abierto:** P-T8-A y P-T9-A a P-T9-D pendientes de ejecución física; hasta
-  entonces la spec queda «implementada (pendiente de pruebas físicas)».
+- **Riesgo abierto (cerrado el 2026-10-29):** P-T8-A y P-T9-A a P-T9-D pendientes de
+  ejecución física; hasta entonces la spec quedaba «implementada (pendiente de pruebas
+  físicas)». Las cinco se ejecutaron y aprobaron (P-T9-B en su repetición del 2026-10-30).
 - **Riesgo abierto:** los umbrales de la 013 siguen siendo válidos solo para el montaje
   actual (celda y cableado) y con croqueta de ~3 cm los atascos mecánicos continúan; no se
   ajustaron umbrales.
@@ -430,14 +431,15 @@ por un intercalado determinista que no depende del planificador.
 
 Las cinco pruebas que solo podía ejecutar el usuario se ejecutaron el 2026-10-29 con el
 ESP32, la celda y el móvil reales. Con ellas, la spec 014 pasa de «implementada (pendiente de
-pruebas físicas)» a **implementada**, con la repetición de P-T9-B pendiente por el corte de
-luz. El detalle de cada ejecución está en el
+pruebas físicas)» a **implementada**, y con la repetición de P-T9-B del 2026-10-30 a
+**implementada y validada**. El detalle de cada ejecución está en el
 [informe de pruebas](../../docs/informes/informe-pruebas-spec-014-2026-10-29.md) §12.
 
 | Prueba | Resultado | Evidencia |
 |---|---|---|
 | P-T9-A — reporte real de fin de ciclo (RF-36) | Aprobada | Dos ciclos con `Reporte de fin de ciclo: intento 1, HTTP 200` sin reintentos. Orden 3: 17,27 g solicitados, 22,23 g medidos y descontados, stock 4637,16 → 4614,93 g. Orden 4: atasco no resuelto, −6,28 g medidos y sin descuento, stock 4614,93 g. La orden 1 (344,75 g) se descarta porque el usuario manipuló la celda al no tener bandeja. El resumen del monitor mostraba «no disponible» y se corrigió en `f10802d`; el firmware reflasheado se verificó en el ciclo siguiente con `order_id=5` y su motivo |
-| P-T9-B — red caída con reinicio (RF-37) | Aprobada | Con la API detenida 2 s después de `serve:true` de la orden 5: 15:51:47 HTTP −1, espera 5 s, 15:52:02 HTTP −1, espera 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1, vuelta a BLE y el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g). Matiz aceptado: el reinicio llegó más de 5 min después, el barrido ya había cerrado la orden 5 como `sin_reporte` y el reenvío, 0,8 s posterior, se aceptó como orden ya cerrada |
+| P-T9-B — red caída con reinicio (RF-37) | Aprobada (primera ejecución, con matiz) | Con la API detenida 2 s después de `serve:true` de la orden 5: 15:51:47 HTTP −1, espera 5 s, 15:52:02 HTTP −1, espera 15 s, 15:52:27 HTTP −1 y «se conserva pendiente para reenviarlo tras un reinicio». Reinicio con la API caída: WiFi OK, validación HTTP −1, vuelta a BLE y el pendiente conservado. Reinicio con la API en marcha: `Reporte pendiente encontrado en NVS`, reenvío de la orden 5 con HTTP 200 al intento 1 y cierre único (un solo registro, sin descuento, stock 4614,93 g). Matiz aceptado: el reinicio llegó más de 5 min después, el barrido ya había cerrado la orden 5 como `sin_reporte` y el reenvío, 0,8 s posterior, se aceptó como orden ya cerrada |
+| P-T9-B — repetición (RF-37) | Aprobada (repetición) | Reenvío del pendiente en NVS antes de la primera consulta; cierre por reporte a las 09:50:41 con plazo a las 09:52:23 (orden 6); un solo cierre y un solo registro `feeding_dispensed`. El monitor mostró `HTTP −11` en el primer POST por una latencia de ~20 s frente al timeout de 10 s del cliente, pero la transacción se aplicó una sola vez: los reintentos respondieron 200 con `ya_cerrada`. Incidencia: la línea base de 0,0 g tras el arranque hizo medir 364,66 g para 17,27 g; el ciclo se anuló en la base de desarrollo |
 | P-T9-C — descarte definitivo (RF-39) | Aprobada | El reenvío de P-T9-B recibió 200 de orden ya cerrada y el firmware descartó el reporte sin reintentar; tras reiniciar de nuevo, la placa **no** mostró `Reporte pendiente encontrado en NVS` (confirmado por el usuario) |
 | P-T9-D — firmware antiguo (RF-40) | Aprobada | La orden 5 se cerró sola a los ~5 min como `sin_reporte`, sin descuento y sin exigir reporte. No se flasheó una build sin la llamada al reporte porque el comportamiento bajo prueba es del servidor y quedó acreditado del lado del servidor |
 | P-T8-A — historial en el móvil (RF-33) | Aprobada | En el Samsung A15 los registros aparecen, los cuatro filtros y la paginación funcionan y el registro nuevo se reflejó al levantar la API (confirmado por el usuario) |
@@ -465,9 +467,9 @@ flujo continúa después con la validación y el paso a estado normal o a aprovi
 volver a intentarlo en ese arranque. Se eliminó el reenvío de `STATE_NORMAL` para no duplicarlo.
 No cambian la política de reintentos, el cuerpo del reporte, la NVS ni el aprovisionamiento BLE.
 
-**P-T9-B se repetirá** con este firmware para acreditar que el reenvío llega antes que el barrido
-del servidor; el resultado anterior se mantiene como evidencia de la persistencia en NVS y del
-cierre único, no del orden.
+**P-T9-B se repitió el 2026-10-30** con este firmware para acreditar que el reenvío llega
+antes que el barrido del servidor; el resultado anterior se mantiene como evidencia de la
+persistencia en NVS y del cierre único, no del orden.
 
 Las deudas aceptadas de la spec siguen vigentes: una entrega incompleta o un reporte tardío no
 descuentan stock, un cliente sin `operation_id` no se puede deduplicar y la ventana de 10
@@ -476,9 +478,18 @@ minutos de `encolar_comida` no recupera ocurrencias perdidas. La rama
 «Riesgo abierto» de la sección anterior sobre las pruebas físicas pendientes; el resto de
 deudas y riesgos de esa sección se mantiene.
 
-> **Nota de pausa (2026-10-29):** la repetición de P-T9-B con el firmware corregido quedó
-> interrumpida por un corte de electricidad. El firmware ya está corregido y flasheado en el
-> ESP32 de pruebas, y el escenario (API detenida a los 2 s de `serve:true`, reinicio y reenvío
-> del pendiente) quedó preparado para retomarla. Hasta entonces, la spec 014 queda
-> **implementada** y el resultado de P-T9-B es **No concluyente**: la primera ejecución se
-> aprobó con matiz y la repetición sigue pendiente.
+> **Repetición de P-T9-B (2026-10-30):** la repetición con el firmware corregido se aprobó. El
+> pendiente se reenvió desde la NVS antes de la primera consulta, la orden 6 se cerró por
+> reporte a las 09:50:41 con plazo a las 09:52:23, un solo cierre y un solo registro
+> `feeding_dispensed`. El primer POST registró `HTTP −11` porque tardó ~20 s y superó el
+> timeout de 10 s del cliente, pero la transacción se aplicó una sola vez: los reintentos
+> posteriores respondieron 200 con `ya_cerrada`. Con esto la spec 014 queda **implementada y
+> validada**; el detalle está en el §12 del informe.
+>
+> **Incidencia de línea base (riesgo de la 013):** el ciclo de la repetición arrancó con la
+> celda sin estabilizar y la línea base se leyó como 0,0 g, así que midió 364,66 g para
+> 17,27 g solicitados y el servidor descontó esos gramos (stock 4614,93 → 4250,27 g). El
+> ciclo se anuló en la base de desarrollo (orden 6 y su registro borrados, stock restaurado a
+> 4614,93 g; copia previa en `/tmp/opencode/pdam-antes-limpieza-2026-10-30.db`) y no se usa
+> como evidencia de descuento. Queda como **riesgo abierto de la spec 013**: «aceptar 0 g como
+> línea base válida tras un arranque». No se corrige en la 014.
