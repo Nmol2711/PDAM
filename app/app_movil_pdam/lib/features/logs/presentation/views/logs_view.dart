@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/widgets/log_filters_bar.dart';
 import 'package:app_movil_pdam/features/logs/presentation/widgets/log_item_widget.dart';
@@ -33,7 +35,13 @@ class _LogsViewState extends State<LogsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Historial de eventos'), elevation: 0),
+      appBar: AppBar(
+        title: const Text('Historial de eventos'),
+        elevation: 0,
+        actions: const <Widget>[
+          SettingsEntryButton(ubicacion: UbicacionEntrada.cabeceraPantalla),
+        ],
+      ),
       body: BlocBuilder<PetBloc, PetState>(
         builder: (context, petState) {
           final pets = petState is PetLoaded ? petState.pets : const <Pet>[];

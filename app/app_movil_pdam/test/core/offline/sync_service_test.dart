@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app_movil_pdam/core/network/session_events.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/core/services/storage_service.dart';
@@ -75,7 +76,7 @@ void main() {
     final storageService = StorageServiceImpl(
       dataLocalService: const FlutterSecureStorage(),
     );
-    final dioClient = DioClient(storageService);
+    final dioClient = DioClient(storageService, sessionEvents: SessionEvents());
     final syncService = SyncService(dioClient: dioClient);
     expect(syncService, isNotNull);
   });
@@ -84,7 +85,7 @@ void main() {
     final storageService = StorageServiceImpl(
       dataLocalService: const FlutterSecureStorage(),
     );
-    final dioClient = DioClient(storageService);
+    final dioClient = DioClient(storageService, sessionEvents: SessionEvents());
     final syncService = SyncService(dioClient: dioClient);
     final petDatasource = LocalPetDatasourceImpl(testDirectory: tempDir.path);
     final pet = Pet(
@@ -108,6 +109,7 @@ void main() {
   test('un log local pendiente no se envía ni provoca una petición', () async {
     final dioClient = DioClient(
       StorageServiceImpl(dataLocalService: const FlutterSecureStorage()),
+      sessionEvents: SessionEvents(),
     );
     final adaptador = _AdaptadorFalso();
     dioClient.dio.httpClientAdapter = adaptador;
@@ -137,6 +139,7 @@ void main() {
   test('el lote de sincronización no incluye ningún ítem type log', () async {
     final dioClient = DioClient(
       StorageServiceImpl(dataLocalService: const FlutterSecureStorage()),
+      sessionEvents: SessionEvents(),
     );
     final adaptador = _AdaptadorFalso();
     dioClient.dio.httpClientAdapter = adaptador;

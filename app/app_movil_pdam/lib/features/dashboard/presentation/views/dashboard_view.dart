@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app_movil_pdam/core/di/injection_container.dart';
-import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/bloc/dashboard_cubit.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/widgets/dashboard_header.dart';
@@ -54,13 +53,6 @@ class DashboardView extends StatelessWidget {
                     children: [
                       DashboardHeader(
                         userName: _getUserName(context),
-                        onThemeToggle: () {
-                          context.read<ThemeCubit>().setTheme(
-                                Theme.of(context).brightness == Brightness.dark
-                                    ? ThemeMode.light
-                                    : ThemeMode.dark,
-                              );
-                        },
                         onLogout: () {
                           context.read<AuthBloc>().add(AuthLogoutPressed());
                         },

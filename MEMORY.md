@@ -1,55 +1,50 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **Spec 014 implementada; repetición de P-T9-B pendiente (2026-10-29):** todo aprobado salvo
-  esa repetición, bloqueada por un corte de luz; firmware corregido ya flasheado y escenario
-  preparado. S2–S6, S8 y S7, P-T8-A, P-T9-A, P-T9-C y P-T9-D aprobadas; 41 RF con trazabilidad.
-  Specs 001–013 cerradas; rama `pruebas/endpoint-fijo-hx711` pendiente de merge a `main`.
-* **Cifras:** `pytest` 530 + 541 subtests; `flutter test` 412/412; `flutter analyze` 0 errores
-  (95 avisos); `pio test -e native` 165/165; `pio run` SUCCESS; base de desarrollo reseteada.
-* **Físicas:** orden 3, 22,23 g medidos y descontados (4637,16 → 4614,93 g); orden 4, atasco no
-  resuelto (−6,28 g) sin descuento. P-T9-B conservó el pendiente y lo reenvió con cierre único,
-  pero el reenvío iba después de la primera consulta; ya es al arrancar y la repetición quedó
-  pendiente por corte de luz. P-T9-C no reintentó ni dejó pendiente; P-T9-D cerró `sin_reporte`.
+* **Spec 015 cerrada (T1–T10 + correcciones finales, 2026-10-30).** Specs 001–014 cerradas; rama
+  `pruebas/endpoint-fijo-hx711` sin merge.
+* **Cifras:** `pytest` 685 pruebas y 848 subpruebas; `flutter test` 737/737; `flutter analyze` 0 errores
+  (103 avisos); 25 RF y 10 RNF de la 015 con prueba existente.
 
 ## Decisiones clave
-* Orden con ID y estados pendiente/cerrada; el stock se descuenta al cerrar con éxito, nunca al
-  entregar, y se descuenta lo medido acotado a 0. El éxito compara contra los solicitados de la
-  orden; si medidos < solicitados, `entrega_incompleta` sin descuento.
-* **Stock relativo y atómico:** descuento `UPDATE ... stock - :d WHERE stock - :d >= 0` y
-  reabastecimiento `UPDATE ... stock + :g WHERE stock + :g <= 5000`, con `rowcount`, reintento y
-  traducción a `stock_fuera_de_rango`/`supera_capacidad`; nunca un stock absoluto.
-* **Una orden pendiente por dispensador:** índice único parcial
-  `ux_dispensing_orders_pending_dispenser` (`WHERE status='pending'`) en modelo y migración; dos
-  entregas simultáneas dejan una orden y la perdedora devuelve la ocurrencia a la cola.
-* Plazo de 5 min más 1 s, barrido cada 30 s y exclusión mutua con el reporte; duplicado responde
-  200 con `ya_cerrada: true`. Motivo inválido: 400 sin registro; ningún rechazo de negocio es 422.
-* MAC parcial `**:AB:1F`; filtros ISO con desplazamiento (`Z`); errores `detail={code,message}`.
-  `Schedule.time` en zona local del servidor (`a_local_naive`, `zona` inyectable); órdenes y plazos en UTC.
-* Reabastecimiento: 400 con registro en transacción aparte; la app envía `operation_id` y el
-  servidor deduplica por `(user_id, operation_id)`; `current_food_grams` del cliente se ignora
-  (RF-23). Comida bloqueada: espera en `dispensing_queue` a que la orden cierre o venza.
-* Borrado de mascota con dispensador: 409 `pet_has_dispenser`. Firmware: timeout de 10 s, reintentos
-  5/15 s, pendiente en NVS, descarte deliberado de 2xx/4xx y monitor sin MAC (orden, motivo y
-  longitud formateados desde el `ReporteCiclo`, nunca releyendo el JSON; corregido en `f10802d`).
-* **RF-37:** el pendiente se reenvía al arrancar, tras el WiFi y antes de validar el servidor y de
-  la primera consulta, aunque no responda y una vez por arranque; sin reenvío en `STATE_NORMAL`.
-* App: `locale: es` del SDK; los logs locales no se sincronizan (`isSynced = true`) y `LogState` usa solo `isOffline` como señal de caché.
-* Atasco (011/013): mediana móvil de 5 válidas, ventana de 5 s, presupuesto de motor de 30 s y 3
-  reintentos; retroceso a 180° de 1,2 s; verificación de 2 s; reposo en `serve:false`.
+* Cuenta 015: `SessionEvents` es el canal único interceptor→`AuthBloc`; el interceptor solo avisa. Un 401
+  cierra sesión solo si la petición no es pública, no es la baja y su `detail.code` es nulo o `unauthorized`.
+* 401 (RF-19): `AuthBloc` ejecuta `AccountLocalCleaner.limpiarPorSesionExpirada()` antes de emitir
+  `AuthSessionExpired`: borra token, tipo, credenciales cifradas y perfil cacheado; conserva mascotas,
+  horarios, historial y `user_theme_mode`; no escribe la marca de baja.
+* Baja 015 (RF-18/RNF-09): orden `marca → token/tipo → credenciales → perfil → Isar → borrar marca`; Isar se
+  acota a `default_user` + correo y `petRemoteId`, nunca `clear()`. El `DELETE` usa los mismos predicados que
+  `contar_huerfanos` (`user_id`, `pet_id`, `dispenser_id`), así una fila `logs(user_id=NULL, pet_id=…)` de
+  base migrada se borra y la baja responde 200. `revoked_tokens` purga los caducados al revocar.
+* Correo vacío: el cliente lo rechaza sin petición; una petición directa se rechaza con `invalid_email`
+  como salvaguarda del contrato y la app nunca usa esa respuesta (nota en `spec.md` y §5.2 del plan).
+* Entrada única: `debeMostrarEntrada(ancho, ubicacion)` decide cabecera (`<600`) o barra del contenedor
+  (`>=600`), nunca ambas; filas 2 y 3 a `/settings/update` y `/settings/delete`, fila 4 abre el diálogo.
+* Perfil 015: credenciales cifradas vía `AuthLocalDatasource.updateCachedCredentials`; el token lo guarda el
+  BLoC con `RegisterTokenUc` (no viaja en `AccountState`); `_sesionValida` se revalida tras cada `await`.
+* Apariencia 015: `ThemeCubit` guarda en `user_theme_mode` (`light`/`dark`/`system`), clave independiente de
+  la cuenta; `aThemeMode()`/`codigoDeModo()` viven en `account/presentation/utils`, fuera del dominio.
+* Orden con ID y estados pendiente/cerrada; el stock se descuenta al cerrar con éxito, nunca al entregar;
+  descuento y reabastecimiento son `UPDATE` relativos con `rowcount` (tope 5000), plazo de 5 min + 1 s.
+* MAC parcial `**:AB:1F`; filtros ISO con `Z`; errores `detail={code,message}`; `Schedule.time` local y
+  órdenes UTC; reabastecimiento deduplicado por `(user_id, operation_id)`; mascota con dispensador 409
+  `pet_has_dispenser`. Firmware: timeout 10 s, reintentos 5/15 s, pendiente en NVS, descarte de 2xx/4xx.
 
 ## Errores a evitar
-* No comparar el progreso contra lecturas individuales ni contar el reintento al iniciar el
-  retroceso; no duplicar umbrales fuera de `dispensing_utils.h`.
-* No descontar stock al entregar ni omitir el filtro `fecha`; no comparar `Schedule.time` contra
-  UTC. No consumir cola, bandera ni stock con asignación ORM: usar `UPDATE` y `rowcount`.
-* No aplicar stock desde el cliente ni añadir `skip` por zona horaria: inyectar el desplazamiento
-  (`zona`, `offsetInicio`/`offsetFin`). La migración de `logs` corre una vez por archivo y proceso
-  (`BASES_MIGRADAS`); tras alterar el esquema por fuera de SQLAlchemy, usar `olvidar_migraciones`.
-* No reenviar el pendiente después de consultar ni duplicarlo en dos estados: llegaría tarde.
+* No volcar estados ni errores completos en `AppBlocObserver` (solo `runtimeType`); mostrar siempre el
+  catálogo. No usar `RadioListTile` ni persistir credenciales fuera del almacén cifrado.
+* No tratar un 401 público (login/registro) ni el de `DELETE /users/me` como sesión expirada, ni llamar a
+  `PendingDeletionStore.clear()` antes de limpiar. No ignorar los `Either` de `deleteString` en la baja.
+* No limpiar la sesión desde el interceptor: la limpieza del 401 vive en `AuthBloc`. No crear `DioClient`
+  sin `SessionEvents` ni volver a poner `tokenNuevo` en `AccountState`.
+* No crear un BLoC en `setUp` de un `testWidgets` ni usar `pumpAndSettle` con indicadores animados; conectar
+  `themeMode` al `ThemeCubit` y medir contraste sobre `surfaceContainerLow`, no `cardColor`.
 
 ## Deuda aceptada y riesgos
-* Entrega incompleta o reporte tardío no descuentan stock (queda por encima del real). La ventana
-  de 10 min de `encolar_comida` no recupera ocurrencias si el proceso cae más. Un cliente sin
-  `operation_id` duplica reenvíos. Ruta con typo `/dispenserscheck-taks/{mac}`.
-* Calibración válida solo para este montaje; P3 sin instrumento independiente y hardware de 005 sin probar.
+* Marca de baja sin identidad: si la limpieza falla y luego se inicia sesión CON conexión con otra cuenta, el
+  reintento de arranque borra sus datos y limpia la marca; aceptado por el perfil local único.
+* Dispensadores con `petRemoteId == null` (`account_local_cleaner.dart:229-232`) se borran siempre, aunque
+  fueran de otra cuenta: se asume una sola cuenta; bloquear sin conexión excede RNF-10.
+* Entrega incompleta o reporte tardío no descuentan stock; la ventana de 10 min de `encolar_comida` no
+  recupera ocurrencias si el proceso cae; cliente sin `operation_id` duplica; typo `/dispenserscheck-taks/{mac}`.
+* Intermitencia preexistente de las dos pruebas de rendimiento con umbral ≤100 ms: fallan por carga, no por regresión.

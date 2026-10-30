@@ -1,11 +1,15 @@
 import re
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 from datetime import datetime, date
 
 # --- SCHEMAS DE USUARIO ---
+# El correo se recibe como texto sin restricciones de Pydantic: el formato, la
+# normalización y los límites de la contraseña los valida el servicio con el
+# catálogo de la cuenta, para que un rechazo de negocio no responda 422 (spec
+# 015, RF-11, §5.4).
 class UserBase(BaseModel):
-    email: EmailStr
+    email: str
 
 class UserCreate(UserBase):
     password: str # Solo se usa al recibir el registro

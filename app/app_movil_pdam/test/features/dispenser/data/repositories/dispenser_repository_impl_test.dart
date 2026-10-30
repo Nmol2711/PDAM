@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:dartz/dartz.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:app_movil_pdam/core/network/session_events.dart';
 import 'package:app_movil_pdam/core/error/api_exception.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
@@ -272,7 +273,7 @@ void main() {
       localDispenserDatasource: localDatasource,
       syncService: syncService,
       bleService: BleProvisioningService(),
-      dioClient: DioClient(storageService),
+      dioClient: DioClient(storageService, sessionEvents: SessionEvents()),
       storageService: storageService,
     );
   });

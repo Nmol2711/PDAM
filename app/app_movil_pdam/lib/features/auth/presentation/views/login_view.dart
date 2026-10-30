@@ -36,6 +36,16 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
+    // La vista se monta después de que el BLoC emita el estado, así que el
+    // mensaje de sesión se lee del estado actual y no solo del listener
+    // (RF-05: el aviso debe verse al volver al login).
+    final authState = context.watch<AuthBloc>().state;
+    final mensajeSesion = switch (authState) {
+      AuthSessionExpired(:final message) => message,
+      AuthAccountDeleted(:final message) => message,
+      _ => null,
+    };
+
     return Scaffold(
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
@@ -91,6 +101,11 @@ class _LoginViewState extends State<LoginView> {
                       style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     ),
                     const SizedBox(height: 40),
+
+                    if (mensajeSesion != null) ...[
+                      _MensajeSesion(mensaje: mensajeSesion),
+                      const SizedBox(height: 16),
+                    ],
 
                     // --- EMAIL ---
                     TextFormField(
@@ -177,6 +192,46 @@ class _LoginViewState extends State<LoginView> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Aviso no bloqueante de sesión terminada (RF-05, RF-18).
+///
+/// El texto llega del catálogo a través del estado del BLoC; la vista no lo
+/// hardcodea y no expone credenciales ni tokens.
+class _MensajeSesion extends StatelessWidget {
+  final String mensaje;
+
+  const _MensajeSesion({required this.mensaje});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Container(
+      key: const Key('login_session_message'),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.error_outline, color: colors.onErrorContainer),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              mensaje,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colors.onErrorContainer,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

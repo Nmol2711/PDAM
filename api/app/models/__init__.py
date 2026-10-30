@@ -7,4 +7,5 @@ from .models import (
     DispensingOrder,
     DispensingQueue,
     RefillOperation,
+    RevokedToken,
 )

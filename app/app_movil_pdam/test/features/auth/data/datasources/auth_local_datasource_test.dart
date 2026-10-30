@@ -48,6 +48,50 @@ void main() {
     expect(credentials['password'], password);
   });
 
+  test('actualiza el correo conservando la contraseña cifrada', () async {
+    // RF-14: al cambiar solo el correo, la contraseña del dispositivo se
+    // conserva para el acceso sin conexión.
+    await dataSource.cacheUserCredentials('viejo@pdam.com', 'claveSegura123');
+
+    await dataSource.updateCachedCredentials(email: 'nuevo@pdam.com');
+    final credentials = await dataSource.getCachedCredentials();
+
+    expect(credentials['email'], 'nuevo@pdam.com');
+    expect(credentials['password'], 'claveSegura123');
+  });
+
+  test('actualiza la contraseña conservando el correo cifrado', () async {
+    // RF-14: al cambiar solo la contraseña, el correo se conserva.
+    await dataSource.cacheUserCredentials('cuenta@pdam.com', 'claveVieja123');
+
+    await dataSource.updateCachedCredentials(password: 'claveNueva123');
+    final credentials = await dataSource.getCachedCredentials();
+
+    expect(credentials['email'], 'cuenta@pdam.com');
+    expect(credentials['password'], 'claveNueva123');
+  });
+
+  test('actualiza correo y contraseña en la misma operación', () async {
+    await dataSource.cacheUserCredentials('viejo@pdam.com', 'claveVieja123');
+
+    await dataSource.updateCachedCredentials(
+      email: 'nuevo@pdam.com',
+      password: 'claveNueva123',
+    );
+    final credentials = await dataSource.getCachedCredentials();
+
+    expect(credentials['email'], 'nuevo@pdam.com');
+    expect(credentials['password'], 'claveNueva123');
+  });
+
+  test('sin credenciales previas no escribe datos a medias', () async {
+    await dataSource.updateCachedCredentials(email: 'nuevo@pdam.com');
+    final credentials = await dataSource.getCachedCredentials();
+
+    expect(credentials['email'], null);
+    expect(credentials['password'], null);
+  });
+
   test('debe limpiar credenciales cacheadas correctamente', () async {
     // Arrange
     await dataSource.cacheUserCredentials('test@pdam.com', '123456');

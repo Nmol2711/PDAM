@@ -55,28 +55,32 @@ class DashboardHeroCard extends StatelessWidget {
                   letterSpacing: -1,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      "$completedFeedings realizadas de $totalFeedings",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        "$completedFeedings realizadas de $totalFeedings",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.end,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      "porciones pendientes",
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
+                      const SizedBox(height: 2),
+                      const Text(
+                        "porciones pendientes",
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                        ),
+                        textAlign: TextAlign.end,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],

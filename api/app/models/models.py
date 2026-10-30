@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from sqlalchemy import (
     Column,
     Float,
@@ -23,6 +25,17 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    # Identidad estable de la cuenta para el token (RF-10, RF-19). Es opaca y no
+    # se muestra: sustituye al correo en `sub`, de modo que registrar de nuevo un
+    # correo no rehabilita los tokens de la cuenta eliminada. El valor por
+    # defecto es invocable para que cada alta reciba un identificador distinto.
+    public_id = Column(
+        String,
+        unique=True,
+        index=True,
+        nullable=False,
+        default=lambda: uuid4().hex,
+    )
 
     # Relaciones cruzadas correctamente con sus hijos
     pets = relationship("Pet", back_populates="owner")
@@ -227,3 +240,22 @@ class RefillOperation(Base):
             "user_id", "operation_id", name="ux_refill_operations_usuario_operacion"
         ),
     )
+
+
+class RevokedToken(Base):
+    """Token invalidado antes de su caducidad (RF-10, RF-19).
+
+    Se revoca por `jti` y no por cuenta: al cambiar el correo solo deja de valer
+    el token usado en esa petición y los demás dispositivos conservan el suyo
+    hasta que caduque. `public_id` es una instantánea sin clave foránea para que
+    el registro sobreviva a la baja de la cuenta, que lo borra explícitamente
+    (RF-18).
+    """
+
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String, unique=True, index=True, nullable=False)
+    public_id = Column(String, index=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime, nullable=False)

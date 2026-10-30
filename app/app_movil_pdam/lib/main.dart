@@ -1,8 +1,10 @@
 import 'package:app_movil_pdam/core/router/app_router.dart';
 import 'package:app_movil_pdam/core/localization/app_localization.dart';
+import 'package:app_movil_pdam/core/services/account_local_cleaner.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
 import 'package:app_movil_pdam/core/offline/isar_service.dart';
+import 'package:app_movil_pdam/features/account/presentation/bloc/account_bloc.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
@@ -21,6 +23,17 @@ void main() async {
   Bloc.observer = AppBlocObserver();
   await IsarService.init();
   await di.setup();
+
+  // RNF-10: si una baja anterior dejó la limpieza local a medias, se reintenta
+  // antes de arrancar. La marca solo se borra cuando la limpieza termina; si
+  // vuelve a fallar, `AuthBloc` bloquea el acceso sin conexión con esas
+  // credenciales. Nunca se impide el arranque de la aplicación.
+  try {
+    await di.sl<AccountLocalCleaner>().limpiarSiPendiente();
+  } catch (_) {
+    // La marca permanece y el bloqueo de acceso sin conexión sigue vigente.
+  }
+
   runApp(const MainApp());
 }
 
@@ -36,6 +49,9 @@ class MainApp extends StatelessWidget {
           create: (context) =>
               di.sl<AuthBloc>()..add(AuthCheckStatusRequested()),
         ),
+        // La cuenta vive por encima del enrutador: el menú y el perfil leen el
+        // mismo estado y el BLoC se limpia al cerrar o expirar la sesión.
+        BlocProvider<AccountBloc>(create: (context) => di.sl<AccountBloc>()),
         BlocProvider<PetBloc>(create: (context) => di.sl<PetBloc>()),
         BlocProvider<ScheduleBloc>(create: (context) => di.sl<ScheduleBloc>()),
         BlocProvider<DispenserBloc>(

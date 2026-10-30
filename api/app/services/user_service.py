@@ -1,42 +1,86 @@
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+
+from app.core.security import get_password_hash
+from app.domain.cuenta import (
+    ERRORES_CUENTA,
+    es_correo_valido,
+    normalizar_correo,
+    validar_password_nueva,
+)
 from app.models import models
 from app.schemas import schemas
-from app.core.security import get_password_hash
 
-# Función para buscar si un usuario ya existe
-def obtener_usuario_por_email(db: Session, email: str) -> schemas.User:
-    user_db = db.query(models.User).filter(models.User.email == email).first()
 
-    if user_db:
-        return schemas.User.model_validate(user_db)
-    return None
+def error_de_cuenta(codigo: str, estado: int = status.HTTP_400_BAD_REQUEST) -> HTTPException:
+    """Rechazo de negocio con el cuerpo `detail={code,message}` del catálogo.
 
-def obtener_password_por_email(db: Session, email:str) -> str | None:
-    user_db = db.query(models.User).filter(models.User.email == email).first()
-    return  user_db.hashed_password if user_db else None
+    Ningún rechazo de validación pasa por Pydantic: el código y el mensaje salen
+    siempre de `app.domain.cuenta` (RF-11, §5.4).
+    """
+    return HTTPException(
+        status_code=estado,
+        detail={"code": codigo, "message": ERRORES_CUENTA[codigo]},
+    )
+
+
+def obtener_usuario_por_public_id(db: Session, public_id: str):
+    """Cuenta por su identidad estable; `None` si ya no existe (RF-19)."""
+    return (
+        db.query(models.User)
+        .filter(models.User.public_id == public_id)
+        .first()
+    )
+
+
+def obtener_usuario_por_correo_normalizado(db: Session, email: str):
+    """Cuenta cuyo correo coincide en forma normalizada (RF-12, RF-19).
+
+    La comparación usa `lower(trim(email))`, así que un correo guardado con
+    mayúsculas o espacios exteriores encuentra su cuenta igualmente.
+    """
+    normalizado = normalizar_correo(email)
+    if not normalizado:
+        return None
+    return (
+        db.query(models.User)
+        .filter(func.lower(func.trim(models.User.email)) == normalizado)
+        .first()
+    )
+
 
 def crear_usuario(db: Session, user: schemas.UserCreate):
-    # 1. Validar si el usuario ya existe
-    usuario_existente = obtener_usuario_por_email(db, user.email)
-    if usuario_existente:
-        # Lanzamos un error de FastAPI que el usuario podrá entender
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El correo electrónico ya está registrado."
-        )
+    """Alta de cuenta normalizada y validada con el catálogo (RF-11, RF-12).
 
-    # 2. Encriptar la contraseña
-    hashed_pw = get_password_hash(user.password)
-    
-    # 3. Crear el objeto del Modelo
+    El correo se guarda en su forma canónica y el duplicado se traduce a
+    `email_already_registered`, tanto en la comprobación previa como si la
+    restricción única salta al confirmar. La validación vive aquí y no en el
+    esquema, de modo que los rechazos son 400 con código y nunca 422.
+    """
+    correo = normalizar_correo(user.email)
+    if not es_correo_valido(correo):
+        raise error_de_cuenta("invalid_email")
+
+    error_password = validar_password_nueva(user.password)
+    if error_password is not None:
+        raise error_de_cuenta(error_password)
+
+    if obtener_usuario_por_correo_normalizado(db, correo) is not None:
+        raise error_de_cuenta("email_already_registered")
+
     db_user = models.User(
-        email=user.email,
-        hashed_password=hashed_pw
+        email=correo,
+        hashed_password=get_password_hash(user.password),
     )
-    
-    # 4. Guardar en la base de datos
     db.add(db_user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Otra petición registró el mismo correo entre la comprobación y el alta.
+        db.rollback()
+        raise error_de_cuenta("email_already_registered") from None
+
     db.refresh(db_user)
     return db_user
