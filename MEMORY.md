@@ -48,7 +48,7 @@
   fueran de otra cuenta: se asume una sola cuenta; bloquear sin conexión excede RNF-10.
 * Entrega incompleta o reporte tardío no descuentan stock; la ventana de 10 min de `encolar_comida` no
   recupera ocurrencias si el proceso cae; cliente sin `operation_id` duplica; typo `/dispenserscheck-taks/{mac}`.
-* **Riesgo abierto de la 013:** acepta 0 g como línea base tras un arranque; en la repetición de
-  P-T9-B midió 364,66 g para 17,27 g. El ciclo inválido se anuló en la base de desarrollo (orden 6 y
-  su log borrados, stock 4614,93 g; copia en `/tmp/opencode/pdam-antes-limpieza-2026-10-30.db`).
+* Incidente 2026-10-30 (013): línea base 0,0 g inestable y 364,66 g para 17,27 g; ciclo anulado en
+  desarrollo (orden 6 y su log borrados, stock 4614,93 g; copia en `/tmp/opencode/pdam-antes-limpieza-2026-10-30.db`).
+* **Spec 016 en borrador:** validación de línea base y plausibilidad del dispensado (derivada del incidente del 2026-10-30), pendiente de aprobación e implementación.
 * Intermitencia preexistente de las dos pruebas de rendimiento con umbral ≤100 ms: fallan por carga, no por regresión.

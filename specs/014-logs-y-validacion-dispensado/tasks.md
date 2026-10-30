@@ -493,3 +493,5 @@ deudas y riesgos de esa sección se mantiene.
 > 4614,93 g; copia previa en `/tmp/opencode/pdam-antes-limpieza-2026-10-30.db`) y no se usa
 > como evidencia de descuento. Queda como **riesgo abierto de la spec 013**: «aceptar 0 g como
 > línea base válida tras un arranque». No se corrige en la 014.
+
+> **Seguimiento:** el riesgo de línea base del 2026-10-30 se aborda en la spec 016 (`specs/016-validacion-linea-base-y-plausibilidad/`).
