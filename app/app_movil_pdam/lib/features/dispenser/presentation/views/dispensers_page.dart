@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
 import 'package:app_movil_pdam/core/theme/app_colors.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
@@ -232,6 +234,9 @@ class _DispensersPageState extends State<DispensersPage>
       appBar: AppBar(
         title: const Text('Dispositivos'),
         actions: [
+          const SettingsEntryButton(
+            ubicacion: UbicacionEntrada.cabeceraPantalla,
+          ),
           IconButton(
             icon: const Icon(Icons.bluetooth_searching),
             tooltip: 'Buscar dispensadores BLE',

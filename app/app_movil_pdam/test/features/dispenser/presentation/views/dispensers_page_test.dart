@@ -279,4 +279,35 @@ void main() {
     expect(find.text('Eliminar credenciales WiFi'), findsNothing);
     expect(find.byType(DeviceCardWidget), findsOneWidget);
   });
+
+  testWidgets('a 600 y 840 la cabecera real no dibuja la entrada y a 320 sí '
+      'hay exactamente una', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final ancho in <double>[600, 840]) {
+      tester.view.physicalSize = Size(ancho, 800);
+      tester.view.devicePixelRatio = 1.0;
+      await pumpPage(
+        tester,
+        repository: MockDispenserRepository(),
+        refreshInterval: null,
+      );
+
+      expect(
+        find.byTooltip('Abrir configuración'),
+        findsNothing,
+        reason: 'ancho $ancho',
+      );
+    }
+
+    tester.view.physicalSize = const Size(320, 640);
+    await pumpPage(
+      tester,
+      repository: MockDispenserRepository(),
+      refreshInterval: null,
+    );
+
+    expect(find.byTooltip('Abrir configuración'), findsOneWidget);
+  });
 }

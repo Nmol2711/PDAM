@@ -1,8 +1,19 @@
 import 'package:app_movil_pdam/core/network/dio_client.dart';
+import 'package:app_movil_pdam/core/network/session_events.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
 import 'package:app_movil_pdam/core/router/app_router.dart';
+import 'package:app_movil_pdam/core/services/account_local_cleaner.dart';
+import 'package:app_movil_pdam/core/services/pending_deletion_store.dart';
 import 'package:app_movil_pdam/core/services/storage_service.dart';
 import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
+import 'package:app_movil_pdam/features/account/data/datasource/local/local_profile_datasource.dart';
+import 'package:app_movil_pdam/features/account/data/datasource/remote/account_remote_datasource.dart';
+import 'package:app_movil_pdam/features/account/data/repository_impl/account_repository_impl.dart';
+import 'package:app_movil_pdam/features/account/domain/repository/account_repository.dart';
+import 'package:app_movil_pdam/features/account/domain/usecase/delete_account_uc.dart';
+import 'package:app_movil_pdam/features/account/domain/usecase/get_profile_uc.dart';
+import 'package:app_movil_pdam/features/account/domain/usecase/update_profile_uc.dart';
+import 'package:app_movil_pdam/features/account/presentation/bloc/account_bloc.dart';
 import 'package:app_movil_pdam/features/auth/data/datasources/local/auth_local_datasource.dart';
 import 'package:app_movil_pdam/features/auth/data/datasources/remote/auth_remote_datasource.dart';
 import 'package:app_movil_pdam/features/auth/data/repositories_impl/auth_repositories_impl.dart';
@@ -10,6 +21,7 @@ import 'package:app_movil_pdam/features/auth/data/repositories_impl/user_reposit
 import 'package:app_movil_pdam/features/auth/domain/repository/auth_token_repositories.dart';
 import 'package:app_movil_pdam/features/auth/domain/repository/user_repositories.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/auth_token_uc/delete_token_uc.dart';
+import 'package:app_movil_pdam/features/auth/domain/usecase/auth_token_uc/register_token_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/current_user_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/login_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/register_uc.dart';
@@ -73,27 +85,41 @@ Future<void> setup() async {
     () => StorageServiceImpl(dataLocalService: const FlutterSecureStorage()),
   );
 
+  // Canal de avisos de sesión compartido por el interceptor y AuthBloc (RF-05).
+  sl.registerLazySingleton<SessionEvents>(() => SessionEvents());
+
+  // Marca de baja pendiente en almacenamiento seguro (RNF-10).
+  sl.registerLazySingleton<PendingDeletionStore>(
+    () => PendingDeletionStoreImpl(storageService: sl<StorageService>()),
+  );
+
   // Dio Cleinte
-  sl.registerLazySingleton(() => DioClient(sl<StorageService>()));
+  sl.registerLazySingleton(
+    () => DioClient(sl<StorageService>(), sessionEvents: sl<SessionEvents>()),
+  );
 
   // Sincronización (consulta de conexión usada por el registro de dispensadores)
-  sl.registerLazySingleton<SyncService>(() => SyncService(dioClient: sl<DioClient>()));
+  sl.registerLazySingleton<SyncService>(
+    () => SyncService(dioClient: sl<DioClient>()),
+  );
 
   // Fuente de Datos
   sl.registerLazySingleton<AuthRemoteDatasource>(
     () => AuthRemoteDatasourceImpl(dioClient: sl<DioClient>()),
   );
+  sl.registerLazySingleton<AccountRemoteDatasource>(
+    () => AccountRemoteDatasourceImpl(dioClient: sl<DioClient>()),
+  );
+  sl.registerLazySingleton<LocalProfileDatasource>(
+    () => LocalProfileDatasourceImpl(),
+  );
   sl.registerLazySingleton<PetRemoteDatasource>(
     () => PetRemoteDatasourceImpl(dioClient: sl<DioClient>()),
   );
 
-  sl.registerLazySingleton<LocalPetDatasource>(
-    () => LocalPetDatasourceImpl(),
-  );
+  sl.registerLazySingleton<LocalPetDatasource>(() => LocalPetDatasourceImpl());
 
-  sl.registerLazySingleton<LocalLogDatasource>(
-    () => LocalLogDatasourceImpl(),
-  );
+  sl.registerLazySingleton<LocalLogDatasource>(() => LocalLogDatasourceImpl());
 
   sl.registerLazySingleton<LocalScheduleDatasource>(
     () => LocalScheduleDatasourceImpl(),
@@ -109,6 +135,16 @@ Future<void> setup() async {
 
   sl.registerLazySingleton<AuthLocalDatasource>(
     () => AuthLocalDatasourceImpl(storageService: sl<StorageService>()),
+  );
+
+  // Limpieza local de la baja con marca persistente (RF-18, RNF-10). Borra
+  // token, tipo, credenciales, perfil y colecciones Isar; conserva el tema.
+  sl.registerLazySingleton<AccountLocalCleaner>(
+    () => AccountLocalCleanerImpl(
+      pendingDeletionStore: sl<PendingDeletionStore>(),
+      authLocalDatasource: sl<AuthLocalDatasource>(),
+      localProfileDatasource: sl<LocalProfileDatasource>(),
+    ),
   );
 
   sl.registerLazySingleton<DispenserRemoteDatasource>(
@@ -132,6 +168,17 @@ Future<void> setup() async {
     () => UserRepositoriesImpl(
       authLocalDatasource: sl<AuthLocalDatasource>(),
       authRemoteDatasource: sl<AuthRemoteDatasource>(),
+      localProfileDatasource: sl<LocalProfileDatasource>(),
+    ),
+  );
+
+  sl.registerLazySingleton<AccountRepository>(
+    () => AccountRepositoryImpl(
+      remoteDatasource: sl<AccountRemoteDatasource>(),
+      localProfileDatasource: sl<LocalProfileDatasource>(),
+      // RF-14: tras un cambio de correo o contraseña se actualizan las
+      // credenciales cifradas del acceso sin conexión en este dispositivo.
+      authLocalDatasource: sl<AuthLocalDatasource>(),
     ),
   );
 
@@ -172,7 +219,9 @@ Future<void> setup() async {
   );
 
   sl.registerLazySingleton<DashboardRepository>(
-    () => DashboardRepositoryImpl(remoteDatasource: sl<DashboardRemoteDatasource>()),
+    () => DashboardRepositoryImpl(
+      remoteDatasource: sl<DashboardRemoteDatasource>(),
+    ),
   );
 
   // Use Case
@@ -186,6 +235,21 @@ Future<void> setup() async {
 
   sl.registerLazySingleton(
     () => DeleteTokenUc(repository: sl<AuthTokenRepositories>()),
+  );
+
+  sl.registerLazySingleton(
+    () => RegisterTokenUc(repository: sl<AuthTokenRepositories>()),
+  );
+
+  // Cuenta (spec 015)
+  sl.registerLazySingleton(
+    () => GetProfileUc(repository: sl<AccountRepository>()),
+  );
+  sl.registerLazySingleton(
+    () => UpdateProfileUc(repository: sl<AccountRepository>()),
+  );
+  sl.registerLazySingleton(
+    () => DeleteAccountUc(repository: sl<AccountRepository>()),
   );
 
   // Pets
@@ -227,9 +291,7 @@ Future<void> setup() async {
     () => UpdateScheduleUc(repository: sl<ScheduleRepositories>()),
   );
 
-  sl.registerLazySingleton(
-    () => GetLogsUc(repository: sl<LogRepositories>()),
-  );
+  sl.registerLazySingleton(() => GetLogsUc(repository: sl<LogRepositories>()));
   sl.registerLazySingleton(
     () => GetLogCatalogUc(repository: sl<LogRepositories>()),
   );
@@ -279,7 +341,25 @@ Future<void> setup() async {
       registerUc: sl<RegisterUc>(),
       loginUc: sl<LoginUc>(),
       currentUserUc: sl<CurrentUserUc>(),
-      deleteTokenUc: sl<DeleteTokenUc>(),
+      pendingDeletionStore: sl<PendingDeletionStore>(),
+      sessionEvents: sl<SessionEvents>(),
+      // RF-19: un 401 borra token, credenciales y perfil cacheado antes de
+      // cerrar la sesión; conserva mascotas, horarios e historial.
+      accountLocalCleaner: sl<AccountLocalCleaner>(),
+    ),
+  );
+
+  sl.registerLazySingleton(
+    () => AccountBloc(
+      getProfileUc: sl<GetProfileUc>(),
+      updateProfileUc: sl<UpdateProfileUc>(),
+      deleteAccountUc: sl<DeleteAccountUc>(),
+      registerTokenUc: sl<RegisterTokenUc>(),
+      accountLocalCleaner: sl<AccountLocalCleaner>(),
+      sessionEvents: sl<SessionEvents>(),
+      // El cierre de sesión, la expiración y la baja limpian el perfil para no
+      // mostrar datos de una cuenta anterior (RF-05, RF-18).
+      authStates: sl<AuthBloc>().stream,
     ),
   );
 

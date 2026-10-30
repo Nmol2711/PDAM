@@ -59,3 +59,33 @@ class ConnectivityRequiredFailures extends Failures {
 class NutritionValidationFailures extends Failures {
   NutritionValidationFailures(super.message);
 }
+
+// Fallos tipados de la cuenta (spec 015). La capa de datos los crea a partir
+// del `code` del `detail` del servidor y la presentación decide el copy; ningún
+// texto crudo de Dio llega a la interfaz (RF-05, RF-07, RF-21).
+
+/// Rechazo de negocio de la cuenta con su código estable del catálogo.
+///
+/// Cubre `invalid_email`, `weak_password`, `password_too_long`,
+/// `empty_update`, `email_already_registered`, `invalid_password`,
+/// `unauthorized`, `conflict` y `server_error`. [message] es el texto visible
+/// del catálogo, nunca el `toString()` de una excepción.
+class AccountFailure extends Failures implements Exception {
+  final String code;
+
+  AccountFailure(this.code, super.message);
+
+  @override
+  String toString() => 'AccountFailure($code): $message';
+}
+
+/// El servidor rechazó el token (401 `unauthorized`): la sesión ya no vale y
+/// el estado de la cuenta debe cerrarla (RF-05, RF-19).
+class UnauthorizedFailure extends Failures {
+  UnauthorizedFailure(super.message);
+}
+
+/// No hay perfil cacheado del que mostrar datos sin conexión (RF-08).
+class NoCachedProfileFailure extends Failures {
+  NoCachedProfileFailure(super.message);
+}

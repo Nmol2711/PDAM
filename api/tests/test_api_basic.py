@@ -2,6 +2,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -49,10 +50,11 @@ class TestHealthAndAuthEndpoints(BaseApiTests):
 
     def test_login_returns_token_for_valid_credentials(self):
         fake_hash = "$2b$12$abcdefghijklmnopqrstuv"
+        usuario = SimpleNamespace(hashed_password=fake_hash, public_id="public-1")
 
-        with patch("app.api.endpoints.auth.user_service.obtener_password_por_email", return_value=fake_hash), \
+        with patch("app.api.endpoints.auth.user_service.obtener_usuario_por_correo_normalizado", return_value=usuario), \
              patch("app.api.endpoints.auth.security.verify_password", return_value=True), \
-             patch("app.api.endpoints.auth.security.create_access_token", return_value="token-falso"):
+             patch("app.api.endpoints.auth.security.crear_token_acceso", return_value="token-falso"):
             response = self.client.post(
                 "/auth/login",
                 data={"username": "usuario@test.com", "password": "123456"},
@@ -65,14 +67,17 @@ class TestHealthAndAuthEndpoints(BaseApiTests):
         self.assertEqual(set(payload.keys()), {"access_token", "token_type"})
 
     def test_login_returns_error_for_invalid_credentials(self):
-        with patch("app.api.endpoints.auth.user_service.obtener_password_por_email", return_value=None):
+        with patch("app.api.endpoints.auth.user_service.obtener_usuario_por_correo_normalizado", return_value=None):
             response = self.client.post(
                 "/auth/login",
                 data={"username": "usuario@test.com", "password": "123456"},
             )
 
         self.assertEqual(response.status_code, 401)
-        self.assertEqual(response.json()["detail"], "Correo o contraseña incorrectos")
+        self.assertEqual(
+            response.json()["detail"],
+            {"code": "invalid_credentials", "message": "Correo o contraseña incorrectos"},
+        )
 
 
 class TestUserRegistrationEndpoints(BaseApiTests):

@@ -612,4 +612,36 @@ void main() {
       expect(find.text('Reintentar'), findsOneWidget);
     });
   });
+
+  group('entrada única en la cabecera real (RF-01)', () {
+    testWidgets('a 600 y 840 la cabecera no dibuja la entrada', (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      for (final ancho in <double>[600, 840]) {
+        tester.view.physicalSize = Size(ancho, 800);
+        tester.view.devicePixelRatio = 1.0;
+        await pumpView(tester);
+
+        expect(
+          find.byTooltip('Abrir configuración'),
+          findsNothing,
+          reason: 'ancho $ancho',
+        );
+      }
+    });
+
+    testWidgets('a 320 la cabecera dibuja exactamente una entrada', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpView(tester);
+
+      expect(find.byTooltip('Abrir configuración'), findsOneWidget);
+    });
+  });
 }

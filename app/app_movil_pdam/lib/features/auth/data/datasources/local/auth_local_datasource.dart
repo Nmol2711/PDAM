@@ -9,6 +9,14 @@ abstract class AuthLocalDatasource {
   Future<void> cacheUserCredentials(String email, String password);
   Future<Map<String, String?>> getCachedCredentials();
   Future<void> clearCachedCredentials();
+
+  /// Actualiza las credenciales cifradas tras cambiar el correo o la
+  /// contraseña (RF-14).
+  ///
+  /// Conserva la parte que no cambió: si solo llega el correo se mantiene la
+  /// contraseña guardada y viceversa. Sin credenciales previas no escribe una
+  /// pareja incompleta, porque el acceso sin conexión necesita ambas.
+  Future<void> updateCachedCredentials({String? email, String? password});
 }
 
 class AuthLocalDatasourceImpl implements AuthLocalDatasource {
@@ -152,7 +160,42 @@ class AuthLocalDatasourceImpl implements AuthLocalDatasource {
 
   @override
   Future<void> clearCachedCredentials() async {
-    await _storageService.deleteString(TokenConstant.keyCachedEmail);
-    await _storageService.deleteString(TokenConstant.keyCachedPassword);
+    // RNF-10 y RF-19: un fallo al borrar cualquiera de las dos credenciales se
+    // propaga. Si se ignorara, la limpieza de la baja terminaría con el correo
+    // y la contraseña cifrados intactos y el acceso sin conexión seguiría
+    // operativo con las credenciales de una cuenta eliminada.
+    final resultEmail = await _storageService.deleteString(
+      TokenConstant.keyCachedEmail,
+    );
+    resultEmail.fold(
+      (failure) => throw Exception(
+        'Error al eliminar el correo en caché ${failure.message}',
+      ),
+      (_) => null,
+    );
+
+    final resultPassword = await _storageService.deleteString(
+      TokenConstant.keyCachedPassword,
+    );
+    resultPassword.fold(
+      (failure) => throw Exception(
+        'Error al eliminar la contraseña en caché ${failure.message}',
+      ),
+      (_) => null,
+    );
+  }
+
+  @override
+  Future<void> updateCachedCredentials({String? email, String? password}) async {
+    if (email == null && password == null) return;
+
+    final actuales = await getCachedCredentials();
+    final correo = email ?? actuales['email'];
+    final clave = password ?? actuales['password'];
+
+    // Sin pareja completa no hay acceso sin conexión que actualizar.
+    if (correo == null || clave == null) return;
+
+    await cacheUserCredentials(correo, clave);
   }
 }

@@ -28,7 +28,11 @@ class BaseApiTests(unittest.TestCase):
             expected_status,
             f"Se esperaba {expected_status} en {method.upper()} {path}, pero se recibió {response.status_code}. Detalle: {response.text}",
         )
-        self.assertIn("detail", response.json())
+        detalle = response.json()["detail"]
+        self.assertEqual(detalle["code"], "unauthorized")
+        self.assertEqual(
+            detalle["message"], "La sesión no es válida. Vuelve a iniciar sesión."
+        )
 
 
 class TestProtectedEndpoints(BaseApiTests):
@@ -79,8 +83,19 @@ class TestProtectedEndpoints(BaseApiTests):
                 self.assert_route_requires_auth("put", route, json=payload, params={"pet_id": 1})
 
     def test_delete_routes_require_authentication(self):
-        routes = ["/pets/1", "/dispensers/1", "/schedules/1"]
+        # La baja de la cuenta exige token; la idempotencia de RF-18 se resuelve
+        # después de validar la identidad, no sin ella.
+        routes = ["/users/me", "/pets/1", "/dispensers/1", "/schedules/1"]
 
         for route in routes:
             with self.subTest(route=route):
                 self.assert_route_requires_auth("delete", route)
+
+    def test_patch_routes_require_authentication(self):
+        routes = [
+            ("/users/me", {"email": "nuevo@test.com"}),
+        ]
+
+        for route, payload in routes:
+            with self.subTest(route=route):
+                self.assert_route_requires_auth("patch", route, json=payload)

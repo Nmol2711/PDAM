@@ -1,14 +1,16 @@
-"""Trazabilidad RF → prueba de la spec 014 (RNF-6, T10).
+"""Trazabilidad RF → prueba de las specs 014 y 015 (RNF-05, RNF-6, T10).
 
-Una sola tabla declara, para cada uno de los 41 requisitos funcionales, al menos
-una prueba automatizada que falla si el requisito se incumple. La prueba final
-comprueba que:
+Para cada spec, una tabla declara, para cada requisito funcional y no funcional,
+al menos una prueba automatizada que falla si el requisito se incumple. Las
+pruebas comprueban que:
 
-1. La tabla cubre exactamente los RF declarados en `spec.md`.
+1. La tabla cubre exactamente los RF (y RNF, en la 015) declarados en `spec.md`.
 2. Cada referencia de la API (`modulo.Clase.test_...`) existe en la suite.
 3. Cada referencia de Flutter y del firmware aparece literalmente en su archivo.
 4. Los RF con efecto físico o visual tienen además su procedimiento manual
    documentado en `tasks.md`.
+5. En la 015, las tablas de `tasks.md` citan archivo y nombre de prueba reales,
+   de modo que no se pueda declarar una prueba inventada.
 
 Las referencias de Flutter y del firmware se guardan como
 `(ruta_relativa, texto_del_caso)`: no se ejecutan desde pytest, pero se verifica
@@ -548,6 +550,1100 @@ MANUALES = {
     "RF-39": "P-T9-C",
     "RF-40": "P-T9-D",
 }
+
+# --- Spec 015: gestión de usuario y menú de configuración -------------------
+
+SPEC_015 = RAIZ / "specs" / "015-gestion-usuario-configuracion" / "spec.md"
+TAREAS_015 = RAIZ / "specs" / "015-gestion-usuario-configuracion" / "tasks.md"
+TRAZABILIDAD = Path(__file__).resolve().parent / "test_traceability_rf.py"
+
+MODULOS_API_015 = (
+    "test_traceability_rf",
+    "test_auth",
+    "test_account_deletion",
+    "test_account_domain",
+    "test_account_errors",
+    "test_account_identity",
+    "test_account_migration",
+    "test_account_profile_api",
+    "test_account_update",
+)
+
+# RF → pruebas automatizadas de la 015. `api` son identificadores de pytest;
+# `flutter` son pares (archivo relativo a la app, fragmento del nombre del caso).
+COBERTURA_015 = {
+    "RF-01": {
+        "flutter": (
+            (
+                "test/core/presentation/settings_entry_visibility_test.dart",
+                "por debajo de 600 solo se muestra en la cabecera de la pantalla",
+            ),
+            (
+                "test/core/presentation/settings_entry_visibility_test.dart",
+                "desde 600 solo se muestra en la barra del contenedor",
+            ),
+            (
+                "test/core/presentation/settings_entry_visibility_test.dart",
+                "nunca hay dos ubicaciones visibles para el mismo ancho",
+            ),
+            (
+                "test/core/presentation/settings_entry_visibility_test.dart",
+                "a 320 hay una entrada en la cabecera y ninguna en el",
+            ),
+            (
+                "test/features/pets/presentation/views/pets_view_test.dart",
+                "a 320 la cabecera real dibuja exactamente una entrada",
+            ),
+            (
+                "test/features/pets/presentation/views/pets_view_test.dart",
+                "a 600 y 840 la cabecera real no dibuja la entrada",
+            ),
+            (
+                "test/features/logs/presentation/views/logs_view_test.dart",
+                "a 320 la cabecera dibuja exactamente una entrada",
+            ),
+            (
+                "test/features/logs/presentation/views/logs_view_test.dart",
+                "a 600 y 840 la cabecera no dibuja la entrada",
+            ),
+            (
+                "test/features/dispenser/presentation/views/dispensers_page_test.dart",
+                "a 600 y 840 la cabecera real no dibuja la entrada y a 320 sí",
+            ),
+            (
+                "test/features/dashboard/presentation/views/"
+                "dashboard_nutrition_entry_test.dart",
+                "a 600 y 840 la cabecera real del panel no dibuja la entrada y",
+            ),
+        ),
+    },
+    "RF-02": {
+        "api": (
+            "test_traceability_rf.TestValidacionGlobal015"
+            ".test_rf02_el_menu_no_depende_del_estado_de_la_cuenta",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/settings_view_test.dart",
+                "muestra el título y las cuatro filas en el orden de RF-02",
+            ),
+            (
+                "test/features/settings/settings_view_test.dart",
+                "no despliega las tres opciones de apariencia como filas",
+            ),
+        ),
+    },
+    "RF-03": {
+        "flutter": (
+            (
+                "test/features/settings/settings_view_test.dart",
+                "la primera fila abre Perfil y al volver el menú conserva las",
+            ),
+            (
+                "test/features/settings/settings_view_test.dart",
+                "RF-03: la segunda fila abre Actualización de perfil y al",
+            ),
+            (
+                "test/features/settings/settings_view_test.dart",
+                "RF-03: la tercera fila abre la Eliminación de cuenta",
+            ),
+            (
+                "test/features/settings/settings_view_test.dart",
+                "la cuarta fila indica el modo activo y se actualiza al volver",
+            ),
+            (
+                "test/features/settings/settings_view_test.dart",
+                "RF-24: la cuarta fila abre el diálogo, marca el modo activo y",
+            ),
+        ),
+    },
+    "RF-04": {
+        "flutter": (
+            (
+                "test/features/dashboard/presentation/views/"
+                "dashboard_nutrition_entry_test.dart",
+                "la cabecera conserva saludo, cierre de sesión y la entrada al",
+            ),
+        ),
+    },
+    "RF-05": {
+        "flutter": (
+            (
+                "test/core/router/app_router_test.dart",
+                "sin sesión, forzar /settings redirige a /login sin mostrar el",
+            ),
+            (
+                "test/core/router/app_router_test.dart",
+                "si la sesión termina con el menú abierto se cierra y se va a",
+            ),
+            (
+                "test/core/network/auth_interceptor_test.dart",
+                "un 401 de una petición autenticada con code unauthorized emite el",
+            ),
+            (
+                "test/core/network/auth_interceptor_test.dart",
+                "un 401 de la baja de la cuenta no emite el aviso ni borra el token:",
+            ),
+            (
+                "test/features/auth/presentation/views/login_view_test.dart",
+                "una sesión expirada muestra el texto del catálogo al volver al",
+            ),
+        ),
+    },
+    "RF-06": {
+        "api": (
+            "test_auth.TestLoginConCuentaInactiva"
+            ".test_una_cuenta_inactiva_inicia_sesion_y_usa_el_token",
+            "test_auth.TestLoginConCuentaInactiva"
+            ".test_desactivar_la_cuenta_no_bloquea_el_login",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/profile_view_test.dart",
+                "muestra correo normalizado, estado y avatar con la inicial",
+            ),
+            (
+                "test/features/settings/profile_view_test.dart",
+                "una cuenta inactiva muestra la etiqueta",
+            ),
+            (
+                "test/features/account/domain/account_validators_test.dart",
+                "el estado activo se muestra como Activa y el inactivo como Inactiva",
+            ),
+        ),
+    },
+    "RF-07": {
+        "flutter": (
+            (
+                "test/features/settings/profile_view_test.dart",
+                "sin conexión muestra el perfil cacheado real con su aviso",
+            ),
+            (
+                "test/features/settings/profile_view_test.dart",
+                "un 401 unauthorized no muestra el perfil cacheado",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "la caché solo guarda respuestas del servidor",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "un 401 unauthorized no devuelve la caché",
+            ),
+        ),
+    },
+    "RF-08": {
+        "flutter": (
+            (
+                "test/features/settings/profile_view_test.dart",
+                "sin perfil cacheado muestra el mensaje de RF-08 y Reintentar",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "sin red y sin caché devuelve NoCachedProfileFailure",
+            ),
+        ),
+    },
+    "RF-09": {
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-09: precarga el correo del servidor y deja las contraseñas",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-09: sin conexión precarga el correo del perfil cacheado real",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-09: sin perfil cacheado el correo queda vacío y sin relleno",
+            ),
+        ),
+    },
+    "RF-10": {
+        "api": (
+            "test_account_update.TestActualizacionSoloCorreo"
+            ".test_solo_correo_devuelve_token_nuevo_y_normaliza",
+            "test_account_update.TestActualizacionSoloCorreo"
+            ".test_el_token_usado_en_la_peticion_deja_de_valer",
+            "test_account_update.TestActualizacionSoloCorreo"
+            ".test_otro_token_de_la_misma_cuenta_sigue_valido",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-10 y RF-14: el éxito guarda el token nuevo, refresca la",
+            ),
+        ),
+    },
+    "RF-11": {
+        "api": (
+            "test_account_domain.TestMatrizRF11"
+            ".test_cada_fila_de_la_matriz_tiene_su_resultado",
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_correo_vacio_explicito_es_invalid_email",
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_password_corta_es_weak_password",
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_password_de_mas_de_72_bytes_es_password_too_long",
+            "test_account_errors.TestNingunRechazoResponde422"
+            ".test_los_rechazos_de_negocio_no_son_422",
+        ),
+        "flutter": (
+            (
+                "test/features/account/domain/account_validators_test.dart",
+                "fila 1: correo vacío muestra la obligatoriedad",
+            ),
+            (
+                "test/features/account/domain/account_validators_test.dart",
+                "fila 14: un correo válido distinto no se comprueba en el cliente",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-11 fila 1: correo vacío muestra el error junto al campo y no",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-11 fila 14: el correo ya registrado lo decide el servidor y",
+            ),
+            (
+                "test/features/account/domain/account_validators_test.dart",
+                "el orden de precedencia es correo, envío sin cambios, "
+                "confirmación,",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-11: muestra a la vez todos los errores aplicables junto a su",
+            ),
+        ),
+    },
+    "RF-12": {
+        "api": (
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_correo_duplicado_normalizado_no_aplica_ningun_cambio",
+            "test_account_identity.TestRegistroNormalizado"
+            ".test_el_duplicado_normalizado_responde_email_already_registered",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-11 fila 14: el correo ya registrado lo decide el servidor y",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "un correo ya registrado no aplica ni escribe nada",
+            ),
+        ),
+    },
+    "RF-13": {
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-13: sin conexión no aplica nada, conserva lo escrito y",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "sin conexión no escribe nada, no encola y avisa",
+            ),
+            (
+                "test/features/account/presentation/account_bloc_test.dart",
+                "sin conexión no aplica nada y avisa",
+            ),
+        ),
+    },
+    "RF-14": {
+        "api": (
+            "test_account_update.TestActualizacionSoloPassword"
+            ".test_la_password_anterior_ya_no_inicia_sesion_y_la_nueva_si",
+        ),
+        "flutter": (
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "RF-14: al cambiar el correo actualiza las credenciales cifradas y",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "RF-14: al cambiar solo la contraseña conserva el correo cifrado",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-10 y RF-14: el éxito guarda el token nuevo, refresca la",
+            ),
+        ),
+    },
+    "RF-15": {
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-15: cancelar no aplica nada y vuelve al menú",
+            ),
+        ),
+    },
+    "RF-16": {
+        "flutter": (
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-16: muestra la advertencia, el listado literal y la acción",
+            ),
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-16: el diálogo muestra los textos, el campo y la acción",
+            ),
+        ),
+    },
+    "RF-17": {
+        "api": (
+            "test_account_deletion.TestBajaRechazos"
+            ".test_contrasena_incorrecta_no_borra_nada_y_conserva_la_sesion",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-17: invalid_password se muestra junto al campo y no cierra",
+            ),
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-17: cancelar deja la cuenta, los datos y la sesión intactos",
+            ),
+        ),
+    },
+    "RF-18": {
+        "api": (
+            "test_account_deletion.TestBajaCorrecta"
+            ".test_borra_la_cuenta_y_las_siete_tablas_afectadas",
+            "test_account_deletion.TestBajaCorrecta"
+            ".test_la_mac_borrada_ya_no_esta_registrada",
+            "test_account_deletion.TestBajaCorrecta"
+            ".test_el_correo_queda_libre_y_el_registro_nuevo_nace_vacio",
+            "test_account_deletion.TestBajaIdempotente"
+            ".test_cuenta_inexistente_responde_200_sin_verificar_contrasena",
+            "test_account_deletion.TestBajaIdempotente"
+            ".test_el_token_de_la_cuenta_eliminada_solo_sirve_para_la_baja",
+            "test_account_deletion.TestContarHuerfanos"
+            ".test_devuelve_cero_tras_la_baja",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-18: el éxito limpia, cierra la sesión y lleva al login con",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "escribe la marca antes, limpia todo y la borra al terminar",
+            ),
+        ),
+    },
+    "RF-19": {
+        "api": (
+            "test_account_deletion.TestBajaCorrecta"
+            ".test_el_correo_queda_libre_y_el_registro_nuevo_nace_vacio",
+            "test_account_identity.TestIdentidadYUsuarioActual"
+            ".test_un_jti_revocado_no_permite_la_peticion",
+            "test_account_identity.TestIdentidadYUsuarioActual"
+            ".test_get_current_user_rechaza_una_cuenta_inexistente",
+        ),
+        "flutter": (
+            (
+                "test/core/network/auth_interceptor_test.dart",
+                "un 401 de una petición autenticada con code unauthorized emite el",
+            ),
+            (
+                "test/features/auth/presentation/bloc/auth_bloc_test.dart",
+                "RF-19: el 401 limpia la sesión antes de emitir AuthSessionExpired",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "RF-19: la limpieza de un 401 borra token, credenciales y perfil y",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "RF-19: tras un 401 el login sin conexión con las credenciales",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "el borrado se acota a la cuenta y no barre filas de otra cuenta",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "el reintento sin perfil cacheado limpia la cuenta y no barre filas",
+            ),
+        ),
+    },
+    "RF-20": {
+        "flutter": (
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-20: sin conexión avisa, cierra el diálogo y no cambia nada",
+            ),
+            (
+                "test/features/account/data/account_repository_impl_test.dart",
+                "sin conexión no elimina nada, no encola y avisa",
+            ),
+            (
+                "test/features/account/presentation/account_bloc_test.dart",
+                "sin conexión no elimina nada ni inicia la limpieza",
+            ),
+        ),
+    },
+    "RF-21": {
+        "api": (
+            "test_account_deletion.TestBajaIdempotente"
+            ".test_dos_bajas_simultaneas_responden_ambas_200",
+            "test_account_deletion.TestBajaAtomica"
+            ".test_fallo_inyectado_revierte_toda_la_transaccion",
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_escritura_condicional_fallida_es_conflict_sin_cambios",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-21: el error del servidor ofrece un reintento real",
+            ),
+        ),
+    },
+    "RF-22": {
+        "flutter": (
+            (
+                "test/features/settings/appearance_mode_dialog_test.dart",
+                "RF-22: elegir aplica el cambio al instante en toda la",
+            ),
+            (
+                "test/features/settings/appearance_mode_dialog_test.dart",
+                "RF-22 y RF-23: Automático sigue el brillo oscuro del sistema",
+            ),
+            (
+                "test/features/settings/appearance_mode_dialog_test.dart",
+                "RF-22: cerrar sin elegir no cambia el modo",
+            ),
+        ),
+    },
+    "RF-23": {
+        "flutter": (
+            (
+                "test/core/theme/theme_cubit_test.dart",
+                "un cubit nuevo con user_theme_mode=dark restaura Oscuro tras",
+            ),
+            (
+                "test/core/theme/theme_cubit_test.dart",
+                "la clave no depende de ningún dato de la cuenta",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "escribe la marca antes, limpia todo y la borra al terminar",
+            ),
+        ),
+    },
+    "RF-24": {
+        "flutter": (
+            (
+                "test/features/settings/appearance_mode_dialog_test.dart",
+                "RF-24: muestra el título y exactamente tres opciones",
+            ),
+            (
+                "test/features/settings/appearance_mode_dialog_test.dart",
+                "RF-24: marca el modo activo del dispositivo",
+            ),
+            (
+                "test/features/settings/settings_view_test.dart",
+                "RF-24: la cuarta fila abre el diálogo, marca el modo activo y",
+            ),
+        ),
+    },
+    "RF-25": {
+        "flutter": (
+            (
+                "test/features/settings/settings_contrast_test.dart",
+                "RF-25: el tema claro cumple el contraste mínimo",
+            ),
+            (
+                "test/features/settings/settings_contrast_test.dart",
+                "RF-25: el tema oscuro cumple el contraste mínimo",
+            ),
+        ),
+    },
+}
+
+# RNF → pruebas automatizadas de la 015.
+COBERTURA_RNF_015 = {
+    "RNF-01": {
+        "flutter": (
+            (
+                "test/features/settings/settings_texts_test.dart",
+                "recorre el menú, el perfil, la actualización y la baja sin "
+                "emojis y en",
+            ),
+            (
+                "test/features/settings/settings_texts_test.dart",
+                "cada mensaje de error nombra el campo y la acción",
+            ),
+        ),
+    },
+    "RNF-02": {
+        "flutter": (
+            (
+                "test/features/settings/settings_responsive_test.dart",
+                "RNF-02: ${entrada.key} con escalado 1.3",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RNF-02: a 320 puntos con texto al 130 % no hay desbordamientos",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RNF-02: a 600 puntos con texto al 130 % no hay desbordamientos",
+            ),
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RNF-02: a 840 puntos en horizontal no hay desbordamientos",
+            ),
+            (
+                "test/features/settings/appearance_mode_dialog_test.dart",
+                "RNF-02: a 320 puntos con texto al 130 % no hay desbordamientos",
+            ),
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RNF-02: a 320 puntos con texto al 130 % no hay desbordamientos",
+            ),
+        ),
+    },
+    "RNF-03": {
+        "api": (
+            "test_traceability_rf.TestValidacionGlobal015"
+            ".test_rnf03_las_vistas_nuevas_no_contienen_logica_de_negocio",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RNF-03: la precarga no muestra el spinner de Guardar",
+            ),
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RNF-03: la precarga del perfil no deshabilita la confirmación ni",
+            ),
+            (
+                "test/features/account/presentation/account_bloc_test.dart",
+                "los errores de cliente se muestran todos y no se envía la",
+            ),
+        ),
+    },
+    "RNF-04": {
+        "api": (
+            "test_account_domain.TestPurezaDelDominio"
+            ".test_importar_el_dominio_no_arrastra_framework_red_ni_entorno",
+            "test_traceability_rf.TestValidacionGlobal015"
+            ".test_rnf04_el_dominio_de_cuenta_no_depende_de_flutter_red_ni_"
+            "almacenamiento",
+        ),
+    },
+    "RNF-05": {
+        "api": (
+            "test_traceability_rf.TestTrazabilidad015"
+            ".test_cada_rf_y_rnf_de_la_015_tiene_prueba_que_existe",
+            "test_traceability_rf.TestTrazabilidad015"
+            ".test_las_tres_operaciones_de_cuenta_tienen_prueba_de_api_y_de_"
+            "interfaz",
+        ),
+    },
+    "RNF-06": {
+        "flutter": (
+            (
+                "test/core/network/dio_client_log_test.dart",
+                "el PATCH con contraseña nueva no vuelca el cuerpo en el log",
+            ),
+            (
+                "test/core/network/dio_client_log_test.dart",
+                "el DELETE con contraseña no vuelca el cuerpo en el log",
+            ),
+            (
+                "test/core/network/dio_client_log_test.dart",
+                "el token de Authorization no aparece en el log",
+            ),
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RNF-06: al cerrar el diálogo la contraseña reingresada se",
+            ),
+        ),
+    },
+    "RNF-07": {
+        "api": (
+            "test_traceability_rf.TestValidacionGlobal015"
+            ".test_rnf07_las_dependencias_declaradas_no_cambian",
+        ),
+    },
+    "RNF-08": {
+        # La verificación real de RNF-08 es la ejecución completa de las suites
+        # de 001–014 (evidencia en T10), no un test unitario. Estas pruebas
+        # fallan si la trazabilidad anterior se recorta: un RF sin prueba
+        # automatizada o una prueba citada que ya no existe.
+        "api": (
+            "test_traceability_rf.TestTrazabilidadGlobal"
+            ".test_la_spec_declara_cuarenta_y_un_rf",
+            "test_traceability_rf.TestTrazabilidadGlobal"
+            ".test_cada_rf_tiene_una_prueba_automatizada_que_existe",
+        ),
+    },
+    "RNF-09": {
+        "api": (
+            "test_account_deletion.TestBajaAtomica"
+            ".test_fallo_inyectado_revierte_toda_la_transaccion",
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_escritura_condicional_fallida_es_conflict_sin_cambios",
+            "test_account_update.TestRechazosDeActualizacion"
+            ".test_fallo_de_escritura_es_server_error_y_revierte",
+        ),
+    },
+    "RNF-10": {
+        "flutter": (
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "escribe la marca antes, limpia todo y la borra al terminar",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "si falla el borrado del token, la marca sobrevive y no borra el",
+            ),
+            (
+                "test/core/services/account_local_cleaner_test.dart",
+                "limpiarSiPendiente reintenta y completa la limpieza al reiniciar",
+            ),
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RNF-10: si la limpieza falla, la marca sobrevive y la sesión se",
+            ),
+            (
+                "test/core/services/pending_deletion_store_test.dart",
+                "marca la baja pendiente en la clave reservada",
+            ),
+        ),
+    },
+}
+
+# RNF-05: las tres operaciones de cuenta exigen prueba de API y de interfaz.
+OPERACIONES_CUENTA = {
+    "consulta (GET /users/me)": {
+        "api": (
+            "test_account_profile_api.TestPerfilConToken"
+            ".test_token_vigente_devuelve_el_perfil_con_el_correo_normalizado",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/profile_view_test.dart",
+                "muestra correo normalizado, estado y avatar con la inicial",
+            ),
+        ),
+    },
+    "actualización (PATCH /users/me)": {
+        "api": (
+            "test_account_update.TestActualizacionSoloCorreo"
+            ".test_solo_correo_devuelve_token_nuevo_y_normaliza",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/update_profile_view_test.dart",
+                "RF-10 y RF-14: el éxito guarda el token nuevo, refresca la",
+            ),
+        ),
+    },
+    "eliminación (DELETE /users/me)": {
+        "api": (
+            "test_account_deletion.TestBajaCorrecta"
+            ".test_borra_la_cuenta_y_las_siete_tablas_afectadas",
+        ),
+        "flutter": (
+            (
+                "test/features/settings/delete_account_view_test.dart",
+                "RF-18: el éxito limpia, cierra la sesión y lleva al login con",
+            ),
+        ),
+    },
+}
+
+# Dependencias declaradas al cerrar la 015 (RNF-07). Si una spec futura añade
+# una, debe actualizar esta instantánea de forma consciente.
+REQUISITOS_BASE = frozenset(
+    {
+        "annotated-doc",
+        "annotated-types",
+        "anyio",
+        "apscheduler",
+        "bcrypt",
+        "cffi",
+        "click",
+        "cryptography",
+        "ecdsa",
+        "fastapi",
+        "greenlet",
+        "h11",
+        "idna",
+        "passlib",
+        "pyasn1",
+        "pycparser",
+        "pydantic",
+        "pydantic_core",
+        "python-dotenv",
+        "python-jose",
+        "python-multipart",
+        "rsa",
+        "six",
+        "sqlalchemy",
+        "starlette",
+        "typing-inspection",
+        "typing_extensions",
+        "uvicorn",
+    }
+)
+
+PUBSPEC_BASE = frozenset(
+    {
+        "flutter",
+        "flutter_localizations",
+        "dartz",
+        "dio",
+        "flutter_secure_storage",
+        "auto_size_text",
+        "bloc",
+        "flutter_bloc",
+        "equatable",
+        "get_it",
+        "go_router",
+        "image_picker",
+        "mobile_scanner",
+        "permission_handler",
+        "fl_chart",
+        "isar",
+        "isar_flutter_libs",
+        "path_provider",
+        "connectivity_plus",
+        "flutter_blue_plus",
+        "flutter_test",
+        "flutter_lints",
+        "build_runner",
+        "isar_generator",
+        "flutter_launcher_icons",
+        "flutter_mcp_server",
+    }
+)
+
+
+def _ids_de_api(modulos):
+    """Identificadores `modulo.Clase.test_...` de los módulos indicados."""
+    identificadores = set()
+    for nombre in modulos:
+        modulo = importlib.import_module(nombre)
+        for prueba in unittest.defaultTestLoader.loadTestsFromModule(modulo):
+            identificadores |= _recorrer(prueba)
+    return identificadores
+
+
+def _seccion_de_tareas(titulo):
+    """Texto de una sección `## ...` de `tasks.md`, sin la siguiente sección."""
+    texto = TAREAS_015.read_text(encoding="utf-8")
+    inicio = texto.find(titulo)
+    if inicio == -1:
+        raise AssertionError(f"tasks.md no contiene la sección «{titulo}»")
+    resto = texto[inicio + len(titulo) :]
+    fin = resto.find("\n## ")
+    return resto if fin == -1 else resto[:fin]
+
+
+def _filas_de_trazabilidad(titulo, prefijo):
+    """Mapa requisito → línea de tabla de una sección de trazabilidad."""
+    filas = {}
+    patron = re.compile(r"^\|\s*(%s-\d{2})\s*\|" % prefijo)
+    for linea in _seccion_de_tareas(titulo).splitlines():
+        coincidencia = patron.match(linea)
+        if coincidencia:
+            filas[coincidencia.group(1)] = linea
+    return filas
+
+
+def _dependencias_de_pubspec(texto):
+    """Nombres declarados en `dependencies` y `dev_dependencies`."""
+    seccion = None
+    dependencias = set()
+    for linea in texto.splitlines():
+        if re.match(r"^\S", linea):
+            seccion = linea.rstrip(":")
+            continue
+        if seccion not in ("dependencies", "dev_dependencies"):
+            continue
+        coincidencia = re.match(r"^  ([A-Za-z0-9_]+):", linea)
+        if coincidencia:
+            dependencias.add(coincidencia.group(1))
+    return dependencias
+
+
+class TestTrazabilidad015(unittest.TestCase):
+    """RNF-05: cada RF y RNF de la 015 tiene prueba y las citas existen."""
+
+    @classmethod
+    def setUpClass(cls):
+        if str(TESTS_API) not in sys.path:
+            sys.path.insert(0, str(TESTS_API))
+
+    def _verificar_referencias(self, requisito, referencias, ids_api):
+        automatizadas = [
+            referencia
+            for clave in ("api", "flutter", "pio")
+            for referencia in referencias.get(clave, ())
+        ]
+        self.assertTrue(automatizadas, f"{requisito} no tiene prueba automatizada")
+
+        for identificador in referencias.get("api", ()):
+            self.assertIn(
+                identificador,
+                ids_api,
+                f"{requisito}: la prueba {identificador} no existe o cambió de nombre",
+            )
+
+        for archivo, caso in referencias.get("flutter", ()):
+            ruta = FLUTTER / archivo
+            self.assertTrue(ruta.is_file(), f"{requisito}: falta {archivo}")
+            self.assertIn(
+                caso,
+                ruta.read_text(encoding="utf-8"),
+                f"{requisito}: el caso «{caso}» ya no está en {archivo}",
+            )
+
+    def test_la_spec_015_declara_25_rf_y_10_rnf(self):
+        texto = SPEC_015.read_text(encoding="utf-8")
+        rf = set(re.findall(r"\*\*(RF-\d{2}):\*\*", texto))
+        rnf = set(re.findall(r"\*\*(RNF-\d{2}):\*\*", texto))
+
+        self.assertEqual(len(rf), 25, sorted(rf))
+        self.assertEqual(len(rnf), 10, sorted(rnf))
+        self.assertEqual(
+            rf,
+            set(COBERTURA_015),
+            "La tabla debe cubrir exactamente los RF de la spec 015",
+        )
+        self.assertEqual(
+            rnf,
+            set(COBERTURA_RNF_015),
+            "La tabla debe cubrir exactamente los RNF de la spec 015",
+        )
+
+    def test_cada_rf_y_rnf_de_la_015_tiene_prueba_que_existe(self):
+        ids_api = _ids_de_api(MODULOS_API_015)
+        referencias = {**COBERTURA_015, **COBERTURA_RNF_015}
+
+        for requisito, pruebas in referencias.items():
+            with self.subTest(requisito=requisito):
+                self._verificar_referencias(requisito, pruebas, ids_api)
+
+    def test_las_tablas_de_trazabilidad_citan_pruebas_que_existen(self):
+        secciones = (
+            (
+                "## Trazabilidad RF → prueba (spec 015)",
+                "RF",
+                set(COBERTURA_015),
+            ),
+            (
+                "## Trazabilidad RNF → prueba (spec 015)",
+                "RNF",
+                set(COBERTURA_RNF_015),
+            ),
+        )
+
+        for titulo, prefijo, esperados in secciones:
+            with self.subTest(seccion=titulo):
+                filas = _filas_de_trazabilidad(titulo, prefijo)
+                self.assertEqual(set(filas), esperados, sorted(filas))
+                for requisito, linea in filas.items():
+                    pares = re.findall(
+                        r"`([^`]+\.(?:py|dart))`\s*·\s*«([^»]+)»", linea
+                    )
+                    self.assertTrue(
+                        pares,
+                        f"{requisito}: la fila no cita archivo y nombre de prueba",
+                    )
+                    for archivo, caso in pares:
+                        ruta = RAIZ / archivo
+                        self.assertTrue(
+                            ruta.is_file(),
+                            f"{requisito}: la tabla cita un archivo inexistente: "
+                            f"{archivo}",
+                        )
+                        self.assertIn(
+                            caso,
+                            ruta.read_text(encoding="utf-8"),
+                            f"{requisito}: la tabla cita «{caso}», que no está "
+                            f"en {archivo}",
+                        )
+
+    def test_las_tres_operaciones_de_cuenta_tienen_prueba_de_api_y_de_interfaz(
+        self,
+    ):
+        ids_api = _ids_de_api(MODULOS_API_015)
+
+        self.assertEqual(len(OPERACIONES_CUENTA), 3)
+        for operacion, referencias in OPERACIONES_CUENTA.items():
+            with self.subTest(operacion=operacion):
+                self.assertTrue(referencias.get("api"), "falta la prueba de API")
+                self.assertTrue(
+                    referencias.get("flutter"), "falta la prueba de interfaz"
+                )
+                self._verificar_referencias(operacion, referencias, ids_api)
+
+    def test_la_declaracion_de_register_view_esta_en_la_trazabilidad(self):
+        tareas = TAREAS_015.read_text(encoding="utf-8")
+        self.assertIn("| RF-03, RF-12 | T3 (declarado en T10) |", tareas)
+        self.assertIn(
+            "register_view.dart`: normalización del correo y validadores del "
+            "dominio",
+            tareas,
+        )
+
+        vista = (
+            FLUTTER
+            / "lib"
+            / "features"
+            / "auth"
+            / "presentation"
+            / "views"
+            / "register_view.dart"
+        )
+        self.assertTrue(vista.is_file())
+        codigo = vista.read_text(encoding="utf-8")
+        for fragmento in (
+            "normalizarCorreo(",
+            "esCorreoValido(",
+            "validarPasswordRegistro",
+            "MensajesCuenta.passwordsNoCoinciden",
+            "class _CampoPassword",
+        ):
+            self.assertIn(fragmento, codigo)
+
+        prueba = (
+            FLUTTER
+            / "test"
+            / "features"
+            / "auth"
+            / "presentation"
+            / "views"
+            / "register_view_test.dart"
+        )
+        self.assertTrue(prueba.is_file())
+
+
+class TestValidacionGlobal015(unittest.TestCase):
+    """Comprobaciones globales de RF-02, RNF-03, RNF-04 y RNF-07."""
+
+    def test_rf02_el_menu_no_depende_del_estado_de_la_cuenta(self):
+        # RF-02: una cuenta inactiva muestra las cuatro filas porque el menú no
+        # lee el estado de la cuenta. La prueba de widget comprueba las cuatro
+        # filas; esta comprobación demuestra que no hay una rama que las oculte.
+        vista = (
+            FLUTTER
+            / "lib"
+            / "features"
+            / "settings"
+            / "presentation"
+            / "views"
+            / "settings_view.dart"
+        )
+        self.assertTrue(vista.is_file())
+        codigo = vista.read_text(encoding="utf-8")
+        # Se buscan identificadores reales, no la subcadena «estado»: un
+        # comentario en español que la contenga no incumple RF-02.
+        for prohibido in ("AccountBloc", "UserProfile", "isActive"):
+            self.assertNotIn(
+                prohibido,
+                codigo,
+                f"El menú no puede depender del estado de la cuenta: {prohibido}",
+            )
+        self.assertIsNone(
+            re.search(r"\.\s*estado\b", codigo),
+            "El menú no puede leer el campo `estado` del perfil",
+        )
+
+    def test_rnf03_las_vistas_nuevas_no_contienen_logica_de_negocio(self):
+        vistas = sorted(
+            (FLUTTER / "lib" / "features" / "settings" / "presentation").rglob(
+                "*.dart"
+            )
+        )
+        self.assertTrue(vistas, "no se encontraron las vistas de configuración")
+
+        importaciones_prohibidas = (
+            "features/account/data/",
+            "features/account/domain/repository",
+            "features/account/domain/usecase",
+            "package:dio/",
+            "package:isar/",
+        )
+        llamadas_prohibidas = (
+            "validarFormularioPerfil(",
+            "normalizarCorreo(",
+            "esCorreoValido(",
+        )
+
+        for ruta in vistas:
+            codigo = ruta.read_text(encoding="utf-8")
+            for prohibido in importaciones_prohibidas:
+                self.assertNotIn(
+                    prohibido,
+                    codigo,
+                    f"{ruta.name} importa la capa de datos o de red: {prohibido}",
+                )
+            for llamada in llamadas_prohibidas:
+                self.assertNotIn(
+                    llamada,
+                    codigo,
+                    f"{ruta.name} contiene lógica de validación: {llamada}",
+                )
+
+    def test_rnf04_el_dominio_de_cuenta_no_depende_de_flutter_red_ni_almacenamiento(
+        self,
+    ):
+        dominio = sorted(
+            (FLUTTER / "lib" / "features" / "account" / "domain").rglob("*.dart")
+        )
+        self.assertTrue(dominio, "no se encontró el dominio de la cuenta")
+
+        importaciones_prohibidas = (
+            "package:flutter/",
+            "package:flutter_bloc/",
+            "package:dio/",
+            "package:isar/",
+            "package:get_it/",
+            "package:go_router/",
+            "features/account/data/",
+            "core/network/",
+            "core/offline/",
+        )
+
+        for ruta in dominio:
+            codigo = ruta.read_text(encoding="utf-8")
+            for prohibido in importaciones_prohibidas:
+                self.assertNotIn(
+                    prohibido,
+                    codigo,
+                    f"{ruta.name} depende de {prohibido} y el dominio debe ser puro",
+                )
+
+    def test_rnf07_las_dependencias_declaradas_no_cambian(self):
+        archivo_requisitos = RAIZ / "api" / "requirements.txt"
+        lineas = archivo_requisitos.read_text(encoding="utf-8").splitlines()
+        requisitos = {
+            linea.split("==")[0].strip().lower()
+            for linea in lineas
+            if linea.strip() and not linea.startswith("#")
+        }
+        self.assertEqual(
+            requisitos,
+            REQUISITOS_BASE,
+            "requirements.txt declara dependencias distintas de la línea base",
+        )
+
+        pubspec = _dependencias_de_pubspec(
+            (FLUTTER / "pubspec.yaml").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            pubspec,
+            PUBSPEC_BASE,
+            "pubspec.yaml declara dependencias distintas de la línea base",
+        )
 
 
 class TestTrazabilidadGlobal(unittest.TestCase):

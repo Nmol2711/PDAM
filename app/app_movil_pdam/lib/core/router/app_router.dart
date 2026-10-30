@@ -6,6 +6,10 @@ import 'package:app_movil_pdam/features/pets/presentation/views/create_pet_view.
 import 'package:app_movil_pdam/features/pets/presentation/views/guided_schedule_form_view.dart';
 import 'package:app_movil_pdam/features/pets/presentation/views/pet_detail_view.dart';
 import 'package:app_movil_pdam/features/pets/presentation/views/pets_view.dart';
+import 'package:app_movil_pdam/features/settings/presentation/views/profile_view.dart';
+import 'package:app_movil_pdam/features/settings/presentation/views/settings_view.dart';
+import 'package:app_movil_pdam/features/settings/presentation/views/update_profile_view.dart';
+import 'package:app_movil_pdam/features/settings/presentation/views/delete_account_view.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -90,6 +94,30 @@ class AppRouter {
         name: 'nutrition_calculator',
         builder: (context, state) => const NutritionCalculatorView(),
       ),
+      // Configuración fuera del contenedor de pestañas (RF-01, RF-05): el
+      // guard de sesión la protege igual que al resto de rutas internas.
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        builder: (context, state) => const SettingsView(),
+        routes: <RouteBase>[
+          GoRoute(
+            path: 'profile',
+            name: 'settings_profile',
+            builder: (context, state) => const ProfileView(),
+          ),
+          GoRoute(
+            path: 'update',
+            name: 'settings_update',
+            builder: (context, state) => const UpdateProfileView(),
+          ),
+          GoRoute(
+            path: 'delete',
+            name: 'settings_delete',
+            builder: (context, state) => const DeleteAccountView(),
+          ),
+        ],
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
           return MainNavigationShell(navigationShell: navigationShell);
@@ -97,10 +125,7 @@ class AppRouter {
         branches: [
           StatefulShellBranch(
             routes: [
-              GoRoute(
-                path: '/home',
-                builder: (context, state) => HomeView(),
-              ),
+              GoRoute(path: '/home', builder: (context, state) => HomeView()),
               GoRoute(
                 path: '/dashboard',
                 builder: (context, state) => DashboardView(),
@@ -117,10 +142,7 @@ class AppRouter {
           ),
           StatefulShellBranch(
             routes: [
-              GoRoute(
-                path: '/logs',
-                builder: (context, state) => LogsView(),
-              ),
+              GoRoute(path: '/logs', builder: (context, state) => LogsView()),
             ],
           ),
           StatefulShellBranch(
@@ -158,8 +180,12 @@ class AppRouter {
         return '/login';
       }
 
-      // 1. Si el usuario NO está autenticado, mándalo al login
-      if (authState is AuthUnauthenticated) {
+      // 1. Sin sesión (o con la sesión terminada por un 401 `unauthorized` o
+      // por la baja), cualquier ruta interna lleva al login sin mostrar su
+      // contenido (RF-05). El menú, sus pantallas y el diálogo se desmontan.
+      if (authState is AuthUnauthenticated ||
+          authState is AuthSessionExpired ||
+          authState is AuthAccountDeleted) {
         if (state.matchedLocation != '/login' &&
             state.matchedLocation != '/register') {
           return '/login';

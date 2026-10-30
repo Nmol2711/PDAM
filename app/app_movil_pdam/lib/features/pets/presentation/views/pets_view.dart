@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/widget/pets_list.dart';
 import 'package:flutter/material.dart';
@@ -27,7 +29,12 @@ class _PetsViewState extends State<PetsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Mascotas")),
+      appBar: AppBar(
+        title: const Text("Mascotas"),
+        actions: const <Widget>[
+          SettingsEntryButton(ubicacion: UbicacionEntrada.cabeceraPantalla),
+        ],
+      ),
       body: Center(
         child: BlocConsumer<PetBloc, PetState>(
           listener: (context, state) {

@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -27,6 +29,10 @@ INDICE_UNICO_MAC_NORMALIZADA = "ux_dispensers_mac_normalized"
 # ante dos entregas simultáneas. Es parcial (`WHERE status = 'pending'`) para que
 # las órdenes cerradas no cuenten.
 INDICE_UNICO_ORDEN_PENDIENTE = "ux_dispensing_orders_pending_dispenser"
+
+# Índice único que garantiza la unicidad de la identidad de la cuenta (RF-10,
+# RF-19) en bases migradas. En bases nuevas lo crea SQLAlchemy desde el modelo.
+INDICE_UNICO_PUBLIC_ID = "ux_users_public_id"
 
 # Bases ya migradas en este proceso. La migración se ejecuta una sola vez por
 # archivo y proceso: el listener `connect` corre en cada conexión nueva y repetir
@@ -390,6 +396,117 @@ def _migrar_logs(dbapi_connection, cursor) -> bool:
     return True
 
 
+def _verificar_public_id_sin_anomalias(cursor) -> None:
+    """Aborta si queda algún `public_id` nulo o repetido (RF-10, RF-19).
+
+    Se prefiere un fallo explícito a borrar datos: la migración nunca resuelve
+    una anomalía eliminando cuentas.
+    """
+    nulos = cursor.execute(
+        "SELECT COUNT(*) FROM users WHERE public_id IS NULL"
+    ).fetchone()[0]
+    if nulos:
+        raise RuntimeError(
+            "No se puede aplicar la unicidad de 'users.public_id' porque quedan "
+            f"{nulos} cuentas sin identificador. Corrige esos registros de forma "
+            "manual; la migración no ha borrado ningún dato."
+        )
+
+    duplicados = cursor.execute(
+        "SELECT public_id, COUNT(*) FROM users GROUP BY public_id HAVING COUNT(*) > 1"
+    ).fetchall()
+    if duplicados:
+        raise RuntimeError(
+            "No se puede aplicar la unicidad de 'users.public_id' porque hay "
+            f"identificadores repetidos {duplicados}. Corrige o elimina los "
+            "registros en conflicto de forma manual; la migración no ha borrado "
+            "ningún dato."
+        )
+
+
+def _migrar_public_id(dbapi_connection, cursor) -> None:
+    """Añade `users.public_id`, lo rellena y crea su índice único.
+
+    Sigue el patrón de la migración de `dispensers.mac_normalized`: DDL directo
+    sobre la conexión SQLite al abrirla, sin framework de migraciones. La
+    identidad es opaca y sustituye al correo en el token, de modo que registrar
+    de nuevo un correo no rehabilita las sesiones de la cuenta eliminada
+    (RF-10, RF-19). Es idempotente: si la columna existe y no tiene huecos, solo
+    comprueba los datos y el índice. Ante cualquier anomalía se revierte todo y
+    se aborta el arranque sin borrar filas (RNF-09).
+    """
+    if not _tabla_existe(cursor, "users"):
+        # Base recién creada: `Base.metadata.create_all` ya incluye la columna.
+        return
+
+    columnas = _columnas_de_tabla(cursor, "users")
+    try:
+        if "public_id" not in columnas:
+            # SQLite no admite añadir una columna `NOT NULL` sin valor constante,
+            # así que se añade anulable y se rellena fila a fila.
+            cursor.execute("ALTER TABLE users ADD COLUMN public_id VARCHAR")
+
+        # Backfill: solo las filas aún vacías, sin tocar las ya migradas.
+        pendientes = cursor.execute(
+            "SELECT id FROM users WHERE public_id IS NULL"
+        ).fetchall()
+        for (id_usuario,) in pendientes:
+            cursor.execute(
+                "UPDATE users SET public_id = ? WHERE id = ?",
+                (uuid4().hex, id_usuario),
+            )
+
+        _verificar_public_id_sin_anomalias(cursor)
+
+        cursor.execute(
+            f"CREATE UNIQUE INDEX IF NOT EXISTS {INDICE_UNICO_PUBLIC_ID} "
+            "ON users (public_id)"
+        )
+    except Exception:
+        # El DDL y los rellenos son transaccionales en SQLite: la reversión deja
+        # la base exactamente como estaba.
+        dbapi_connection.rollback()
+        raise
+
+    dbapi_connection.commit()
+
+
+def _crear_tabla_tokens_revocados(cursor) -> None:
+    """Crea `revoked_tokens` en bases existentes (RF-10, RF-19).
+
+    `create_all` solo crea tablas que faltan, pero la migración corre antes y
+    debe dejar la tabla disponible también en una base anterior a la spec 015.
+    Es idempotente (`IF NOT EXISTS`) y replica los nombres de columna e índices
+    que genera SQLAlchemy para no dejar diferencias con una base nueva.
+    """
+    if not _tabla_existe(cursor, "users"):
+        # Base recién creada: la tabla la crea `Base.metadata.create_all`.
+        return
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            id INTEGER NOT NULL PRIMARY KEY,
+            jti VARCHAR NOT NULL,
+            public_id VARCHAR NOT NULL,
+            expires_at DATETIME NOT NULL,
+            revoked_at DATETIME NOT NULL
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_revoked_tokens_jti "
+        "ON revoked_tokens (jti)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS ix_revoked_tokens_public_id "
+        "ON revoked_tokens (public_id)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS ix_revoked_tokens_id ON revoked_tokens (id)"
+    )
+
+
 # Esto asegura que SQLite verifique las llaves foráneas
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
@@ -449,6 +566,13 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         # Índice único parcial de la orden pendiente (RNF-3). Se crea aquí porque
         # `create_all` no añade índices a una tabla que ya existe.
         _crear_indice_orden_pendiente(cursor)
+
+        # Identidad estable de la cuenta y tabla de tokens revocados (RF-10,
+        # RF-19). Se ejecutan antes de `Base.metadata.create_all` (que vive en
+        # `main.py`) para que una base existente reciba la columna y la tabla, y
+        # abortan el arranque si no pueden garantizar la unicidad.
+        _migrar_public_id(dbapi_connection, cursor)
+        _crear_tabla_tokens_revocados(cursor)
         dbapi_connection.commit()
 
         if ruta:

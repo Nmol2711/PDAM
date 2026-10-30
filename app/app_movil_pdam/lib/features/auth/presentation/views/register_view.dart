@@ -1,7 +1,8 @@
+import 'package:app_movil_pdam/features/account/domain/utils/account_validators.dart';
+import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 
 class RegisterView extends StatefulWidget {
   const RegisterView({super.key});
@@ -16,9 +17,6 @@ class _RegisterViewState extends State<RegisterView> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  bool _obscurePassword = true;
-  bool _obscureConfirmPassword = true;
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -30,12 +28,12 @@ class _RegisterViewState extends State<RegisterView> {
   void _onRegisterPressed() {
     if (_formKey.currentState!.validate()) {
       context.read<AuthBloc>().add(
-            AuthRegisterRequested(
-              email: _emailController.text.trim(),
-              password: _passwordController.text.trim(),
-              confirmPassword: _confirmPasswordController.text.trim(),
-            ),
-          );
+        AuthRegisterRequested(
+          email: normalizarCorreo(_emailController.text),
+          password: _passwordController.text.trim(),
+          confirmPassword: _confirmPasswordController.text.trim(),
+        ),
+      );
     }
   }
 
@@ -60,14 +58,14 @@ class _RegisterViewState extends State<RegisterView> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Crear Cuenta'),
-          elevation: 0,
-        ),
+        appBar: AppBar(title: const Text('Crear Cuenta'), elevation: 0),
         body: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 16.0,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -75,14 +73,14 @@ class _RegisterViewState extends State<RegisterView> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      "Únete a PDAM",
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      'Únete a PDAM',
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Crea una cuenta para automatizar la alimentación de tus mascotas",
+                      'Crea una cuenta para automatizar la alimentación de tus '
+                      'mascotas',
                       style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     ),
                     const SizedBox(height: 32),
@@ -99,8 +97,12 @@ class _RegisterViewState extends State<RegisterView> {
                         ),
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'El correo es obligatorio';
+                        final correo = normalizarCorreo(value ?? '');
+                        if (correo.isEmpty) {
+                          return MensajesCuenta.correoObligatorio;
+                        }
+                        if (!esCorreoValido(correo)) {
+                          return MensajesCuenta.correoInvalido;
                         }
                         return null;
                       },
@@ -108,65 +110,23 @@ class _RegisterViewState extends State<RegisterView> {
                     const SizedBox(height: 16),
 
                     // --- CONTRASEÑA ---
-                    TextFormField(
+                    _CampoPassword(
                       controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Contraseña',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'La contraseña es obligatoria';
-                        }
-                        if (value.length < 4) {
-                          return 'La contraseña debe tener al menos 4 caracteres';
-                        }
-                        return null;
-                      },
+                      labelText: 'Contraseña',
+                      validator: validarPasswordRegistro,
                     ),
                     const SizedBox(height: 16),
 
                     // --- CONFIRMAR CONTRASEÑA ---
-                    TextFormField(
+                    _CampoPassword(
                       controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      decoration: InputDecoration(
-                        labelText: 'Confirmar Contraseña',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword = !_obscureConfirmPassword;
-                            });
-                          },
-                        ),
-                      ),
+                      labelText: 'Confirmar Contraseña',
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
+                        if (value == null || value.isEmpty) {
                           return 'Confirma tu contraseña';
                         }
                         if (value != _passwordController.text) {
-                          return 'Las contraseñas no coinciden';
+                          return MensajesCuenta.passwordsNoCoinciden;
                         }
                         return null;
                       },
@@ -189,9 +149,15 @@ class _RegisterViewState extends State<RegisterView> {
                               ? const SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
                                 )
-                              : const Text('Registrarse', style: TextStyle(fontSize: 16)),
+                              : const Text(
+                                  'Registrarse',
+                                  style: TextStyle(fontSize: 16),
+                                ),
                         );
                       },
                     ),
@@ -209,6 +175,53 @@ class _RegisterViewState extends State<RegisterView> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Campo de contraseña con su propio control de visibilidad.
+///
+/// El `setState` de la visibilidad vive aquí y no en la vista principal, que
+/// solo compone widgets (principio 3, RNF-03).
+class _CampoPassword extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final String? Function(String?)? validator;
+
+  const _CampoPassword({
+    required this.controller,
+    required this.labelText,
+    this.validator,
+  });
+
+  @override
+  State<_CampoPassword> createState() => _CampoPasswordState();
+}
+
+class _CampoPasswordState extends State<_CampoPassword> {
+  bool _obscure = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      controller: widget.controller,
+      obscureText: _obscure,
+      decoration: InputDecoration(
+        labelText: widget.labelText,
+        prefixIcon: const Icon(Icons.lock_outline),
+        border: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscure
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+          ),
+          onPressed: () => setState(() => _obscure = !_obscure),
+        ),
+      ),
+      validator: widget.validator,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:app_movil_pdam/core/network/session_events.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
@@ -160,7 +161,7 @@ void main() {
 
   setUp(() {
     adapter = _FakeAdapter();
-    client = DioClient(_FakeStorageService());
+    client = DioClient(_FakeStorageService(), sessionEvents: SessionEvents());
     client.dio.interceptors.clear();
     client.dio.httpClientAdapter = adapter;
     datasource = DispenserRemoteDatasourceImpl(dioClient: client);

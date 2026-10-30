@@ -5,6 +5,7 @@ import 'package:app_movil_pdam/core/offline/models/local_pet.dart';
 import 'package:app_movil_pdam/core/offline/models/local_schedule.dart';
 import 'package:app_movil_pdam/core/offline/models/local_log.dart';
 import 'package:app_movil_pdam/core/offline/models/local_dispenser.dart';
+import 'package:app_movil_pdam/core/offline/models/local_profile.dart';
 
 class IsarService {
   static Isar? _isarInstance;
@@ -42,7 +43,9 @@ class IsarService {
   }
 
   static Future<Isar> init({String? directory}) async {
-    final dir = directory != null ? Directory(directory) : await getApplicationDocumentsDirectory();
+    final dir = directory != null
+        ? Directory(directory)
+        : await getApplicationDocumentsDirectory();
     if (_isarInstance != null && _isarInstance!.isOpen) {
       if (_currentDirectory != dir.path) {
         await close();
@@ -50,11 +53,17 @@ class IsarService {
         return _isarInstance!;
       }
     }
-    
+
     try {
       _currentDirectory = dir.path;
       _isarInstance = await Isar.open(
-        [LocalPetSchema, LocalScheduleSchema, LocalLogSchema, LocalDispenserSchema],
+        [
+          LocalPetSchema,
+          LocalScheduleSchema,
+          LocalLogSchema,
+          LocalDispenserSchema,
+          LocalProfileSchema,
+        ],
         directory: dir.path,
         inspector: true,
       );
@@ -68,7 +77,13 @@ class IsarService {
           }
           _currentDirectory = dir.path;
           _isarInstance = await Isar.open(
-            [LocalPetSchema, LocalScheduleSchema, LocalLogSchema, LocalDispenserSchema],
+            [
+              LocalPetSchema,
+              LocalScheduleSchema,
+              LocalLogSchema,
+              LocalDispenserSchema,
+              LocalProfileSchema,
+            ],
             directory: dir.path,
             inspector: true,
           );
@@ -84,7 +99,9 @@ class IsarService {
 
   static Isar get db {
     if (_isarInstance == null || !_isarInstance!.isOpen) {
-      throw Exception('Isar no ha sido inicializado. Llama a IsarService.init() primero.');
+      throw Exception(
+        'Isar no ha sido inicializado. Llama a IsarService.init() primero.',
+      );
     }
     return _isarInstance!;
   }
