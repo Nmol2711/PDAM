@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/schedule.dart';
 
@@ -15,16 +17,19 @@ class GeneratedSchedulesListWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Divider(),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.fieldGap),
         Text(
           "Horarios Programados:",
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -32,36 +37,51 @@ class GeneratedSchedulesListWidget extends StatelessWidget {
           itemBuilder: (context, index) {
             final s = schedules[index];
             return Card(
-              elevation: 0,
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              margin: const EdgeInsets.symmetric(vertical: 4),
+              margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
               child: ListTile(
-                leading: const Icon(Icons.access_time, color: Colors.blue),
-                title: Text(s.time, style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: Text("${s.amount} g", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 15)),
+                leading: Icon(Icons.access_time, color: esquema.tertiary),
+                title: Text(
+                  s.time,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                trailing: Text(
+                  "${s.amount} g",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: esquema.tertiary,
+                    fontSize: 15,
+                  ),
+                ),
               ),
             );
           },
         ),
-        const SizedBox(height: 16),
-        Card(
-          elevation: 0,
-          color: Colors.cyan.withValues(alpha: 0.1),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(14.0),
-            child: Row(
-              children: [
-                const Icon(Icons.water_drop, color: Colors.cyan, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    "💧 Agua recomendada: ${waterMin.toStringAsFixed(0)} - ${waterMax.toStringAsFixed(0)} ml/día.",
-                    style: const TextStyle(fontSize: 13, height: 1.3),
+        const SizedBox(height: AppSpacing.fieldGap),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
+          decoration: BoxDecoration(
+            color: esquema.tertiaryContainer,
+            borderRadius: AppRadii.cardRadius,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.water_drop,
+                color: esquema.onTertiaryContainer,
+                size: 28,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  "Agua recomendada: ${waterMin.toStringAsFixed(0)} - ${waterMax.toStringAsFixed(0)} ml/día.",
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.3,
+                    color: esquema.onTertiaryContainer,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ],

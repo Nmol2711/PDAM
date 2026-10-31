@@ -58,7 +58,7 @@ class AppRouter {
           final pet = state.extra as Pet;
           return PetDetailView(pet: pet);
         },
-        // 🔥 Añadimos las sub-rutas para el feature del dispensador
+        // Añadimos las sub-rutas para el feature del dispensador
         routes: [
           GoRoute(
             path: 'register-dispenser',

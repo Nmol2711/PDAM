@@ -20,7 +20,7 @@ class DashboardRepositoryImpl implements DashboardRepository {
       final summary = await _remoteDatasource.getDashboardSummary();
       return Right(summary);
     } catch (e) {
-      // 🔄 OFFLINE FALLBACK: Calcular resumen desde Isar local
+      // OFFLINE FALLBACK: Calcular resumen desde Isar local
       try {
         final isar = await IsarService.init();
         final localPets = await isar.localPets.where().findAll();

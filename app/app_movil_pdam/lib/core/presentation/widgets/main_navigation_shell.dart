@@ -1,6 +1,7 @@
 // core/presentation/widgets/main_navigation_shell.dart
 import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,7 +44,12 @@ class MainNavigationShell extends StatelessWidget {
           },
           children: const [
             Padding(
-              padding: EdgeInsets.fromLTRB(28, 24, 16, 12),
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.xxl,
+                AppSpacing.xxl,
+                AppSpacing.lg,
+                AppSpacing.md,
+              ),
               child: Text(
                 'PDAM - Menú',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),

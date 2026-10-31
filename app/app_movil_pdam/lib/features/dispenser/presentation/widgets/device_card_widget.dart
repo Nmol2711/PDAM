@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:app_movil_pdam/core/theme/app_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/core/di/injection_container.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
@@ -32,95 +33,100 @@ class DeviceCardWidget extends StatelessWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Reabastecer Alimento'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Dispositivo: ${dispenser.name}'),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: amountController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Cantidad a agregar',
-                    hintText: selectedUnit == 'g' ? 'Ej. 1000' : 'Ej. 1.5',
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8.0,
-                  runSpacing: 4.0,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    const Text('Unidad: '),
-                    ChoiceChip(
-                      label: const Text('Gramos (g)'),
-                      selected: selectedUnit == 'g',
-                      onSelected: (selected) {
-                        if (selected) setState(() => selectedUnit = 'g');
-                      },
+        builder: (context, setState) {
+          final esquema = Theme.of(context).colorScheme;
+          return AlertDialog(
+            title: const Text('Reabastecer Alimento'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Dispositivo: ${dispenser.name}'),
+                  const SizedBox(height: AppSpacing.lg),
+                  TextField(
+                    controller: amountController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
                     ),
-                    ChoiceChip(
-                      label: const Text('Kilogramos (kg)'),
-                      selected: selectedUnit == 'kg',
-                      onSelected: (selected) {
-                        if (selected) setState(() => selectedUnit = 'kg');
-                      },
+                    decoration: InputDecoration(
+                      labelText: 'Cantidad a agregar',
+                      hintText: selectedUnit == 'g' ? 'Ej. 1000' : 'Ej. 1.5',
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text('Unidad: '),
+                      ChoiceChip(
+                        label: const Text('Gramos (g)'),
+                        selected: selectedUnit == 'g',
+                        onSelected: (selected) {
+                          if (selected) setState(() => selectedUnit = 'g');
+                        },
+                      ),
+                      ChoiceChip(
+                        label: const Text('Kilogramos (kg)'),
+                        selected: selectedUnit == 'kg',
+                        onSelected: (selected) {
+                          if (selected) setState(() => selectedUnit = 'kg');
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Capacidad del depósito: 5 kg (5000 g). '
+                    'La cantidad se suma al stock y no puede superar el máximo.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: esquema.onSurfaceVariant,
+                    ),
+                  ),
+                  if (limitMessage != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      limitMessage!,
+                      style: TextStyle(fontSize: 12, color: esquema.error),
                     ),
                   ],
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Capacidad del depósito: 5 kg (5000 g). '
-                  'La cantidad se suma al stock y no puede superar el máximo.',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                if (limitMessage != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    limitMessage!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.warning,
-                    ),
-                  ),
                 ],
-              ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final val = double.tryParse(amountController.text.trim()) ?? 0.0;
-                try {
-                  final grams = convertAndValidateRefill(val, selectedUnit);
-                  applyRefill(dispenser.currentFoodGrams, grams);
-                } on RefillLimitException catch (e) {
-                  setState(() => limitMessage = e.toString());
-                  return;
-                }
-                setState(() => limitMessage = null);
-                Navigator.of(dialogContext).pop();
-                bloc.add(
-                  RefillFoodEvent(
-                    dispenserId: dispenser.deviceId,
-                    amount: val,
-                    unit: selectedUnit,
-                  ),
-                );
-              },
-              child: const Text('Confirmar'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final val =
+                      double.tryParse(amountController.text.trim()) ?? 0.0;
+                  try {
+                    final grams = convertAndValidateRefill(val, selectedUnit);
+                    applyRefill(dispenser.currentFoodGrams, grams);
+                  } on RefillLimitException catch (e) {
+                    setState(() => limitMessage = e.toString());
+                    return;
+                  }
+                  setState(() => limitMessage = null);
+                  Navigator.of(dialogContext).pop();
+                  bloc.add(
+                    RefillFoodEvent(
+                      dispenserId: dispenser.deviceId,
+                      amount: val,
+                      unit: selectedUnit,
+                    ),
+                  );
+                },
+                child: const Text('Confirmar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -129,21 +135,26 @@ class DeviceCardWidget extends StatelessWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppRadii.sheetRadius),
       builder: (context) => FutureBuilder<Map<String, dynamic>>(
         future: _loadPetAndSchedules(),
         builder: (context, snapshot) {
-          final petName = snapshot.data?['petName'] as String? ?? 'Sin mascota vinculada';
-          final schedules = snapshot.data?['schedules'] as List<Schedule>? ?? [];
-          final remainingRations = calculateRemainingRations(dispenser.currentFoodGrams, schedules);
-          final rationsText = schedules.isEmpty && dispenser.currentFoodGrams > 0
+          final esquema = Theme.of(context).colorScheme;
+          final petName =
+              snapshot.data?['petName'] as String? ?? 'Sin mascota vinculada';
+          final schedules =
+              snapshot.data?['schedules'] as List<Schedule>? ?? [];
+          final remainingRations = calculateRemainingRations(
+            dispenser.currentFoodGrams,
+            schedules,
+          );
+          final rationsText =
+              schedules.isEmpty && dispenser.currentFoodGrams > 0
               ? '${(dispenser.currentFoodGrams / 50).floor()} raciones (estimadas)'
               : '$remainingRations raciones';
 
           return Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(AppSpacing.xxl),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,8 +165,8 @@ class DeviceCardWidget extends StatelessWidget {
                     Text(
                       'Detalles de Alimento',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -164,48 +175,51 @@ class DeviceCardWidget extends StatelessWidget {
                   ],
                 ),
                 const Divider(),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.sm),
                 Text('Dispositivo: ${dispenser.name}'),
                 Text('MAC: ${dispenser.macAddress}'),
-                Text('Mascota vinculada: $petName', style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                DispenserFoodProgressBar(currentFoodGrams: dispenser.currentFoodGrams),
-                const SizedBox(height: 16),
+                Text(
+                  'Mascota vinculada: $petName',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DispenserFoodProgressBar(
+                  currentFoodGrams: dispenser.currentFoodGrams,
+                ),
+                const SizedBox(height: AppSpacing.lg),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(14),
+                    color: esquema.primary.withValues(alpha: 0.08),
+                    borderRadius: AppRadii.cardRadius,
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.restaurant_rounded,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: esquema.primary,
                         size: 28,
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: AppSpacing.lg),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Estimación de Suministro',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: AppColors.textSecondary,
+                                color: esquema.onSurfaceVariant,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: AppSpacing.xs),
                             Text(
                               'La cantidad actual durará aproximadamente para $rationsText.',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.white
-                                    : AppColors.textPrimary,
+                                color: esquema.onSurface,
                               ),
                             ),
                           ],
@@ -214,7 +228,7 @@ class DeviceCardWidget extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpacing.xxl),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -237,10 +251,12 @@ class DeviceCardWidget extends StatelessWidget {
     try {
       final petDatasource = sl<LocalPetDatasource>();
       final scheduleDatasource = sl<LocalScheduleDatasource>();
-      
+
       final pets = await petDatasource.getLocalPets();
-      final pet = pets.where((p) => dispenser.petId != null && p.id == dispenser.petId).firstOrNull;
-      
+      final pet = pets
+          .where((p) => dispenser.petId != null && p.id == dispenser.petId)
+          .firstOrNull;
+
       final petName = pet?.name ?? 'Sin mascota vinculada';
       final petId = pet?.id;
 
@@ -257,34 +273,32 @@ class DeviceCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final esquema = theme.colorScheme;
+    final gutter = AppSpacing.pageFor(MediaQuery.sizeOf(context).width);
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth > 600;
-
         return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+          margin: EdgeInsets.symmetric(
+            horizontal: gutter,
+            vertical: AppSpacing.sm,
           ),
-          color: isDark ? AppColors.darkCard : AppColors.lightCard,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: InkWell(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: AppRadii.cardRadius,
             onTap: onTap,
             child: Padding(
-              padding: EdgeInsets.all(isWide ? 20.0 : 16.0),
+              padding: const EdgeInsets.all(AppSpacing.cardPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (dispenser.isOfflineCached) ...[
                     const InAppNotificationBanner(
                       title: 'Sincronización Local',
-                      message: 'Mostrando datos de la última caché local (Offline-First).',
+                      message:
+                          'Mostrando datos de la última caché local (Offline-First).',
                       type: InAppNotificationType.info,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.sm),
                   ],
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -293,18 +307,18 @@ class DeviceCardWidget extends StatelessWidget {
                         child: Row(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(AppSpacing.sm),
                               decoration: BoxDecoration(
-                                color: AppColors.primaryGreen.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
+                                color: esquema.primary.withValues(alpha: 0.12),
+                                borderRadius: AppRadii.cardRadius,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.router_rounded,
-                                color: AppColors.primaryGreen,
+                                color: esquema.primary,
                                 size: 28,
                               ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: AppSpacing.md),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,17 +328,15 @@ class DeviceCardWidget extends StatelessWidget {
                                     style: theme.textTheme.titleMedium
                                         ?.copyWith(
                                           fontWeight: FontWeight.bold,
-                                          color: isDark
-                                              ? Colors.white
-                                              : AppColors.textPrimary,
+                                          color: esquema.onSurface,
                                         ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 2),
+                                  const SizedBox(height: AppSpacing.xs),
                                   Text(
                                     'MAC: ${dispenser.macAddress}',
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: AppColors.textSecondary,
+                                      color: esquema.onSurfaceVariant,
                                     ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -337,31 +349,37 @@ class DeviceCardWidget extends StatelessWidget {
                     ],
                   ),
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                    padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                     child: Divider(height: 1),
                   ),
-                  DispenserFoodProgressBar(currentFoodGrams: dispenser.currentFoodGrams),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  DispenserFoodProgressBar(
+                    currentFoodGrams: dispenser.currentFoodGrams,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
                     children: [
                       OutlinedButton.icon(
                         onPressed: () => _showRefillDialog(context),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primaryGreen,
-                          side: const BorderSide(color: AppColors.primaryGreen),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
                           ),
                         ),
-                        icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                        icon: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 16,
+                        ),
                         label: const Text(
                           'Reabastecer',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                       TextButton(
@@ -371,7 +389,6 @@ class DeviceCardWidget extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.info,
                           ),
                         ),
                       ),
@@ -379,7 +396,7 @@ class DeviceCardWidget extends StatelessWidget {
                   ),
                   if (onResetWifi != null) ...[
                     const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                      padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                       child: Divider(height: 1),
                     ),
                     Align(
@@ -387,14 +404,11 @@ class DeviceCardWidget extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: onResetWifi,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.warning,
-                          side: const BorderSide(color: AppColors.warning),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          foregroundColor: esquema.error,
+                          side: BorderSide(color: esquema.error),
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                            horizontal: AppSpacing.md,
+                            vertical: AppSpacing.sm,
                           ),
                         ),
                         icon: const Icon(Icons.wifi_off_rounded, size: 16),

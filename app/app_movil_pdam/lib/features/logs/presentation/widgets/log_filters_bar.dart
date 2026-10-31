@@ -1,14 +1,19 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/logs/domain/entity/activity_log.dart';
 import 'package:app_movil_pdam/features/logs/domain/entity/log_filters.dart';
 import 'package:app_movil_pdam/features/logs/domain/utils/log_time_utils.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
 import 'package:flutter/material.dart';
 
-/// Barra de los cuatro filtros combinables del historial (RF-27 a RF-31).
+/// Barra plegable de los cuatro filtros combinables del historial
+/// (RF-27 a RF-31, RF-11 y RF-12).
 ///
-/// No conoce el BLoC ni calcula zonas horarias: emite los filtros elegidos y la
-/// vista los envía al estado.
-class LogFiltersBar extends StatelessWidget {
+/// El estado de plegado es de presentación y vive en este widget, no en la
+/// vista principal (AGENTS.md): la vista solo compone y emite eventos. Cada
+/// entrada a la pantalla crea una instancia nueva y empieza plegada; mientras
+/// la pantalla siga montada, filtrar, paginar, recargar o reintentar no la
+/// recrea, así que el panel permanece abierto.
+class LogFiltersBar extends StatefulWidget {
   final LogFilters filters;
   final LogCatalog catalog;
   final List<Pet> pets;
@@ -25,50 +30,110 @@ class LogFiltersBar extends StatelessWidget {
   });
 
   @override
+  State<LogFiltersBar> createState() => _LogFiltersBarState();
+}
+
+class _LogFiltersBarState extends State<LogFiltersBar> {
+  bool _expanded = false;
+
+  /// Último estado de visibilidad de la rama según `TickerMode`. El shell
+  /// `StatefulShellRoute.indexedStack` desactiva `TickerMode` al ocultar la
+  /// pestaña; al plegarse ahí se cumple «se pliega al reentrar» aunque el
+  /// historial siga montado.
+  bool _wasVisible = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (!visible && _wasVisible) {
+      // Se asigna antes del build que sigue a la dependencia; no hace falta
+      // `setState` (y llamarlo aquí sería durante la fase de construcción).
+      _expanded = false;
+    }
+    _wasVisible = visible;
+  }
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+
+  @override
   Widget build(BuildContext context) {
     final colores = Theme.of(context).colorScheme;
 
-    return Container(
-      color: colores.surfaceContainerHighest.withValues(alpha: 0.3),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final ancho = constraints.maxWidth;
-          // En un móvil estrecho cada campo ocupa una fila completa para que
-          // nada se desborde (RF-33).
-          final anchoCampo = ancho < 400 ? ancho : (ancho - 8) / 2;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('logs_filters_toggle'),
+              onPressed: _toggle,
+              icon: const Icon(Icons.filter_alt_outlined, size: 18),
+              label: const Text('Filtros'),
+            ),
+          ),
+        ),
+        if (_expanded)
+          Container(
+            color: colores.surfaceContainerHighest.withValues(alpha: 0.3),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.xs,
+            ),
+            child: _panel(),
+          ),
+      ],
+    );
+  }
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  SizedBox(width: anchoCampo, child: _filtroMascota()),
-                  SizedBox(width: anchoCampo, child: _filtroEvento()),
-                  SizedBox(width: anchoCampo, child: _filtroResultado()),
-                  SizedBox(width: anchoCampo, child: _filtroFecha(context)),
-                ],
+  Widget _panel() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final ancho = constraints.maxWidth;
+        // En un móvil estrecho cada campo ocupa una fila completa para que
+        // nada se desborde (RF-33).
+        final anchoCampo = ancho < 400 ? ancho : (ancho - AppSpacing.sm) / 2;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                SizedBox(width: anchoCampo, child: _filtroMascota()),
+                SizedBox(width: anchoCampo, child: _filtroEvento()),
+                SizedBox(width: anchoCampo, child: _filtroResultado()),
+                SizedBox(width: anchoCampo, child: _filtroFecha(context)),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: widget.filters.hasActiveFilters
+                    ? widget.onClear
+                    : null,
+                icon: const Icon(Icons.filter_alt_off, size: 18),
+                label: const Text('Limpiar filtros'),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: filters.hasActiveFilters ? onClear : null,
-                  icon: const Icon(Icons.filter_alt_off, size: 18),
-                  label: const Text('Limpiar filtros'),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _filtroMascota() {
-    final seleccionada = pets.any((pet) => pet.id == filters.petId)
-        ? filters.petId
+    final seleccionada =
+        widget.pets.any((pet) => pet.id == widget.filters.petId)
+        ? widget.filters.petId
         : null;
 
     return DropdownButtonFormField<int?>(
@@ -80,7 +145,7 @@ class LogFiltersBar extends StatelessWidget {
           value: null,
           child: Text('Todas las mascotas', overflow: TextOverflow.ellipsis),
         ),
-        ...pets.map(
+        ...widget.pets.map(
           (pet) => DropdownMenuItem<int?>(
             value: pet.id,
             child: Text(pet.name, overflow: TextOverflow.ellipsis),
@@ -88,10 +153,10 @@ class LogFiltersBar extends StatelessWidget {
         ),
       ],
       onChanged: (valor) {
-        onFiltersChanged(
+        widget.onFiltersChanged(
           valor == null
-              ? filters.copyWith(clearPetId: true)
-              : filters.copyWith(petId: valor),
+              ? widget.filters.copyWith(clearPetId: true)
+              : widget.filters.copyWith(petId: valor),
         );
       },
     );
@@ -99,8 +164,10 @@ class LogFiltersBar extends StatelessWidget {
 
   Widget _filtroEvento() {
     final seleccionado =
-        catalog.eventTypes.any((entrada) => entrada.code == filters.eventType)
-        ? filters.eventType
+        widget.catalog.eventTypes.any(
+          (entrada) => entrada.code == widget.filters.eventType,
+        )
+        ? widget.filters.eventType
         : null;
 
     return DropdownButtonFormField<String?>(
@@ -112,7 +179,7 @@ class LogFiltersBar extends StatelessWidget {
           value: null,
           child: Text('Todos los tipos', overflow: TextOverflow.ellipsis),
         ),
-        ...catalog.eventTypes.map(
+        ...widget.catalog.eventTypes.map(
           (entrada) => DropdownMenuItem<String?>(
             value: entrada.code,
             child: Text(entrada.label, overflow: TextOverflow.ellipsis),
@@ -120,10 +187,10 @@ class LogFiltersBar extends StatelessWidget {
         ),
       ],
       onChanged: (valor) {
-        onFiltersChanged(
+        widget.onFiltersChanged(
           valor == null
-              ? filters.copyWith(clearEventType: true)
-              : filters.copyWith(eventType: valor),
+              ? widget.filters.copyWith(clearEventType: true)
+              : widget.filters.copyWith(eventType: valor),
         );
       },
     );
@@ -131,8 +198,10 @@ class LogFiltersBar extends StatelessWidget {
 
   Widget _filtroResultado() {
     final seleccionado =
-        catalog.outcomes.any((entrada) => entrada.code == filters.outcome)
-        ? filters.outcome
+        widget.catalog.outcomes.any(
+          (entrada) => entrada.code == widget.filters.outcome,
+        )
+        ? widget.filters.outcome
         : null;
 
     return DropdownButtonFormField<String?>(
@@ -144,7 +213,7 @@ class LogFiltersBar extends StatelessWidget {
           value: null,
           child: Text('Todos los resultados', overflow: TextOverflow.ellipsis),
         ),
-        ...catalog.outcomes.map(
+        ...widget.catalog.outcomes.map(
           (entrada) => DropdownMenuItem<String?>(
             value: entrada.code,
             child: Text(entrada.label, overflow: TextOverflow.ellipsis),
@@ -152,10 +221,10 @@ class LogFiltersBar extends StatelessWidget {
         ),
       ],
       onChanged: (valor) {
-        onFiltersChanged(
+        widget.onFiltersChanged(
           valor == null
-              ? filters.copyWith(clearOutcome: true)
-              : filters.copyWith(outcome: valor),
+              ? widget.filters.copyWith(clearOutcome: true)
+              : widget.filters.copyWith(outcome: valor),
         );
       },
     );
@@ -166,17 +235,13 @@ class LogFiltersBar extends StatelessWidget {
       onPressed: () => _elegirRango(context),
       icon: const Icon(Icons.calendar_today, size: 18),
       label: Text(_etiquetaRango, overflow: TextOverflow.ellipsis),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        alignment: Alignment.centerLeft,
-      ),
+      style: OutlinedButton.styleFrom(alignment: Alignment.centerLeft),
     );
   }
 
   String get _etiquetaRango {
-    final desde = filters.fromDate;
-    final hasta = filters.toDate;
+    final desde = widget.filters.fromDate;
+    final hasta = widget.filters.toDate;
     if (desde == null && hasta == null) return 'Rango de fechas';
     if (desde != null && hasta != null) {
       return '${formatearFechaCorta(desde)} - ${formatearFechaCorta(hasta)}';
@@ -188,8 +253,8 @@ class LogFiltersBar extends StatelessWidget {
   Future<void> _elegirRango(BuildContext context) async {
     final hoy = DateTime.now();
     final ultimoDia = DateTime(hoy.year, hoy.month, hoy.day);
-    final desde = filters.fromDate;
-    final hasta = filters.toDate;
+    final desde = widget.filters.fromDate;
+    final hasta = widget.filters.toDate;
 
     final rango = await showDateRangePicker(
       context: context,
@@ -202,18 +267,12 @@ class LogFiltersBar extends StatelessWidget {
     );
 
     if (rango == null) return;
-    onFiltersChanged(
-      filters.copyWith(fromDate: rango.start, toDate: rango.end),
+    widget.onFiltersChanged(
+      widget.filters.copyWith(fromDate: rango.start, toDate: rango.end),
     );
   }
 
   InputDecoration _decoracion(String etiqueta) {
-    return InputDecoration(
-      labelText: etiqueta,
-      isDense: true,
-      border: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-      ),
-    );
+    return InputDecoration(labelText: etiqueta, isDense: true);
   }
 }

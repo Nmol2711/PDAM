@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/widgets/dispenser_notice_mapper.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/pet/pet_wsava_limit.dart';
@@ -30,7 +32,7 @@ class _PetDetailViewState extends State<PetDetailView> {
     context.read<ScheduleBloc>().add(
       ScheduleListPetRequested(petId: widget.pet.id),
     );
-    // 🔥 Solicitamos al backend saber si esta mascota ya tiene un dispensador asociado
+    // Solicitamos al backend saber si esta mascota ya tiene un dispensador asociado
     context.read<DispenserBloc>().add(LoadDispenserByPetEvent(widget.pet.id));
   }
 
@@ -46,6 +48,8 @@ class _PetDetailViewState extends State<PetDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final gutter = AppSpacing.pageFor(MediaQuery.sizeOf(context).width);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.pet.name),
@@ -89,11 +93,11 @@ class _PetDetailViewState extends State<PetDetailView> {
                       fit: BoxFit.cover,
                     ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
 
             // --- 2. INFORMACIÓN CLAVE (Fila de Cards) ---
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: gutter),
               child: Row(
                 children: [
                   _infoCard(
@@ -110,11 +114,11 @@ class _PetDetailViewState extends State<PetDetailView> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
 
-            // --- 🔥 NUEVA SECCIÓN: ESTADO DEL DISPENSADOR (Reactivo con BLoC) ---
+            // --- NUEVA SECCIÓN: ESTADO DEL DISPENSADOR (Reactivo con BLoC) ---
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: gutter),
               child: BlocConsumer<DispenserBloc, DispenserState>(
                 listener: (context, state) {
                   // Si venimos regresando del formulario y el BLoC guardó con éxito,
@@ -131,15 +135,16 @@ class _PetDetailViewState extends State<PetDetailView> {
                   if (state is DispenserLoading) {
                     return const Center(
                       child: Padding(
-                        padding: EdgeInsets.all(8.0),
+                        padding: EdgeInsets.all(AppSpacing.sm),
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     );
                   }
 
-                  if (state is DispenserLoaded || (state is DispenserFailure && state.dispenser != null)) {
-                    final dispenser = state is DispenserLoaded 
-                        ? state.dispenser 
+                  if (state is DispenserLoaded ||
+                      (state is DispenserFailure && state.dispenser != null)) {
+                    final dispenser = state is DispenserLoaded
+                        ? state.dispenser
                         : (state as DispenserFailure).dispenser!;
                     final isActive = dispenser.isActive;
 
@@ -148,23 +153,25 @@ class _PetDetailViewState extends State<PetDetailView> {
                           _showDispenserOptionsDialog(context, dispenser),
                       child: Card(
                         color: isActive
-                            ? Colors.green.withOpacity(0.15)
-                            : Colors.orange.withOpacity(0.15),
+                            ? esquema.primaryContainer
+                            : esquema.surfaceContainerHighest,
                         shape: RoundedRectangleBorder(
                           side: BorderSide(
-                            color: isActive ? Colors.green : Colors.orange,
+                            color: isActive ? esquema.primary : esquema.outline,
                             width: 1,
                           ),
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: AppRadii.cardRadius,
                         ),
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: isActive
-                                ? Colors.green
-                                : Colors.orange,
+                                ? esquema.primary
+                                : esquema.onSurfaceVariant,
                             child: Icon(
                               isActive ? Icons.check : Icons.pause_circle,
-                              color: Colors.white,
+                              color: isActive
+                                  ? esquema.onPrimary
+                                  : esquema.surface,
                             ),
                           ),
                           title: Text(
@@ -173,15 +180,17 @@ class _PetDetailViewState extends State<PetDetailView> {
                                 : 'Dispensador Desactivado',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: isActive ? Colors.green : Colors.orange,
+                              color: isActive
+                                  ? esquema.onPrimaryContainer
+                                  : esquema.onSurfaceVariant,
                             ),
                           ),
                           subtitle: Text(
                             'MAC: ${dispenser.macAddress}\nEstado: ${isActive ? 'Activo' : 'Desactivado'}',
                             style: TextStyle(
                               color: isActive
-                                  ? Colors.green.shade700
-                                  : Colors.orange.shade700,
+                                  ? esquema.onPrimaryContainer
+                                  : esquema.onSurfaceVariant,
                             ),
                           ),
                         ),
@@ -189,7 +198,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                     );
                   }
 
-                  // ➕ CASO 2: No hay vinculado / Falló la carga -> Mostramos botón para ir a registrar
+                  // CASO 2: No hay vinculado / Falló la carga -> Mostramos botón para ir a registrar
                   return OutlinedButton.icon(
                     onPressed: () {
                       // Navegamos al formulario pasando la mascota en el extra
@@ -202,45 +211,45 @@ class _PetDetailViewState extends State<PetDetailView> {
                     label: const Text("Vincular Dispensador Inteligente"),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
-                      side: const BorderSide(color: Colors.blue),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
                     ),
                   );
                 },
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.sectionGap),
 
             // Título de la sección de Horarios
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              padding: EdgeInsets.symmetric(horizontal: gutter),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    "Horarios de Comida",
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Text(
+                      "Horarios de Comida",
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.add_circle,
-                      color: Colors.blue,
+                      color: esquema.primary,
                       size: 28,
                     ),
                     onPressed: () {
                       final state = context.read<ScheduleBloc>().state;
-                      final schedules = state is ScheduleLoaded ? state.schedules : <Schedule>[];
+                      final schedules = state is ScheduleLoaded
+                          ? state.schedules
+                          : <Schedule>[];
                       _showAddScheduleOptionsDialog(context, schedules);
                     },
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
 
             // --- 3. LISTA DE HORARIOS ORIGINAL (Conectada al Bloc) ---
             BlocBuilder<ScheduleBloc, ScheduleState>(
@@ -248,7 +257,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                 if (state is ScheduleLoading) {
                   return const Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24.0),
+                      padding: EdgeInsets.all(AppSpacing.sectionGap),
                       child: CircularProgressIndicator(),
                     ),
                   );
@@ -257,10 +266,10 @@ class _PetDetailViewState extends State<PetDetailView> {
                 if (state is ScheduleError) {
                   return Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(AppSpacing.lg),
                       child: Text(
                         state.message,
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(color: esquema.error),
                       ),
                     ),
                   );
@@ -270,7 +279,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                   if (state.schedules.isEmpty) {
                     return const Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24.0),
+                        padding: EdgeInsets.all(AppSpacing.sectionGap),
                         child: Text("No hay horarios asignados aún."),
                       ),
                     );
@@ -280,24 +289,29 @@ class _PetDetailViewState extends State<PetDetailView> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: state.schedules.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: EdgeInsets.symmetric(horizontal: gutter),
                     itemBuilder: (context, index) {
                       final schedule = state.schedules[index];
 
                       return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        elevation: 2,
+                        margin: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.xs,
+                        ),
                         clipBehavior: Clip.antiAlias,
                         child: InkWell(
                           onTap: () {
-                            _showEditScheduleDialog(context, schedule, widget.pet.id);
+                            _showEditScheduleDialog(
+                              context,
+                              schedule,
+                              widget.pet.id,
+                            );
                           },
                           child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.blueAccent,
+                            leading: CircleAvatar(
+                              backgroundColor: esquema.primary,
                               child: Icon(
                                 Icons.access_time,
-                                color: Colors.white,
+                                color: esquema.onPrimary,
                               ),
                             ),
                             title: Text(
@@ -311,10 +325,17 @@ class _PetDetailViewState extends State<PetDetailView> {
                               "Porción: ${schedule.amount} gramos",
                             ),
                             trailing: IconButton(
-                              icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+                              icon: Icon(
+                                Icons.edit_outlined,
+                                color: esquema.primary,
+                              ),
                               tooltip: 'Editar horario',
                               onPressed: () {
-                                _showEditScheduleDialog(context, schedule, widget.pet.id);
+                                _showEditScheduleDialog(
+                                  context,
+                                  schedule,
+                                  widget.pet.id,
+                                );
                               },
                             ),
                           ),
@@ -327,7 +348,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                 return const SizedBox();
               },
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpacing.xxxl),
           ],
         ),
       ),
@@ -392,9 +413,9 @@ class _PetDetailViewState extends State<PetDetailView> {
                   DeleteDispenserEvent(petId: dispenser.petId),
                 );
               },
-              child: const Text(
+              child: Text(
                 'Eliminar',
-                style: TextStyle(color: Colors.red),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
           ],
@@ -403,14 +424,20 @@ class _PetDetailViewState extends State<PetDetailView> {
     );
   }
 
-  void _showAddScheduleOptionsDialog(BuildContext context, List<Schedule> existingSchedules) {
+  void _showAddScheduleOptionsDialog(
+    BuildContext context,
+    List<Schedule> existingSchedules,
+  ) {
+    final esquema = Theme.of(context).colorScheme;
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadii.sheet),
+        ),
       ),
       builder: (context) => Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -420,27 +447,35 @@ class _PetDetailViewState extends State<PetDetailView> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: AppSpacing.xl),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.blueAccent,
-                child: Icon(Icons.add, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: esquema.primary,
+                child: Icon(Icons.add, color: esquema.onPrimary),
               ),
               title: const Text("Agregar horario individual"),
-              subtitle: const Text("Registra una hora y porción con validación WSAVA"),
+              subtitle: const Text(
+                "Registra una hora y porción con validación WSAVA",
+              ),
               onTap: () {
                 Navigator.pop(context);
-                _showAddScheduleDialog(context, existingSchedules, widget.pet.id);
+                _showAddScheduleDialog(
+                  context,
+                  existingSchedules,
+                  widget.pet.id,
+                );
               },
             ),
             const Divider(),
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: Colors.orangeAccent,
-                child: Icon(Icons.auto_awesome, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: esquema.tertiary,
+                child: Icon(Icons.auto_awesome, color: esquema.onTertiary),
               ),
               title: const Text("Plan Nutricional Automático WSAVA"),
-              subtitle: const Text("Generar horarios basados en BCS, MCS y densidad calórica"),
+              subtitle: const Text(
+                "Generar horarios basados en BCS, MCS y densidad calórica",
+              ),
               onTap: () {
                 Navigator.pop(context);
                 context.pushNamed('guided_schedule_form', extra: widget.pet);
@@ -452,7 +487,11 @@ class _PetDetailViewState extends State<PetDetailView> {
     );
   }
 
-  void _showAddScheduleDialog(BuildContext context, List<Schedule> existingSchedules, int petId) {
+  void _showAddScheduleDialog(
+    BuildContext context,
+    List<Schedule> existingSchedules,
+    int petId,
+  ) {
     final timeController = TextEditingController();
     final amountController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -461,14 +500,16 @@ class _PetDetailViewState extends State<PetDetailView> {
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadii.sheet),
+        ),
       ),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
+          left: AppSpacing.xl,
+          right: AppSpacing.xl,
+          top: AppSpacing.xl,
         ),
         child: Form(
           key: formKey,
@@ -478,17 +519,18 @@ class _PetDetailViewState extends State<PetDetailView> {
             children: [
               Text(
                 "Nuevo Horario",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 controller: timeController,
                 decoration: const InputDecoration(
                   labelText: "Hora (HH:MM)",
                   hintText: "Ej. 08:30",
                   prefixIcon: Icon(Icons.access_time),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return "Requerido";
@@ -498,15 +540,16 @@ class _PetDetailViewState extends State<PetDetailView> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: "Cantidad (gramos)",
                   hintText: "Ej. 150",
                   prefixIcon: Icon(Icons.scale),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                   suffixText: 'g',
                 ),
                 validator: (v) {
@@ -517,14 +560,19 @@ class _PetDetailViewState extends State<PetDetailView> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.sectionGap),
               FilledButton(
                 onPressed: () {
                   if (formKey.currentState!.validate()) {
-                    final newAmount = double.parse(amountController.text.trim());
-                    final existingTotal = existingSchedules.fold(0.0, (sum, s) => sum + s.amount);
+                    final newAmount = double.parse(
+                      amountController.text.trim(),
+                    );
+                    final existingTotal = existingSchedules.fold(
+                      0.0,
+                      (sum, s) => sum + s.amount,
+                    );
                     final totalPlanned = existingTotal + newAmount;
-                    
+
                     // El motor solo soporta canino/felino (RF-2). Para otras
                     // especies no hay límite WSAVA y no se muestra ningún aviso.
                     final wsavaLimitGrams = petWsavaDailyLimitGrams(widget.pet);
@@ -537,7 +585,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                         showDialog(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text("⚠️ Límite WSAVA Excedido"),
+                            title: const Text("Límite WSAVA Excedido"),
                             content: Text(
                               "No se puede crear este horario porque excede significativamente el límite diario recomendado por WSAVA para ${widget.pet.name}.\n\n"
                               "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
@@ -560,7 +608,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                         showDialog(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: const Text("⚠️ Advertencia Nutricional WSAVA"),
+                            title: const Text("Advertencia Nutricional WSAVA"),
                             content: Text(
                               "Esta porción supera ligeramente la recomendación diaria recomendada por WSAVA.\n\n"
                               "• Límite recomendado: ${wsavaLimitGrams.toStringAsFixed(0)}g\n"
@@ -576,12 +624,12 @@ class _PetDetailViewState extends State<PetDetailView> {
                                 onPressed: () {
                                   Navigator.pop(ctx);
                                   context.read<ScheduleBloc>().add(
-                                        ScheduleCreatePressed(
-                                          petId: petId,
-                                          time: timeController.text.trim(),
-                                          amount: newAmount,
-                                        ),
-                                      );
+                                    ScheduleCreatePressed(
+                                      petId: petId,
+                                      time: timeController.text.trim(),
+                                      amount: newAmount,
+                                    ),
+                                  );
                                 },
                                 child: const Text("Continuar"),
                               ),
@@ -594,44 +642,52 @@ class _PetDetailViewState extends State<PetDetailView> {
 
                     Navigator.pop(context);
                     context.read<ScheduleBloc>().add(
-                          ScheduleCreatePressed(
-                            petId: petId,
-                            time: timeController.text.trim(),
-                            amount: newAmount,
-                          ),
-                        );
+                      ScheduleCreatePressed(
+                        petId: petId,
+                        time: timeController.text.trim(),
+                        amount: newAmount,
+                      ),
+                    );
                   }
                 },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: const Text(
+                  "Guardar Horario",
+                  style: TextStyle(fontSize: 16),
                 ),
-                child: const Text("Guardar Horario", style: TextStyle(fontSize: 16)),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         ),
       ),
     );
   }
-  void _showEditScheduleDialog(BuildContext context, Schedule schedule, int petId) {
+
+  void _showEditScheduleDialog(
+    BuildContext context,
+    Schedule schedule,
+    int petId,
+  ) {
     final timeController = TextEditingController(text: schedule.time);
-    final amountController = TextEditingController(text: schedule.amount.toString());
+    final amountController = TextEditingController(
+      text: schedule.amount.toString(),
+    );
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppRadii.sheet),
+        ),
       ),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 20,
-          right: 20,
-          top: 20,
+          left: AppSpacing.xl,
+          right: AppSpacing.xl,
+          top: AppSpacing.xl,
         ),
         child: Form(
           key: formKey,
@@ -641,16 +697,17 @@ class _PetDetailViewState extends State<PetDetailView> {
             children: [
               Text(
                 "Editar Horario",
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xl),
               TextFormField(
                 controller: timeController,
                 decoration: const InputDecoration(
                   labelText: "Hora (HH:MM)",
                   prefixIcon: Icon(Icons.access_time),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                 ),
                 validator: (v) {
                   if (v == null || v.isEmpty) return "Requerido";
@@ -660,14 +717,15 @@ class _PetDetailViewState extends State<PetDetailView> {
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
               TextFormField(
                 controller: amountController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(
                   labelText: "Cantidad (gramos)",
                   prefixIcon: Icon(Icons.scale),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                   suffixText: 'g',
                 ),
                 validator: (v) {
@@ -678,7 +736,7 @@ class _PetDetailViewState extends State<PetDetailView> {
                   return null;
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.sectionGap),
               FilledButton(
                 onPressed: () {
                   if (formKey.currentState!.validate()) {
@@ -693,13 +751,12 @@ class _PetDetailViewState extends State<PetDetailView> {
                     Navigator.pop(context);
                   }
                 },
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: const Text(
+                  "Guardar Cambios",
+                  style: TextStyle(fontSize: 16),
                 ),
-                child: const Text("Guardar Cambios", style: TextStyle(fontSize: 16)),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         ),
@@ -710,18 +767,24 @@ class _PetDetailViewState extends State<PetDetailView> {
   Widget _infoCard(String title, String value, IconData icon) {
     return Expanded(
       child: Card(
-        elevation: 1,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 4),
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
           child: Column(
             children: [
-              Icon(icon, color: Colors.blueGrey, size: 20),
-              const SizedBox(height: 4),
+              Icon(
+                icon,
+                color: Theme.of(context).colorScheme.tertiary,
+                size: 20,
+              ),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 title,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 value,
                 style: const TextStyle(

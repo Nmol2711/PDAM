@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/network/session_events.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_field.dart';
 import 'package:app_movil_pdam/core/services/account_local_cleaner.dart';
 import 'package:app_movil_pdam/core/services/pending_deletion_store.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
@@ -266,7 +267,13 @@ void main() {
   }
 
   TextField campo(WidgetTester tester, String clave) =>
-      tester.widget<TextField>(find.byKey(Key(clave)));
+      tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(Key(clave)),
+          matching: find.byType(TextField),
+          matchRoot: true,
+        ),
+      );
 
   Future<void> escribir(
     WidgetTester tester, {
@@ -329,6 +336,23 @@ void main() {
     expect(find.byType(CircleAvatar), findsNothing);
     expect(find.byType(Image), findsNothing);
     expect(find.textContaining('Foto'), findsNothing);
+  });
+
+  testWidgets('RF-10: las dos contraseñas nuevas usan el ojo compartido', (
+    tester,
+  ) async {
+    await pumpForm(tester);
+
+    expect(find.byType(PasswordVisibilityField), findsNWidgets(2));
+
+    await escribir(tester, password: 'claveLarga', confirmacion: 'claveLarga');
+    expect(find.byTooltip('Mostrar contraseña'), findsNWidgets(2));
+
+    await tester.tap(find.byTooltip('Mostrar contraseña').first);
+    await tester.pump();
+
+    expect(find.byTooltip('Ocultar contraseña'), findsOneWidget);
+    expect(campo(tester, 'update_profile_password').obscureText, isFalse);
   });
 
   testWidgets('RF-09: sin conexión precarga el correo del perfil cacheado real '

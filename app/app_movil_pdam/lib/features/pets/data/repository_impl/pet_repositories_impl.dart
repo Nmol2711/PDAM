@@ -39,7 +39,7 @@ class PetRepositoriesImpl implements PetsRepositories {
       await _localPetDatasource.saveLocalPet(result, isSynced: true);
       return Right(result);
     } catch (e) {
-      // 🔄 OFFLINE FALLBACK: Guardar localmente si el servidor está apagado
+      // OFFLINE FALLBACK: Guardar localmente si el servidor está apagado
       try {
         final localPet = Pet(
           id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -102,7 +102,7 @@ class PetRepositoriesImpl implements PetsRepositories {
       final localPets = await _localPetDatasource.getLocalPets();
       return Right(localPets);
     } catch (e) {
-      // 🔄 OFFLINE FALLBACK: Si falla la red (servidor apagado/sin internet), leemos de Isar
+      // OFFLINE FALLBACK: Si falla la red (servidor apagado/sin internet), leemos de Isar
       try {
         final localPets = await _localPetDatasource.getLocalPets();
         return Right(localPets);
@@ -136,7 +136,7 @@ class PetRepositoriesImpl implements PetsRepositories {
       await _localPetDatasource.saveLocalPet(result, isSynced: true);
       return Right(result);
     } catch (e) {
-      // 🔄 OFFLINE FALLBACK: Actualizar localmente si el servidor está apagado
+      // OFFLINE FALLBACK: Actualizar localmente si el servidor está apagado
       try {
         final localPets = await _localPetDatasource.getLocalPets();
         final existing = localPets.firstWhere((p) => p.id == petId);

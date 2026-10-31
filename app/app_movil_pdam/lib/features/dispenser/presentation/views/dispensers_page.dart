@@ -5,7 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
-import 'package:app_movil_pdam/core/theme/app_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/widgets/device_card_widget.dart';
@@ -84,37 +85,64 @@ class _DispensersPageState extends State<DispensersPage>
   }
 
   void _handleState(DispenserState state) {
+    final esquema = Theme.of(context).colorScheme;
+    final semantica = AppSemanticColors.of(context);
     if (state is DispenserErrorState) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(state.message)),
+        SnackBar(
+          backgroundColor: esquema.error,
+          content: Text(
+            state.message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: esquema.onError),
+          ),
+        ),
       );
     } else if (state is DispenserListLoaded && state.refillLimitExceeded) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(RefillLimitException.message)),
+        SnackBar(
+          backgroundColor: esquema.error,
+          content: Text(
+            RefillLimitException.message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: esquema.onError),
+          ),
+        ),
       );
     } else if (state is DispenserListLoaded && state.refillSuccess) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reabastecimiento con éxito')),
+        SnackBar(
+          backgroundColor: semantica.success,
+          content: Text(
+            'Reabastecimiento con éxito',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: semantica.onSuccess),
+          ),
+        ),
       );
     }
   }
 
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 600;
         final minHeight = constraints.hasBoundedHeight
-            ? (constraints.maxHeight - 48).clamp(0.0, double.infinity).toDouble()
+            ? (constraints.maxHeight - 48)
+                  .clamp(0.0, double.infinity)
+                  .toDouble()
             : 0.0;
         return RefreshIndicator(
           onRefresh: _onPullToRefresh,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.symmetric(
-              horizontal: isWide ? 48.0 : 24.0,
-              vertical: 24.0,
+              horizontal: isWide ? AppSpacing.pageWide : AppSpacing.page,
+              vertical: AppSpacing.page,
             ),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: minHeight),
@@ -122,9 +150,9 @@ class _DispensersPageState extends State<DispensersPage>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(24),
+                    padding: const EdgeInsets.all(AppSpacing.xxl),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -133,36 +161,33 @@ class _DispensersPageState extends State<DispensersPage>
                       color: theme.colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.xxl),
                   Text(
                     'No hay dispositivos vinculados',
                     style: theme.textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
+                      color: theme.colorScheme.onSurface,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     'Aún no se ha vinculado ningún dispositivo dispensador. Configura tu hardware mediante Bluetooth para comenzar a alimentar a tus mascotas automáticamente.',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
+                      color: theme.colorScheme.onSurfaceVariant,
                       height: 1.5,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: AppSpacing.xxxl),
                   FilledButton.icon(
                     onPressed: () {
                       context.go('/dispensers/scan');
                     },
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        horizontal: AppSpacing.xxl,
+                        vertical: AppSpacing.md,
                       ),
                     ),
                     icon: const Icon(Icons.bluetooth_searching_rounded),
@@ -210,9 +235,17 @@ class _DispensersPageState extends State<DispensersPage>
                       onPressed: () {
                         Navigator.of(dialogContext).pop();
                         context.read<DispenserBloc>().add(
-                              ResetWifiEvent(dispenserId: dispenser.deviceId),
-                            );
+                          ResetWifiEvent(dispenserId: dispenser.deviceId),
+                        );
                       },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(
+                          dialogContext,
+                        ).colorScheme.error,
+                        foregroundColor: Theme.of(
+                          dialogContext,
+                        ).colorScheme.onError,
+                      ),
                       child: const Text('Eliminar'),
                     ),
                   ],

@@ -1,5 +1,6 @@
 import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/widgets/log_filters_bar.dart';
 import 'package:app_movil_pdam/features/logs/presentation/widgets/log_item_widget.dart';
@@ -37,7 +38,6 @@ class _LogsViewState extends State<LogsView> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Historial de eventos'),
-        elevation: 0,
         actions: const <Widget>[
           SettingsEntryButton(ubicacion: UbicacionEntrada.cabeceraPantalla),
         ],
@@ -99,6 +99,9 @@ class _LogsViewState extends State<LogsView> {
       ...state.items.map((log) => LogItemWidget(log: log)),
     ];
 
-    return ListView(padding: const EdgeInsets.only(bottom: 8), children: hijos);
+    return ListView(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      children: hijos,
+    );
   }
 }

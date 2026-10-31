@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import '../bloc/dispenser_bloc.dart';
 
 class RegisterDispenserFormWidget extends StatelessWidget {
@@ -16,29 +17,27 @@ class RegisterDispenserFormWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
+        Text(
           'Asocia un dispositivo PDAM escaneando su código QR.',
-          style: TextStyle(fontSize: 15, color: Colors.grey),
+          style: TextStyle(fontSize: 15, color: esquema.onSurfaceVariant),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sectionGap),
         TextFormField(
           controller: macController,
           readOnly: true,
           decoration: InputDecoration(
             labelText: 'Dirección MAC del Dispositivo',
-            border: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
-            ),
             suffixIcon: IconButton(
-              icon: const Icon(Icons.qr_code_scanner, color: Colors.blue),
+              icon: Icon(Icons.qr_code_scanner, color: esquema.primary),
               onPressed: onScanQr,
             ),
           ),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: AppSpacing.xxxl),
         BlocBuilder<DispenserBloc, DispenserState>(
           buildWhen: (previous, current) =>
               (previous is DispenserLoading) != (current is DispenserLoading),
@@ -47,18 +46,12 @@ class RegisterDispenserFormWidget extends StatelessWidget {
 
             return FilledButton(
               onPressed: isLoading ? null : onSubmit,
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
               child: isLoading
-                  ? const SizedBox(
+                  ? SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
-                        color: Colors.white,
+                        color: esquema.onSurfaceVariant,
                         strokeWidth: 2,
                       ),
                     )

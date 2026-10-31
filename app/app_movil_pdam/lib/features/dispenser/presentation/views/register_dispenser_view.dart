@@ -1,5 +1,7 @@
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -44,10 +46,16 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
 
   void _vincularDispositivo() {
     if (_macController.text.isEmpty || _currentSecretKey.isEmpty) {
+      final semantica = AppSemanticColors.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor, escanea el código QR primero.'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          backgroundColor: semantica.alert,
+          content: Text(
+            'Por favor, escanea el código QR primero.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: semantica.onAlert),
+          ),
         ),
       );
       return;
@@ -79,6 +87,9 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
 
   @override
   Widget build(BuildContext context) {
+    final semantica = AppSemanticColors.of(context);
+    final ancho = MediaQuery.sizeOf(context).width;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Vincular Dispensador')),
       body: MultiBlocListener(
@@ -87,9 +98,14 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
             listener: (context, state) {
               if (state is DispenserSuccess) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Dispensador asociado correctamente'),
-                    backgroundColor: Colors.green,
+                  SnackBar(
+                    backgroundColor: semantica.success,
+                    content: Text(
+                      'Dispensador asociado correctamente',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: semantica.onSuccess,
+                      ),
+                    ),
                   ),
                 );
                 context.pop();
@@ -112,7 +128,10 @@ class _RegisterDispenserViewState extends State<RegisterDispenserView> {
         ],
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageFor(ancho),
+              vertical: AppSpacing.page,
+            ),
             child: RegisterDispenserFormWidget(
               macController: _macController,
               onScanQr: _scanQrCode,

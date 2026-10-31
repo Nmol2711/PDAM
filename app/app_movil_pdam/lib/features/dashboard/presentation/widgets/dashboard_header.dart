@@ -1,5 +1,6 @@
 import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// Cabecera del panel principal (RF-04).
@@ -35,7 +36,7 @@ class DashboardHeader extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'Panel de Control Nutricional',
                 style: textTheme.bodyMedium?.copyWith(
@@ -45,10 +46,8 @@ class DashboardHeader extends StatelessWidget {
             ],
           ),
         ),
-        const SettingsEntryButton(
-          ubicacion: UbicacionEntrada.cabeceraPantalla,
-        ),
-        const SizedBox(width: 4),
+        const SettingsEntryButton(ubicacion: UbicacionEntrada.cabeceraPantalla),
+        const SizedBox(width: AppSpacing.xs),
         CircleAvatar(
           radius: 20,
           backgroundColor: colors.primaryContainer,

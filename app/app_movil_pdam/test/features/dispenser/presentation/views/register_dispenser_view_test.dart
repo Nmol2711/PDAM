@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
@@ -83,12 +84,12 @@ class _FakeDispenserRepository implements DispenserRepositories {
   ) async => const Right(true);
 
   @override
-  Future<Either<Failures, bool>> deleteDispenser(int petIf) async => const Right(true);
+  Future<Either<Failures, bool>> deleteDispenser(int petIf) async =>
+      const Right(true);
 
   @override
-  Future<Either<Failures, Dispenser>> getDispenserByPet(
-    int petId,
-  ) async => Left(LocalStorageFailures('Sin dispensador local'));
+  Future<Either<Failures, Dispenser>> getDispenserByPet(int petId) async =>
+      Left(LocalStorageFailures('Sin dispensador local'));
 
   @override
   Future<Either<Failures, Dispenser>> updateDispenserMac(
@@ -152,9 +153,8 @@ _pumpVistaRegistro(WidgetTester tester) async {
     routes: <RouteBase>[
       GoRoute(
         path: '/',
-        builder: (BuildContext context, GoRouterState state) => const Scaffold(
-          body: Center(child: Text('Detalle de la mascota')),
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            const Scaffold(body: Center(child: Text('Detalle de la mascota'))),
       ),
       GoRoute(
         path: '/registro',
@@ -168,9 +168,8 @@ _pumpVistaRegistro(WidgetTester tester) async {
       GoRoute(
         path: '/escaner',
         name: 'qr_scanner',
-        builder: (BuildContext context, GoRouterState state) => const Scaffold(
-          body: Center(child: Text('Escáner QR')),
-        ),
+        builder: (BuildContext context, GoRouterState state) =>
+            const Scaffold(body: Center(child: Text('Escáner QR'))),
       ),
     ],
   );
@@ -203,17 +202,21 @@ Future<void> _solicitarVinculacion(
 /// RNF-05: el color rojo no puede ser el único indicador del error, así que en
 /// los cuatro rechazos no debe aparecer ningún `SnackBar` rojo.
 void _esperarSinSnackBarRojo(WidgetTester tester) {
-  final List<SnackBar> barras = tester.widgetList<SnackBar>(find.byType(SnackBar)).toList();
+  final List<SnackBar> barras = tester
+      .widgetList<SnackBar>(find.byType(SnackBar))
+      .toList();
   for (final SnackBar barra in barras) {
     expect(
       barra.backgroundColor,
       isNot(Colors.red),
-      reason: 'Los rechazos se muestran con el diálogo, no con un SnackBar rojo.',
+      reason:
+          'Los rechazos se muestran con el diálogo, no con un SnackBar rojo.',
     );
   }
 }
 
-void _esperarAviso(WidgetTester tester, {
+void _esperarAviso(
+  WidgetTester tester, {
   required String titulo,
   required String mensaje,
   required IconData icono,
@@ -227,36 +230,39 @@ void _esperarAviso(WidgetTester tester, {
 }
 
 void main() {
-  testWidgets('conflicto de alta muestra el aviso de MAC ya registrada (RF-10)', (
-    WidgetTester tester,
-  ) async {
-    final ({DispenserBloc bloc, _FakeDispenserRepository repositorio}) escena =
-        await _pumpVistaRegistro(tester);
-    escena.repositorio.respuestaAlta = Left(
-      MacAlreadyRegisteredFailures(mensajeDelServidor),
-    );
+  testWidgets(
+    'conflicto de alta muestra el aviso de MAC ya registrada (RF-10)',
+    (WidgetTester tester) async {
+      final ({DispenserBloc bloc, _FakeDispenserRepository repositorio})
+      escena = await _pumpVistaRegistro(tester);
+      escena.repositorio.respuestaAlta = Left(
+        MacAlreadyRegisteredFailures(mensajeDelServidor),
+      );
 
-    await _solicitarVinculacion(tester, escena.bloc);
+      await _solicitarVinculacion(tester, escena.bloc);
 
-    _esperarAviso(
-      tester,
-      titulo: tituloMacYaRegistrada,
-      mensaje: mensajeMacYaRegistrada,
-      icono: Icons.warning_amber_rounded,
-    );
+      _esperarAviso(
+        tester,
+        titulo: tituloMacYaRegistrada,
+        mensaje: mensajeMacYaRegistrada,
+        icono: Icons.warning_amber_rounded,
+      );
 
-    await tester.tap(find.text('Entendido'));
-    await tester.pumpAndSettle();
-    expect(find.byType(AppNoticeDialog), findsNothing);
-    expect(find.byType(RegisterDispenserView), findsOneWidget);
-  });
+      await tester.tap(find.text('Entendido'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AppNoticeDialog), findsNothing);
+      expect(find.byType(RegisterDispenserView), findsOneWidget);
+    },
+  );
 
   testWidgets('dirección en uso muestra su propio aviso (RF-11)', (
     WidgetTester tester,
   ) async {
     final ({DispenserBloc bloc, _FakeDispenserRepository repositorio}) escena =
         await _pumpVistaRegistro(tester);
-    escena.repositorio.respuestaAlta = Left(MacInUseFailures(mensajeDelServidor));
+    escena.repositorio.respuestaAlta = Left(
+      MacInUseFailures(mensajeDelServidor),
+    );
 
     await _solicitarVinculacion(tester, escena.bloc);
 
@@ -268,25 +274,26 @@ void main() {
     );
   });
 
-  testWidgets('formato inválido muestra un aviso distinto al de conflicto (RF-12)', (
-    WidgetTester tester,
-  ) async {
-    final ({DispenserBloc bloc, _FakeDispenserRepository repositorio}) escena =
-        await _pumpVistaRegistro(tester);
-    escena.repositorio.respuestaAlta = Left(
-      InvalidMacFormatFailures(mensajeDelServidor),
-    );
+  testWidgets(
+    'formato inválido muestra un aviso distinto al de conflicto (RF-12)',
+    (WidgetTester tester) async {
+      final ({DispenserBloc bloc, _FakeDispenserRepository repositorio})
+      escena = await _pumpVistaRegistro(tester);
+      escena.repositorio.respuestaAlta = Left(
+        InvalidMacFormatFailures(mensajeDelServidor),
+      );
 
-    await _solicitarVinculacion(tester, escena.bloc);
+      await _solicitarVinculacion(tester, escena.bloc);
 
-    _esperarAviso(
-      tester,
-      titulo: tituloFormatoInvalido,
-      mensaje: mensajeFormatoInvalido,
-      icono: Icons.warning_amber_rounded,
-    );
-    expect(find.text(tituloMacYaRegistrada), findsNothing);
-  });
+      _esperarAviso(
+        tester,
+        titulo: tituloFormatoInvalido,
+        mensaje: mensajeFormatoInvalido,
+        icono: Icons.warning_amber_rounded,
+      );
+      expect(find.text(tituloMacYaRegistrada), findsNothing);
+    },
+  );
 
   testWidgets('falta de conexión muestra el aviso informativo (RF-13)', (
     WidgetTester tester,
@@ -308,21 +315,22 @@ void main() {
     _esperarSinSnackBarRojo(tester);
   });
 
-  testWidgets('ningún rechazo muestra datos ajenos en el aviso (RF-16, CL-14)', (
-    WidgetTester tester,
-  ) async {
-    final ({DispenserBloc bloc, _FakeDispenserRepository repositorio}) escena =
-        await _pumpVistaRegistro(tester);
-    escena.repositorio.respuestaAlta = Left(
-      MacAlreadyRegisteredFailures(mensajeDelServidor),
-    );
+  testWidgets(
+    'ningún rechazo muestra datos ajenos en el aviso (RF-16, CL-14)',
+    (WidgetTester tester) async {
+      final ({DispenserBloc bloc, _FakeDispenserRepository repositorio})
+      escena = await _pumpVistaRegistro(tester);
+      escena.repositorio.respuestaAlta = Left(
+        MacAlreadyRegisteredFailures(mensajeDelServidor),
+      );
 
-    await _solicitarVinculacion(tester, escena.bloc);
+      await _solicitarVinculacion(tester, escena.bloc);
 
-    expect(find.textContaining('RayoSecreto'), findsNothing);
-    expect(find.textContaining('dueno.secreto@pdam.test'), findsNothing);
-    expect(find.textContaining('7777'), findsNothing);
-  });
+      expect(find.textContaining('RayoSecreto'), findsNothing);
+      expect(find.textContaining('dueno.secreto@pdam.test'), findsNothing);
+      expect(find.textContaining('7777'), findsNothing);
+    },
+  );
 
   testWidgets('el alta correcta conserva su SnackBar de éxito y regresa', (
     WidgetTester tester,
@@ -344,6 +352,38 @@ void main() {
     expect(find.byType(AppNoticeDialog), findsNothing);
     expect(find.text('Dispensador asociado correctamente'), findsOneWidget);
     _esperarSinSnackBarRojo(tester);
+
+    final semantica = AppTheme.lightTheme.extension<AppSemanticColors>()!;
+    final aviso = tester.widget<SnackBar>(find.byType(SnackBar));
+    expect(aviso.backgroundColor, semantica.success);
+    final texto = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.text('Dispensador asociado correctamente'),
+      ),
+    );
+    expect(texto.style?.color, semantica.onSuccess);
+
     expect(find.text('Detalle de la mascota'), findsOneWidget);
+  });
+
+  testWidgets('RF-04: el aviso de QR pendiente usa el rol alert', (
+    WidgetTester tester,
+  ) async {
+    await _pumpVistaRegistro(tester);
+
+    await tester.tap(find.text('Vincular Dispositivo'));
+    await tester.pumpAndSettle();
+
+    final semantica = AppTheme.lightTheme.extension<AppSemanticColors>()!;
+    final aviso = tester.widget<SnackBar>(find.byType(SnackBar));
+    expect(aviso.backgroundColor, semantica.alert);
+    final texto = tester.widget<Text>(
+      find.descendant(
+        of: find.byType(SnackBar),
+        matching: find.text('Por favor, escanea el código QR primero.'),
+      ),
+    );
+    expect(texto.style?.color, semantica.onAlert);
   });
 }

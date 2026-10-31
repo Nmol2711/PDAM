@@ -1,7 +1,12 @@
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
+import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/app_cta_button.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
+import 'package:app_movil_pdam/features/pets/domain/entity/schedule.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/pet/pet_wsava_limit.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/auto_generate_schedules_uc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/schedule/create_schedule_uc.dart';
@@ -14,6 +19,7 @@ import 'package:app_movil_pdam/features/pets/presentation/views/pet_detail_view.
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dartz/dartz.dart';
 
 import '../../../dispenser/presentation/bloc/dispenser_bloc_test.dart';
 import '../bloc/schedule_bloc_test.dart';
@@ -27,16 +33,25 @@ void main() {
       getScheduleUc: GetScheduleUc(repository: repository),
       getSchedulesUc: GetSchedulesUc(repository: repository),
       getSchedulesByPetUc: GetSchedulesByPetUc(repository: repository),
-      autoGenerateSchedulesUc:
-          AutoGenerateSchedulesUc(repository: repository),
+      autoGenerateSchedulesUc: AutoGenerateSchedulesUc(repository: repository),
       updateScheduleUc: UpdateScheduleUc(repository: repository),
     );
   }
 
-  Future<void> pumpPetDetail(WidgetTester tester, Pet pet) async {
-    final scheduleBloc = buildScheduleBloc(MockScheduleRepository());
+  Future<void> pumpPetDetail(
+    WidgetTester tester,
+    Pet pet, {
+    MockDispenserRepository? dispenserRepository,
+    MockScheduleRepository? scheduleRepository,
+    double textScaler = 1.0,
+  }) async {
+    final scheduleBloc = buildScheduleBloc(
+      scheduleRepository ?? MockScheduleRepository(),
+    );
     addTearDown(scheduleBloc.close);
-    final dispenserBloc = buildDispenserBloc(MockDispenserRepository());
+    final dispenserBloc = buildDispenserBloc(
+      dispenserRepository ?? MockDispenserRepository(),
+    );
     addTearDown(dispenserBloc.close);
 
     // Los proveedores deben quedar por encima del Navigator para que el
@@ -49,6 +64,12 @@ void main() {
         ],
         child: MaterialApp(
           theme: AppTheme.lightTheme,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(textScaler)),
+            child: child!,
+          ),
           home: PetDetailView(pet: pet),
         ),
       ),
@@ -119,4 +140,194 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('Porción: 250.0 gramos'), findsOneWidget);
   });
+
+  testWidgets(
+    'RF-04 y RF-14: el dispensador activo usa primaryContainer con su '
+    'contenido',
+    (tester) async {
+      await pumpPetDetail(tester, mascotaDePrueba(TypePest.canino));
+      final esquema = AppTheme.lightTheme.colorScheme;
+
+      final titulo = tester.widget<Text>(find.text('Dispensador Vinculado'));
+      expect(titulo.style?.color, esquema.onPrimaryContainer);
+
+      final card = tester.widget<Card>(
+        find
+            .ancestor(
+              of: find.text('Dispensador Vinculado'),
+              matching: find.byType(Card),
+            )
+            .first,
+      );
+      expect(card.color, esquema.primaryContainer);
+    },
+  );
+
+  testWidgets('RF-04 y RF-14: el dispensador desactivado usa '
+      'surfaceContainerHighest con su contenido', (tester) async {
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      dispenserRepository: _InactiveDispenserRepository(),
+    );
+    final esquema = AppTheme.lightTheme.colorScheme;
+
+    final titulo = tester.widget<Text>(find.text('Dispensador Desactivado'));
+    expect(titulo.style?.color, esquema.onSurfaceVariant);
+
+    final card = tester.widget<Card>(
+      find
+          .ancestor(
+            of: find.text('Dispensador Desactivado'),
+            matching: find.byType(Card),
+          )
+          .first,
+    );
+    expect(card.color, esquema.surfaceContainerHighest);
+  });
+
+  testWidgets(
+    'RF-05: vincular dispensador sigue siendo una acción secundaria',
+    (tester) async {
+      await pumpPetDetail(
+        tester,
+        mascotaDePrueba(TypePest.canino),
+        dispenserRepository: MockDispenserRepository(shouldFail: true),
+      );
+
+      expect(find.text('Vincular Dispensador Inteligente'), findsOneWidget);
+      expect(find.byType(OutlinedButton), findsWidgets);
+      expect(find.byType(AppCtaButton), findsNothing);
+    },
+  );
+
+  testWidgets('RF-07 y RF-08: todas las tarjetas del detalle usan el tema', (
+    tester,
+  ) async {
+    final scheduleRepository = MockScheduleRepository()
+      ..schedules = <Schedule>[
+        const Schedule(id: 1, time: '08:00', amount: 100, petId: 1),
+      ];
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      scheduleRepository: scheduleRepository,
+    );
+    final esquema = AppTheme.lightTheme.colorScheme;
+
+    final tarjetas = tester.widgetList<Card>(find.byType(Card)).toList();
+    expect(tarjetas.length, greaterThanOrEqualTo(5));
+
+    for (final card in tarjetas) {
+      expect(card.elevation, isNull, reason: 'elevación local en una tarjeta');
+      final material = tester.widget<Material>(
+        find
+            .descendant(
+              of: find.byWidget(card),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(material.elevation, 0);
+      if (card.color == null) {
+        expect(material.color, esquema.surface);
+        final forma = material.shape! as RoundedRectangleBorder;
+        expect(forma.borderRadius, BorderRadius.circular(8));
+        expect(forma.side.color, esquema.outline);
+      }
+    }
+  });
+
+  testWidgets('RF-09: las tarjetas de información rellenan 16', (tester) async {
+    await pumpPetDetail(tester, mascotaDePrueba(TypePest.canino));
+
+    final rellenos = tester
+        .widgetList<Padding>(
+          find.descendant(
+            of: find.byType(Card),
+            matching: find.byType(Padding),
+          ),
+        )
+        .where(
+          (relleno) =>
+              relleno.padding == const EdgeInsets.all(AppSpacing.cardPadding),
+        );
+    expect(rellenos.length, 3);
+  });
+
+  testWidgets('RNF-02: a 320 puntos con texto al 130 % no desborda', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      textScaler: 1.3,
+    );
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('RF-09: el detalle usa gutter 16 y 24', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    for (final caso in <({double ancho, double gutter})>[
+      (ancho: 400, gutter: AppSpacing.page),
+      (ancho: 800, gutter: AppSpacing.pageWide),
+    ]) {
+      tester.view.physicalSize = Size(caso.ancho, 1000);
+      tester.view.devicePixelRatio = 1.0;
+
+      final scheduleRepository = MockScheduleRepository()
+        ..schedules = <Schedule>[
+          const Schedule(id: 1, time: '08:00', amount: 100, petId: 1),
+        ];
+      await pumpPetDetail(
+        tester,
+        mascotaDePrueba(TypePest.canino),
+        scheduleRepository: scheduleRepository,
+      );
+
+      final rellenos = tester.widgetList<Padding>(
+        find.ancestor(of: find.text('Edad'), matching: find.byType(Padding)),
+      );
+      expect(
+        rellenos.any(
+          (relleno) =>
+              relleno.padding == EdgeInsets.symmetric(horizontal: caso.gutter),
+        ),
+        isTrue,
+        reason: 'sección sin gutter ${caso.ancho}',
+      );
+
+      final lista = tester.widget<ListView>(find.byType(ListView).first);
+      expect(
+        lista.padding,
+        EdgeInsets.symmetric(horizontal: caso.gutter),
+        reason: 'horarios sin gutter ${caso.ancho}',
+      );
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    }
+  });
+}
+
+class _InactiveDispenserRepository extends MockDispenserRepository {
+  @override
+  Future<Either<Failures, Dispenser>> getDispenserByPet(int petId) async {
+    return Right(
+      Dispenser(
+        id: 1,
+        macAddress: 'AA:BB:CC:DD:EE:FF',
+        isActive: false,
+        petId: petId,
+      ),
+    );
+  }
 }

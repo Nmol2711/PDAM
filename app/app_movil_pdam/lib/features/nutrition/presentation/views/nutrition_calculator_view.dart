@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/nutrition/presentation/bloc/nutrition_cubit.dart';
 import 'package:app_movil_pdam/features/nutrition/presentation/widgets/nutrition_result_card.dart';
 import 'package:app_movil_pdam/features/nutrition/presentation/widgets/nutrition_snack_alert.dart';
@@ -14,20 +16,24 @@ class NutritionCalculatorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     return Scaffold(
-      appBar: AppBar(title: const Text('Calculadora Nutricional'), elevation: 0),
+      appBar: AppBar(title: const Text('Calculadora Nutricional')),
       body: BlocBuilder<NutritionCubit, NutritionState>(
         builder: (context, state) {
           final form = state.form;
           final cubit = context.read<NutritionCubit>();
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageFor(ancho),
+              vertical: AppSpacing.page,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const _SectionHeader('1. Información de la mascota y alimento'),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<String>(
                   key: const ValueKey('nutrition_species'),
                   value: form.species,
@@ -38,7 +44,7 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateSpecies(v);
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
                 TextFormField(
                   key: const ValueKey('nutrition_body_weight'),
                   initialValue: form.bodyWeight,
@@ -51,7 +57,7 @@ class NutritionCalculatorView extends StatelessWidget {
                     Icons.monitor_weight_outlined,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
                 TextFormField(
                   key: const ValueKey('nutrition_caloric_density'),
                   initialValue: form.caloricDensity,
@@ -64,9 +70,9 @@ class NutritionCalculatorView extends StatelessWidget {
                     Icons.local_fire_department_outlined,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpacing.sectionGap),
                 const _SectionHeader('2. Condición física corporal'),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<int>(
                   key: const ValueKey('nutrition_bcs'),
                   value: form.bcs,
@@ -80,7 +86,7 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateBcs(v);
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
                 DropdownButtonFormField<String>(
                   key: const ValueKey('nutrition_mcs'),
                   value: form.mcs,
@@ -94,9 +100,9 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateMcs(v);
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpacing.sectionGap),
                 const _SectionHeader('3. Actividad y reproducción'),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<String>(
                   key: const ValueKey('nutrition_activity'),
                   value: form.activityLevel,
@@ -110,7 +116,7 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateActivityLevel(v);
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
                 DropdownButtonFormField<String>(
                   key: const ValueKey('nutrition_reproductive_status'),
                   value: form.reproductiveStatus,
@@ -124,7 +130,7 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateReproductiveStatus(v);
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
                 DropdownButtonFormField<String>(
                   key: const ValueKey('nutrition_life_stage'),
                   value: form.lifeStage,
@@ -135,9 +141,9 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateLifeStage(v);
                   },
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppSpacing.sectionGap),
                 const _SectionHeader('4. Comidas y snacks'),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppSpacing.md),
                 DropdownButtonFormField<int>(
                   key: const ValueKey('nutrition_meals_per_day'),
                   value: form.mealsPerDay,
@@ -151,7 +157,7 @@ class NutritionCalculatorView extends StatelessWidget {
                     if (v != null) cubit.updateMealsPerDay(v);
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
                 TextFormField(
                   key: const ValueKey('nutrition_snacks_kcal'),
                   initialValue: form.snacksKcal,
@@ -164,27 +170,21 @@ class NutritionCalculatorView extends StatelessWidget {
                     Icons.fastfood_outlined,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: AppSpacing.xxxl),
                 FilledButton.icon(
                   onPressed: cubit.calculate,
                   icon: const Icon(Icons.calculate_outlined),
                   label: const Text('Calcular', style: TextStyle(fontSize: 16)),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                 ),
                 if (state.errorMessage != null) ...[
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AppSpacing.xl),
                   _ErrorBanner(message: state.errorMessage!),
                 ],
                 if (state.result != null) ...[
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.sectionGap),
                   if (state.result!.exceedsSnackLimit) ...[
                     NutritionSnackAlert(result: state.result!),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.md),
                   ],
                   NutritionResultCard(result: state.result!),
                 ],
@@ -198,13 +198,7 @@ class NutritionCalculatorView extends StatelessWidget {
 }
 
 InputDecoration _decoration(String label, IconData icon) {
-  return InputDecoration(
-    labelText: label,
-    prefixIcon: Icon(icon),
-    border: const OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-    ),
-  );
+  return InputDecoration(labelText: label, prefixIcon: Icon(icon));
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -236,16 +230,16 @@ class _ErrorBanner extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: colors.errorContainer,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.banner),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.error_outline, color: colors.onErrorContainer),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
               message,
@@ -283,7 +277,10 @@ const List<DropdownMenuItem<String>> _reproductiveItems = [
 ];
 
 const List<DropdownMenuItem<String>> _lifeStageItems = [
-  DropdownMenuItem(value: 'crecimiento', child: Text('Crecimiento (< 12 meses)')),
+  DropdownMenuItem(
+    value: 'crecimiento',
+    child: Text('Crecimiento (< 12 meses)'),
+  ),
   DropdownMenuItem(value: 'adulto', child: Text('Adulto')),
 ];
 
@@ -292,8 +289,8 @@ final List<DropdownMenuItem<int>> _bcsItems = List.generate(9, (index) {
   final label = value == 5
       ? 'Ideal'
       : value < 5
-          ? 'Delgado'
-          : 'Sobrepeso';
+      ? 'Delgado'
+      : 'Sobrepeso';
   return DropdownMenuItem(value: value, child: Text('$value - $label'));
 });
 

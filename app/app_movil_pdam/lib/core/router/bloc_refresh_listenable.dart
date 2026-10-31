@@ -15,7 +15,7 @@ class BlocRefreshListenable<B extends BlocBase<S>, S> extends ChangeNotifier {
     // 2. Escuchamos de forma permanente todos los cambios futuros
     _subscription = bloc.stream.listen((state) {
       debugPrint(
-        "🔔 [Puente Router] El Bloc emitió un estado. Notificando a GoRouter...",
+        "[Puente Router] El Bloc emitió un estado. Notificando a GoRouter...",
       );
       notifyListeners();
     });

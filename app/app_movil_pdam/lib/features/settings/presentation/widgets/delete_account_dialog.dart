@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_field.dart';
 import 'package:app_movil_pdam/features/account/domain/utils/account_validators.dart';
 import 'package:app_movil_pdam/features/account/presentation/bloc/account_bloc.dart';
 import 'package:flutter/material.dart';
@@ -64,7 +66,7 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
                     MensajesCuenta.avisoIrreversible,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   // RF-16: el diálogo enumera los datos que se pierden, además
                   // del aviso que ya muestra la pantalla.
                   Text(
@@ -72,17 +74,18 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
                     key: const Key('delete_account_dialog_data'),
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Text(
                     MensajesCuenta.indicacionPasswordActual,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
+                  const SizedBox(height: AppSpacing.lg),
+                  PasswordVisibilityField(
                     key: const Key('delete_account_password'),
                     controller: _password,
                     enabled: !state.isSubmitting,
-                    obscureText: true,
+                    label: MensajesCuenta.passwordActual,
+                    errorText: errorCampo,
                     autocorrect: false,
                     enableSuggestions: false,
                     textInputAction: TextInputAction.done,
@@ -99,11 +102,6 @@ class _DeleteAccountDialogState extends State<DeleteAccountDialog> {
                     onSubmitted: (_) {
                       if (puedeConfirmar) _confirmar();
                     },
-                    decoration: InputDecoration(
-                      labelText: MensajesCuenta.passwordActual,
-                      border: const OutlineInputBorder(),
-                      errorText: errorCampo,
-                    ),
                   ),
                 ],
               ),
