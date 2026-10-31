@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app_movil_pdam/core/di/injection_container.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/bloc/dashboard_cubit.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/widgets/dashboard_header.dart';
@@ -15,10 +17,10 @@ class DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     return BlocProvider(
       create: (_) => sl<DashboardCubit>()..loadSummary(),
       child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: BlocBuilder<DashboardCubit, DashboardState>(
           builder: (context, state) {
             int totalPets = 0;
@@ -47,7 +49,10 @@ class DashboardView extends StatelessWidget {
                 },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pageFor(ancho),
+                    vertical: AppSpacing.page,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -57,7 +62,7 @@ class DashboardView extends StatelessWidget {
                           context.read<AuthBloc>().add(AuthLogoutPressed());
                         },
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: AppSpacing.sectionGap),
 
                       DashboardHeroCard(
                         totalFeedings: pendingFeedings + completedFeedings,
@@ -67,10 +72,10 @@ class DashboardView extends StatelessWidget {
                           context.go('/logs');
                         },
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: AppSpacing.sectionGap),
 
                       _buildNutritionEntry(context),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: AppSpacing.sectionGap),
 
                       DashboardMetricsGrid(
                         totalPets: totalPets,
@@ -78,13 +83,13 @@ class DashboardView extends StatelessWidget {
                         foodDispensedToday: foodDispensed,
                         foodTargetToday: foodTarget,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: AppSpacing.sectionGap),
 
                       DashboardChartCard(
                         weeklyDispensed: weeklyDispensed,
                         dailyTarget: foodTarget,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: AppSpacing.sectionGap),
 
                       _buildQuickActions(context),
                     ],
@@ -111,23 +116,22 @@ class DashboardView extends StatelessWidget {
   /// La vista solo presenta y navega: el cálculo vive en `NutritionCubit`.
   Widget _buildNutritionEntry(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final borderRadius = BorderRadius.circular(20);
 
     return Material(
       color: colors.primaryContainer,
-      borderRadius: borderRadius,
+      borderRadius: AppRadii.cardRadius,
       child: InkWell(
         onTap: () => context.pushNamed('nutrition_calculator'),
-        borderRadius: borderRadius,
+        borderRadius: AppRadii.cardRadius,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: colors.primary,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: AppRadii.controlRadius,
                 ),
                 child: Icon(
                   Icons.calculate_outlined,
@@ -135,7 +139,7 @@ class DashboardView extends StatelessWidget {
                   size: 24,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,7 +152,7 @@ class DashboardView extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       'Calcula la ración diaria de tu mascota según WSAVA',
                       style: TextStyle(
@@ -170,6 +174,7 @@ class DashboardView extends StatelessWidget {
   }
 
   Widget _buildQuickActions(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -177,36 +182,36 @@ class DashboardView extends StatelessWidget {
           "Acciones Rápidas",
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Row(
           children: [
             Expanded(
               child: _QuickActionCard(
                 label: 'Nueva Mascota',
                 icon: Icons.add_circle_outline,
-                color: const Color(0xFF00C853),
+                color: colors.primary,
                 onTap: () {
                   context.push('/create_pet');
                 },
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _QuickActionCard(
                 label: 'Nuevo Horario',
                 icon: Icons.schedule_outlined,
-                color: const Color(0xFF0066FF),
+                color: colors.primary,
                 onTap: () {
                   _showSelectPetDialog(context);
                 },
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _QuickActionCard(
                 label: 'Dispositivos',
                 icon: Icons.bluetooth_outlined,
-                color: const Color(0xFF6C63FF),
+                color: colors.primary,
                 onTap: () {
                   context.push('/pets');
                 },
@@ -235,7 +240,9 @@ class DashboardView extends StatelessWidget {
                 }
                 if (state is PetLoaded) {
                   if (state.pets.isEmpty) {
-                    return const Text("No hay mascotas registradas. Registra una mascota primero.");
+                    return const Text(
+                      "No hay mascotas registradas. Registra una mascota primero.",
+                    );
                   }
                   return ListView.builder(
                     shrinkWrap: true,
@@ -245,7 +252,9 @@ class DashboardView extends StatelessWidget {
                       return ListTile(
                         leading: const CircleAvatar(child: Icon(Icons.pets)),
                         title: Text(pet.name),
-                        subtitle: Text("Especie: ${pet.species.name} • ${pet.weight} kg"),
+                        subtitle: Text(
+                          "Especie: ${pet.species.name} • ${pet.weight} kg",
+                        ),
                         onTap: () {
                           Navigator.pop(dialogContext);
                           context.pushNamed('guided_schedule_form', extra: pet);
@@ -287,23 +296,26 @@ class _QuickActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: AppRadii.cardRadius,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+        padding: const EdgeInsets.symmetric(
+          vertical: AppSpacing.lg,
+          horizontal: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadii.cardRadius,
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: color, size: 24),
-            const SizedBox(height: 6),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               label,
               style: TextStyle(
-                color: color,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
                 fontSize: 11,
               ),

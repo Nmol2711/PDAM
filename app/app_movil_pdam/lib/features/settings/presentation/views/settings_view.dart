@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/core/theme/theme_cubit.dart';
 import 'package:app_movil_pdam/features/account/domain/entity/appearance_mode.dart';
 import 'package:app_movil_pdam/features/account/presentation/utils/appearance_mode_theme.dart';
@@ -18,6 +19,7 @@ class SettingsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     return Scaffold(
       appBar: AppBar(title: const Text('Configuración')),
       body: SafeArea(
@@ -26,14 +28,14 @@ class SettingsView extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 640),
             child: ListView(
               key: const Key('settings_scroll'),
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.pageFor(ancho),
+                vertical: AppSpacing.page,
+              ),
               children: <Widget>[
                 Card(
                   margin: EdgeInsets.zero,
                   clipBehavior: Clip.antiAlias,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
                   child: Column(
                     children: <Widget>[
                       SettingsMenuTile(
@@ -41,19 +43,28 @@ class SettingsView extends StatelessWidget {
                         title: 'Perfil',
                         onTap: () => context.push('/settings/profile'),
                       ),
-                      const Divider(height: 1, indent: 72),
+                      const Divider(
+                        height: 1,
+                        indent: SettingsMenuTile.dividerIndent,
+                      ),
                       SettingsMenuTile(
                         icon: Icons.edit_outlined,
                         title: 'Actualización de perfil',
                         onTap: () => context.push('/settings/update'),
                       ),
-                      const Divider(height: 1, indent: 72),
+                      const Divider(
+                        height: 1,
+                        indent: SettingsMenuTile.dividerIndent,
+                      ),
                       SettingsMenuTile(
                         icon: Icons.delete_outline,
                         title: 'Eliminación de cuenta',
                         onTap: () => context.push('/settings/delete'),
                       ),
-                      const Divider(height: 1, indent: 72),
+                      const Divider(
+                        height: 1,
+                        indent: SettingsMenuTile.dividerIndent,
+                      ),
                       BlocBuilder<ThemeCubit, ThemeMode>(
                         builder: (context, themeMode) {
                           final modo = AppearanceMode.desdeCodigo(

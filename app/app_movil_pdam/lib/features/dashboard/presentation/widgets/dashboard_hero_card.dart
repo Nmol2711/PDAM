@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 class DashboardHeroCard extends StatelessWidget {
@@ -16,40 +18,35 @@ class DashboardHeroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: const Color(0xFF0066FF),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0066FF).withValues(alpha: 0.3),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: esquema.primary,
+        borderRadius: AppRadii.cardRadius,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Alimentaciones para hoy",
             style: TextStyle(
-              color: Colors.white70,
+              color: esquema.onPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
                 "$pendingFeedings",
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: esquema.onPrimary,
                   fontSize: 48,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -1,
@@ -57,24 +54,24 @@ class DashboardHeroCard extends StatelessWidget {
               ),
               Flexible(
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
                         "$completedFeedings realizadas de $totalFeedings",
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: esquema.onPrimary,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
                         textAlign: TextAlign.end,
                       ),
-                      const SizedBox(height: 2),
-                      const Text(
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
                         "porciones pendientes",
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: esquema.onPrimary,
                           fontSize: 12,
                         ),
                         textAlign: TextAlign.end,
@@ -85,45 +82,66 @@ class DashboardHeroCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: const [
-                    Icon(Icons.access_time_filled, color: Colors.white, size: 16),
-                    SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        "Dispensador activo y sincronizado",
-                        style: TextStyle(color: Colors.white, fontSize: 11),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              TextButton(
-                onPressed: onLogsPressed,
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF0066FF),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  "Ver Historial",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: AppSpacing.lg),
+          _estadoYAccion(esquema),
         ],
       ),
+    );
+  }
+
+  Widget _estadoYAccion(ColorScheme esquema) {
+    final estado = Row(
+      children: [
+        Icon(Icons.access_time_filled, color: esquema.onPrimary, size: 16),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            "Dispensador activo y sincronizado",
+            style: TextStyle(color: esquema.onPrimary, fontSize: 11),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+    final boton = TextButton(
+      onPressed: onLogsPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: esquema.onPrimary,
+        foregroundColor: esquema.primary,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+      ),
+      child: const Text(
+        "Ver Historial",
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // En pantallas estrechas el botón baja a su propia línea para no
+        // desbordar con texto ampliado (RNF-02).
+        if (constraints.maxWidth < 300) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              estado,
+              const SizedBox(height: AppSpacing.sm),
+              Align(alignment: Alignment.centerRight, child: boton),
+            ],
+          );
+        }
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(child: estado),
+            const SizedBox(width: AppSpacing.sm),
+            boton,
+          ],
+        );
+      },
     );
   }
 }

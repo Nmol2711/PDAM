@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 // Componente de aviso reutilizable (RF-09 · RNF-01 a RNF-07 · CL-13).
@@ -60,8 +61,8 @@ class AppNoticeDialog extends StatelessWidget {
   /// defecto para aprovechar el ancho en pantallas estrechas; en las anchas manda
   /// [anchoMaximoDialogo] (CL-13, RNF-06).
   static const EdgeInsets margenPantalla = EdgeInsets.symmetric(
-    horizontal: 20,
-    vertical: 24,
+    horizontal: AppSpacing.xl,
+    vertical: AppSpacing.xxl,
   );
 
   /// Altura mínima de la acción principal: objetivo táctil de 48 dp (RNF-07).
@@ -126,15 +127,15 @@ class AppNoticeDialog extends StatelessWidget {
       scrollable: true,
       contentPadding: const EdgeInsets.fromLTRB(
         margenContenido,
-        16,
+        AppSpacing.lg,
         margenContenido,
-        24,
+        AppSpacing.sectionGap,
       ),
       titlePadding: const EdgeInsets.fromLTRB(
         margenContenido,
-        24,
+        AppSpacing.sectionGap,
         margenContenido,
-        8,
+        AppSpacing.sm,
       ),
       icon: Semantics(
         container: true,

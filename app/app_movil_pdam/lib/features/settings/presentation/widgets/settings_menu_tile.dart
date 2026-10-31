@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 
 /// Fila del menú de configuración (RF-02, RF-03).
 ///
@@ -6,6 +8,11 @@ import 'package:flutter/material.dart';
 /// título puede ocupar varias líneas para que el escalado de texto no recorte
 /// nada (RNF-02).
 class SettingsMenuTile extends StatelessWidget {
+  /// Lado del contenedor del icono y sangría derivada para los divisores.
+  static const double iconContainerSize = 40;
+  static const double dividerIndent =
+      AppSpacing.lg + iconContainerSize + AppSpacing.lg;
+
   final IconData icon;
   final String title;
   final String? subtitle;
@@ -32,26 +39,29 @@ class SettingsMenuTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
         child: Row(
           children: <Widget>[
             Container(
-              width: 40,
-              height: 40,
+              width: iconContainerSize,
+              height: iconContainerSize,
               decoration: BoxDecoration(
                 color: colors.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: AppRadii.controlRadius,
               ),
               child: Icon(icon, size: 22, color: colors.onPrimaryContainer),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: AppSpacing.lg),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(title, style: textTheme.titleMedium),
                   if (subtitle != null) ...<Widget>[
-                    const SizedBox(height: 2),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       subtitle!,
                       style: textTheme.bodySmall?.copyWith(
@@ -62,7 +72,7 @@ class SettingsMenuTile extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             Icon(trailingIcon, color: colors.onSurfaceVariant),
           ],
         ),

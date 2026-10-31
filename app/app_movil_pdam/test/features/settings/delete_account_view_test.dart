@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/network/session_events.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_field.dart';
 import 'package:app_movil_pdam/core/router/bloc_refresh_listenable.dart';
 import 'package:app_movil_pdam/core/services/account_local_cleaner.dart';
 import 'package:app_movil_pdam/core/services/pending_deletion_store.dart';
@@ -291,6 +292,13 @@ void main() {
   FilledButton botonConfirmar(WidgetTester tester) => tester
       .widget<FilledButton>(find.byKey(const Key('delete_account_confirm')));
 
+  TextField campoPassword(WidgetTester tester) => tester.widget<TextField>(
+    find.descendant(
+      of: find.byKey(const Key('delete_account_password')),
+      matching: find.byType(TextField),
+    ),
+  );
+
   testWidgets('RF-16: muestra la advertencia, el listado literal y la acción '
       'que abre el diálogo', (tester) async {
     await pumpDelete(tester);
@@ -343,12 +351,7 @@ void main() {
       ),
       findsNothing,
     );
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('delete_account_password')))
-          .obscureText,
-      isTrue,
-    );
+    expect(campoPassword(tester).obscureText, isTrue);
     expect(h.repo.llamadasBaja, 0);
   });
 
@@ -380,10 +383,27 @@ void main() {
     await tester.pumpAndSettle();
     await abrirDialogo(tester);
 
-    final campo = tester.widget<TextField>(
-      find.byKey(const Key('delete_account_password')),
-    );
+    final campo = campoPassword(tester);
     expect(campo.controller?.text, isEmpty);
+  });
+
+  testWidgets('RF-10: la contraseña actual usa el ojo compartido', (
+    tester,
+  ) async {
+    await pumpDelete(tester);
+    await abrirDialogo(tester);
+
+    expect(find.byType(PasswordVisibilityField), findsOneWidget);
+
+    await escribir(tester, 'claveActual');
+    expect(find.byTooltip('Mostrar contraseña'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Mostrar contraseña'));
+    await tester.pump();
+
+    expect(find.byTooltip('Ocultar contraseña'), findsOneWidget);
+    expect(campoPassword(tester).obscureText, isFalse);
+    expect(campoPassword(tester).controller?.text, 'claveActual');
   });
 
   testWidgets('RF-17: invalid_password se muestra junto al campo y no cierra '

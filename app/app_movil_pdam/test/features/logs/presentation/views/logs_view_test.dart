@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/features/logs/domain/entity/activity_log.dart';
 import 'package:app_movil_pdam/features/logs/domain/entity/log_filters.dart';
@@ -11,6 +12,7 @@ import 'package:app_movil_pdam/features/logs/domain/use_case/get_log_catalog_uc.
 import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/views/logs_view.dart';
+import 'package:app_movil_pdam/features/logs/presentation/widgets/log_pagination_bar.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
 import 'package:app_movil_pdam/features/pets/domain/repositories/pets_repositories.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/pet/create_pet_uc.dart';
@@ -192,12 +194,10 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> pumpView(
+  Future<void> montarVista(
     WidgetTester tester, {
-    bool settle = true,
     double textScaler = 1.0,
   }) async {
-    crearBlocs();
     await tester.pumpWidget(
       MultiBlocProvider(
         providers: [
@@ -218,9 +218,60 @@ void main() {
         ),
       ),
     );
+  }
+
+  /// Monta la vista dentro de un `IndexedStack` con `TickerMode`, como hace
+  /// `StatefulShellRoute.indexedStack`: la rama oculta sigue montada.
+  Future<void> montarShell(
+    WidgetTester tester,
+    ValueNotifier<bool> visible,
+  ) async {
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<LogBloc>.value(value: logBloc!),
+          BlocProvider<PetBloc>.value(value: petBloc!),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: ValueListenableBuilder<bool>(
+            valueListenable: visible,
+            builder: (context, activa, child) => IndexedStack(
+              index: activa ? 1 : 0,
+              children: [
+                const Scaffold(body: Center(child: Text('Otra pestaña'))),
+                TickerMode(enabled: activa, child: const LogsView()),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> pumpView(
+    WidgetTester tester, {
+    bool settle = true,
+    double textScaler = 1.0,
+    Size? tamano,
+  }) async {
+    if (tamano != null) {
+      tester.view.physicalSize = tamano;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+    }
+    crearBlocs();
+    await montarVista(tester, textScaler: textScaler);
     if (settle) {
       await asentar(tester);
     }
+  }
+
+  /// Abre el panel plegable de filtros antes de interactuar con sus campos.
+  Future<void> abrirFiltros(WidgetTester tester) async {
+    await tester.tap(find.byKey(const Key('logs_filters_toggle')));
+    await tester.pumpAndSettle();
   }
 
   group('lista del historial (RF-33, RF-41)', () {
@@ -299,6 +350,7 @@ void main() {
       tester,
     ) async {
       await pumpView(tester);
+      await abrirFiltros(tester);
 
       expect(find.text('Mascota'), findsOneWidget);
       expect(find.text('Tipo de evento'), findsOneWidget);
@@ -311,6 +363,7 @@ void main() {
       'el filtro por mascota emite el cambio y vuelve a la página 1',
       (tester) async {
         await pumpView(tester);
+        await abrirFiltros(tester);
 
         await tester.tap(find.text('Todas las mascotas'));
         await tester.pumpAndSettle();
@@ -323,6 +376,7 @@ void main() {
 
     testWidgets('el filtro por tipo de evento emite el cambio', (tester) async {
       await pumpView(tester);
+      await abrirFiltros(tester);
 
       await tester.tap(find.text('Todos los tipos'));
       await tester.pumpAndSettle();
@@ -334,6 +388,7 @@ void main() {
 
     testWidgets('el filtro por resultado emite el cambio', (tester) async {
       await pumpView(tester);
+      await abrirFiltros(tester);
 
       await tester.tap(find.text('Todos los resultados'));
       await tester.pumpAndSettle();
@@ -345,6 +400,7 @@ void main() {
 
     testWidgets('el botón de rango de fechas abre el selector', (tester) async {
       await pumpView(tester);
+      await abrirFiltros(tester);
 
       await tester.tap(find.text('Rango de fechas'));
       await tester.pumpAndSettle();
@@ -364,6 +420,7 @@ void main() {
       await pumpView(tester);
       logBloc!.add(const LogsRequested(filters: LogFilters(petId: 1), page: 3));
       await asentar(tester);
+      await abrirFiltros(tester);
 
       await tester.tap(find.text('Limpiar filtros'));
       await asentar(tester);
@@ -542,12 +599,16 @@ void main() {
       );
 
       await pumpView(tester, textScaler: 1.3);
+      await abrirFiltros(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Limpiar filtros'), findsOneWidget);
       expect(find.text('Página 1 de 3'), findsOneWidget);
       expect(find.text('Comida dispensada'), findsWidgets);
-      expect(find.text('Fallo del sensor durante la dispensación'), findsOneWidget);
+      expect(
+        find.text('Fallo del sensor durante la dispensación'),
+        findsOneWidget,
+      );
     });
 
     testWidgets(
@@ -589,6 +650,7 @@ void main() {
       );
 
       await pumpView(tester);
+      await abrirFiltros(tester);
 
       expect(tester.takeException(), isNull);
       expect(find.text('Limpiar filtros'), findsOneWidget);
@@ -642,6 +704,235 @@ void main() {
       await pumpView(tester);
 
       expect(find.byTooltip('Abrir configuración'), findsOneWidget);
+    });
+  });
+
+  group('panel de filtros plegable (RF-11 y RF-12)', () {
+    testWidgets('empieza plegado y solo muestra el botón Filtros', (
+      tester,
+    ) async {
+      await pumpView(tester);
+
+      expect(find.byKey(const Key('logs_filters_toggle')), findsOneWidget);
+      expect(find.text('Filtros'), findsOneWidget);
+      expect(find.text('Mascota'), findsNothing);
+      expect(find.text('Tipo de evento'), findsNothing);
+      expect(find.text('Resultado'), findsNothing);
+      expect(find.text('Rango de fechas'), findsNothing);
+      expect(find.text('Limpiar filtros'), findsNothing);
+      expect(find.byType(Badge), findsNothing);
+    });
+
+    testWidgets('desplegar y plegar no recarga ni altera los filtros', (
+      tester,
+    ) async {
+      await pumpView(tester);
+      final llamadas = repository.calls;
+      final filtros = logBloc!.state.filters;
+
+      await abrirFiltros(tester);
+      expect(find.text('Mascota'), findsOneWidget);
+      expect(find.text('Limpiar filtros'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('logs_filters_toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Mascota'), findsNothing);
+      expect(repository.calls, llamadas);
+      expect(logBloc!.state.filters, filtros);
+    });
+
+    testWidgets('permanece abierto al aplicar un filtro', (tester) async {
+      await pumpView(tester);
+      await abrirFiltros(tester);
+
+      await tester.tap(find.text('Todas las mascotas'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Milo').last);
+      await asentar(tester);
+
+      expect(find.text('Mascota'), findsOneWidget);
+      expect(find.text('Limpiar filtros'), findsOneWidget);
+    });
+
+    testWidgets('permanece abierto al cambiar de página', (tester) async {
+      repository.page = LogPage(
+        items: [_log()],
+        total: 120,
+        page: 1,
+        pageSize: 50,
+      );
+      await pumpView(tester);
+      await abrirFiltros(tester);
+
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.chevron_right));
+      await asentar(tester);
+
+      expect(find.text('Mascota'), findsOneWidget);
+    });
+
+    testWidgets('permanece abierto al recargar', (tester) async {
+      await pumpView(tester);
+      await abrirFiltros(tester);
+
+      logBloc!.add(const LogsRequested());
+      await asentar(tester);
+
+      expect(find.text('Mascota'), findsOneWidget);
+    });
+
+    testWidgets('permanece abierto al reintentar tras un error', (
+      tester,
+    ) async {
+      repository.failure = ServerFailures('Servidor no disponible');
+      await pumpView(tester);
+      await abrirFiltros(tester);
+      expect(find.text('Reintentar'), findsOneWidget);
+
+      repository.failure = null;
+      repository.page = LogPage(
+        items: [_log()],
+        total: 1,
+        page: 1,
+        pageSize: 50,
+      );
+      await tester.tap(find.text('Reintentar'));
+      await asentar(tester);
+
+      expect(find.text('Mascota'), findsOneWidget);
+    });
+
+    testWidgets('se pliega al volver a la pestaña con el shell real', (
+      tester,
+    ) async {
+      crearBlocs();
+      final visible = ValueNotifier<bool>(true);
+      addTearDown(visible.dispose);
+
+      await montarShell(tester, visible);
+      await asentar(tester);
+      await abrirFiltros(tester);
+      expect(find.text('Mascota'), findsOneWidget);
+
+      final llamadas = repository.calls;
+      final filtros = repository.lastFilters;
+
+      // La pestaña deja de estar activa: TickerMode pasa a false y la rama
+      // sigue montada, como en StatefulShellRoute.indexedStack.
+      visible.value = false;
+      await tester.pumpAndSettle();
+      visible.value = true;
+      await tester.pumpAndSettle();
+
+      expect(find.text('Filtros'), findsOneWidget);
+      expect(find.text('Mascota'), findsNothing);
+      expect(find.text('Limpiar filtros'), findsNothing);
+      expect(repository.calls, llamadas);
+      expect(repository.lastFilters, filtros);
+    });
+
+    testWidgets('los filtros y el botón usan el radio 8 del tema', (
+      tester,
+    ) async {
+      await pumpView(tester);
+      await abrirFiltros(tester);
+
+      final decorador = tester.widget<InputDecorator>(
+        find.descendant(
+          of: find.byType(DropdownButtonFormField<int?>).first,
+          matching: find.byType(InputDecorator),
+        ),
+      );
+      final borde = decorador.decoration.border! as OutlineInputBorder;
+      expect(borde.borderRadius, BorderRadius.circular(8));
+
+      final rango = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Rango de fechas'),
+      );
+      expect(rango.style?.shape, isNull);
+      final forma =
+          AppTheme.lightTheme.outlinedButtonTheme.style!.shape!.resolve(
+                <WidgetState>{},
+              )!
+              as RoundedRectangleBorder;
+      expect(forma.borderRadius, BorderRadius.circular(8));
+
+      final boton = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Filtros'),
+      );
+      expect(boton.style, isNull);
+    });
+
+    testWidgets('a 320 con texto 1.3 el panel plegado no desborda', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await pumpView(tester, textScaler: 1.3);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('Filtros'), findsOneWidget);
+      expect(find.text('Mascota'), findsNothing);
+    });
+  });
+
+  group('gutter exterior (RF-09)', () {
+    Future<void> comprobarGutter(
+      WidgetTester tester, {
+      required Size tamano,
+      required double gutter,
+    }) async {
+      repository.page = LogPage(
+        items: [_log()],
+        total: 1,
+        page: 1,
+        pageSize: 50,
+      );
+      await pumpView(tester, tamano: tamano);
+
+      final tarjeta = tester.widget<Card>(find.byType(Card).first);
+      expect(
+        tarjeta.margin,
+        EdgeInsets.symmetric(vertical: AppSpacing.xs, horizontal: gutter),
+        reason: 'tarjeta a ${tamano.width}',
+      );
+
+      final paginacion = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(LogPaginationBar),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect(
+        paginacion.padding,
+        EdgeInsets.symmetric(horizontal: gutter, vertical: AppSpacing.xs),
+        reason: 'paginación a ${tamano.width}',
+      );
+    }
+
+    testWidgets('a 400 puntos las tarjetas y la paginación usan 16', (
+      tester,
+    ) async {
+      await comprobarGutter(
+        tester,
+        tamano: const Size(400, 900),
+        gutter: AppSpacing.page,
+      );
+    });
+
+    testWidgets('a 800 puntos las tarjetas y la paginación usan 24', (
+      tester,
+    ) async {
+      await comprobarGutter(
+        tester,
+        tamano: const Size(800, 900),
+        gutter: AppSpacing.pageWide,
+      );
     });
   });
 }

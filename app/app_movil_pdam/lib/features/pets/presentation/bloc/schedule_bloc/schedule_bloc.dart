@@ -76,7 +76,7 @@ class ScheduleBloc extends Bloc<ScheduleEvent, ScheduleState> {
     ScheduleCreateMultipleRequested event,
     Emitter<ScheduleState> emit,
   ) async {
-    emit(ScheduleLoading()); // 💡 Un solo estado de carga al inicio
+    emit(ScheduleLoading()); // Un solo estado de carga al inicio
 
     // 1. Mapeamos a una lista de Futures tradicionales
     final futures = event.times

@@ -34,7 +34,7 @@ class ScheduleRepositoryImpl implements ScheduleRepositories {
       await _localScheduleDatasource.saveLocalSchedule(result, isSynced: true);
       return Right(result);
     } catch (e) {
-      // 🔄 OFFLINE FALLBACK: Crear localmente si el servidor está apagado
+      // OFFLINE FALLBACK: Crear localmente si el servidor está apagado
       try {
         final localSchedule = Schedule(
           id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
@@ -95,7 +95,7 @@ class ScheduleRepositoryImpl implements ScheduleRepositories {
       final localSchedules = await _localScheduleDatasource.getLocalSchedules(petId: petId);
       return Right(ScheduleFetchResult(schedules: localSchedules, isOffline: false));
     } catch (e) {
-      // 🔄 OFFLINE FALLBACK: Si falla la red, leemos de Isar
+      // OFFLINE FALLBACK: Si falla la red, leemos de Isar
       try {
         final localSchedules = await _localScheduleDatasource.getLocalSchedules(petId: petId);
         return Right(ScheduleFetchResult(schedules: localSchedules, isOffline: true));

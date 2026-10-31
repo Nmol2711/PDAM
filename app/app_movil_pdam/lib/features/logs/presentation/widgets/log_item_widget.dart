@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/logs/domain/entity/activity_log.dart';
 import 'package:app_movil_pdam/features/logs/domain/utils/log_time_utils.dart';
 import 'package:flutter/material.dart';
@@ -16,14 +18,12 @@ class LogItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final colores = Theme.of(context).colorScheme;
     final textos = Theme.of(context).textTheme;
+    final gutter = AppSpacing.pageFor(MediaQuery.sizeOf(context).width);
 
     return Card(
-      elevation: 0,
-      color: colores.surfaceContainerLow,
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: EdgeInsets.symmetric(vertical: AppSpacing.xs, horizontal: gutter),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -40,7 +40,7 @@ class LogItemWidget extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   _fechaHora(log),
                   style: textos.bodySmall?.copyWith(
@@ -49,10 +49,10 @@ class LogItemWidget extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Wrap(
-              spacing: 6,
-              runSpacing: 6,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 if (log.outcomeLabel != null)
@@ -69,7 +69,7 @@ class LogItemWidget extends StatelessWidget {
               ],
             ),
             if (log.petId != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 _mascota(log),
                 style: textos.bodySmall,
@@ -78,7 +78,7 @@ class LogItemWidget extends StatelessWidget {
               ),
             ],
             if (log.esDispensado && _tieneGramos) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 _gramos,
                 style: textos.bodySmall?.copyWith(
@@ -142,17 +142,20 @@ class _Etiqueta extends StatelessWidget {
               : colores.onSecondaryContainer);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: fondo,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppRadii.controlRadius,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icono != null) ...[
             Icon(icono, size: 14, color: frente),
-            const SizedBox(width: 4),
+            const SizedBox(width: AppSpacing.xs),
           ],
           Flexible(
             child: Text(

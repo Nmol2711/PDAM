@@ -1,5 +1,7 @@
 import 'package:app_movil_pdam/core/presentation/utils/settings_entry_visibility.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/settings_entry_button.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/widget/pets_list.dart';
 import 'package:flutter/material.dart';
@@ -28,6 +30,9 @@ class _PetsViewState extends State<PetsView> {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final semantica = AppSemanticColors.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Mascotas"),
@@ -41,8 +46,13 @@ class _PetsViewState extends State<PetsView> {
             if (state is PetActionSuccess) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.green,
+                  backgroundColor: semantica.success,
+                  content: Text(
+                    state.message,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: semantica.onSuccess,
+                    ),
+                  ),
                 ),
               );
             }
@@ -57,18 +67,18 @@ class _PetsViewState extends State<PetsView> {
               return const CircularProgressIndicator();
             } else if (state is PetError) {
               return Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(AppSpacing.sectionGap),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.pets, size: 64, color: Colors.grey),
-                    const SizedBox(height: 16),
+                    Icon(Icons.pets, size: 64, color: esquema.onSurfaceVariant),
+                    const SizedBox(height: AppSpacing.fieldGap),
                     Text(
                       state.message,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(color: esquema.error),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.fieldGap),
                     ElevatedButton(
                       onPressed: () {
                         context.read<PetBloc>().add(PetsLoadedRequested());

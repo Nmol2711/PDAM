@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/account/domain/utils/account_validators.dart';
 import 'package:app_movil_pdam/features/account/presentation/bloc/account_bloc.dart';
 import 'package:app_movil_pdam/features/settings/presentation/widgets/delete_account_dialog.dart';
@@ -17,17 +18,18 @@ class DeleteAccountView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     return Scaffold(
       appBar: AppBar(title: const Text('Eliminación de cuenta')),
       body: SafeArea(
         child: BlocBuilder<AccountBloc, AccountState>(
-          builder: (context, state) => _contenido(context, state),
+          builder: (context, state) => _contenido(context, state, ancho),
         ),
       ),
     );
   }
 
-  Widget _contenido(BuildContext context, AccountState state) {
+  Widget _contenido(BuildContext context, AccountState state, double ancho) {
     final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final mensaje = state.message;
@@ -38,7 +40,10 @@ class DeleteAccountView extends StatelessWidget {
 
     return SingleChildScrollView(
       key: const Key('delete_account_scroll'),
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.pageFor(ancho),
+        vertical: AppSpacing.page,
+      ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -54,15 +59,12 @@ class DeleteAccountView extends StatelessWidget {
                   actionLabel: 'Reintentar',
                   onAction: () => _abrirDialogo(context),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
               ],
               Card(
                 margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -73,7 +75,7 @@ class DeleteAccountView extends StatelessWidget {
                             Icons.warning_amber_rounded,
                             color: colors.error,
                           ),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: AppSpacing.md),
                           Expanded(
                             child: Text(
                               MensajesCuenta.avisoIrreversible,
@@ -85,7 +87,7 @@ class DeleteAccountView extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.lg),
                       Text(
                         MensajesCuenta.datosEnRiesgo,
                         key: const Key('delete_account_data'),
@@ -95,7 +97,7 @@ class DeleteAccountView extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xxl),
               FilledButton(
                 key: const Key('delete_account_open'),
                 onPressed: state.isSubmitting
@@ -104,7 +106,9 @@ class DeleteAccountView extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: colors.error,
                   foregroundColor: colors.onError,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppSpacing.fieldGap,
+                  ),
                 ),
                 child: const Text(MensajesCuenta.eliminarMiCuenta),
               ),

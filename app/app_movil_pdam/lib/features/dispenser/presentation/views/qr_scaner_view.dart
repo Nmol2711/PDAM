@@ -1,7 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:app_movil_pdam/core/services/qr_validator.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/widgets/scanner_notice_band.dart';
 import 'package:go_router/go_router.dart';
+
+/// Muestra el aviso de QR inválido con el rol de error y su contenido.
+void mostrarErrorQr(BuildContext context) {
+  final esquema = Theme.of(context).colorScheme;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      backgroundColor: esquema.error,
+      content: Text(
+        'Código QR inválido para el sistema PDAM',
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: esquema.onError),
+      ),
+    ),
+  );
+}
 
 class QrScannerView extends StatefulWidget {
   const QrScannerView({super.key});
@@ -37,12 +54,7 @@ class _QrScannerViewState extends State<QrScannerView> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Código QR inválido para el sistema PDAM'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    mostrarErrorQr(context);
 
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
@@ -72,32 +84,13 @@ class _QrScannerViewState extends State<QrScannerView> {
             },
             errorBuilder: (context, error, child) {
               final String message = error.errorCode.name;
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Text(
-                    'No se pudo iniciar la cámara:\n$message',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                ),
+              return ScannerNoticeBand(
+                message: 'No se pudo iniciar la cámara:\n$message',
               );
             },
           ),
           if (_scannerError != null)
-            Container(
-              color: Colors.black.withOpacity(0.7),
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Text(
-                    _scannerError!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
-                  ),
-                ),
-              ),
-            ),
+            ScannerNoticeBand(message: _scannerError!, withScrim: true),
         ],
       ),
     );

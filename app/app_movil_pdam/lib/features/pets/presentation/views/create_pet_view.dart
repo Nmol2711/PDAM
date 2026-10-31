@@ -4,6 +4,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
+import 'package:app_movil_pdam/core/presentation/widgets/app_cta_button.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 
 class CreatePetView extends StatefulWidget {
@@ -54,9 +58,7 @@ class _CreatePetViewState extends State<CreatePetView> {
   void _showImageSourceActionSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppRadii.sheetRadius),
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
@@ -106,38 +108,46 @@ class _CreatePetViewState extends State<CreatePetView> {
       }
       if (_selectedBirthDate == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor, selecciona la fecha de nacimiento')),
+          const SnackBar(
+            content: Text('Por favor, selecciona la fecha de nacimiento'),
+          ),
         );
         return;
       }
 
       context.read<PetBloc>().add(
-            PetCreatePressed(
-              name: _nameController.text.trim(),
-              species: _selectedSpecies!,
-              birthDate: _selectedBirthDate!,
-              weight: double.parse(_weightController.text),
-              reproductiveStatus: _reproductiveStatus,
-              imageFile: _selectedImage,
-            ),
-          );
+        PetCreatePressed(
+          name: _nameController.text.trim(),
+          species: _selectedSpecies!,
+          birthDate: _selectedBirthDate!,
+          weight: double.parse(_weightController.text),
+          reproductiveStatus: _reproductiveStatus,
+          imageFile: _selectedImage,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final semantica = AppSemanticColors.of(context);
+    final ancho = MediaQuery.sizeOf(context).width;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Registrar Mascota'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Registrar Mascota')),
       body: BlocListener<PetBloc, PetState>(
         listener: (context, state) {
           if (state is PetDetailLoaded || state is PetActionSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('¡Mascota registrada con éxito!'),
-                backgroundColor: Colors.green,
+              SnackBar(
+                backgroundColor: semantica.success,
+                content: Text(
+                  '¡Mascota registrada con éxito!',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: semantica.onSuccess),
+                ),
               ),
             );
             context.read<PetBloc>().add(PetsLoadedRequested());
@@ -145,14 +155,22 @@ class _CreatePetViewState extends State<CreatePetView> {
           } else if (state is PetError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
+                backgroundColor: esquema.error,
+                content: Text(
+                  state.message,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: esquema.onError),
+                ),
               ),
             );
           }
         },
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageFor(ancho),
+            vertical: AppSpacing.page,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -166,7 +184,9 @@ class _CreatePetViewState extends State<CreatePetView> {
                       children: [
                         CircleAvatar(
                           radius: 56,
-                          backgroundColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                          backgroundColor: esquema.primaryContainer.withValues(
+                            alpha: 0.4,
+                          ),
                           backgroundImage: _selectedImage != null
                               ? FileImage(_selectedImage!)
                               : null,
@@ -174,7 +194,7 @@ class _CreatePetViewState extends State<CreatePetView> {
                               ? Icon(
                                   Icons.camera_alt_outlined,
                                   size: 36,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  color: esquema.primary,
                                 )
                               : null,
                         ),
@@ -183,12 +203,12 @@ class _CreatePetViewState extends State<CreatePetView> {
                             right: 0,
                             bottom: 0,
                             child: CircleAvatar(
-                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              backgroundColor: esquema.primary,
                               radius: 18,
-                              child: const Icon(
+                              child: Icon(
                                 Icons.edit,
                                 size: 16,
-                                color: Colors.white,
+                                color: esquema.onPrimary,
                               ),
                             ),
                           ),
@@ -196,7 +216,7 @@ class _CreatePetViewState extends State<CreatePetView> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: AppSpacing.sectionGap),
 
                 // ─── NOMBRE ───
                 TextFormField(
@@ -204,9 +224,6 @@ class _CreatePetViewState extends State<CreatePetView> {
                   decoration: const InputDecoration(
                     labelText: 'Nombre de la mascota',
                     prefixIcon: Icon(Icons.badge_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -215,7 +232,7 @@ class _CreatePetViewState extends State<CreatePetView> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // ─── ESPECIE ───
                 DropdownButtonFormField<TypePest>(
@@ -224,9 +241,6 @@ class _CreatePetViewState extends State<CreatePetView> {
                   decoration: const InputDecoration(
                     labelText: 'Especie',
                     prefixIcon: Icon(Icons.pets_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
                   ),
                   items: TypePest.values.map((TypePest type) {
                     return DropdownMenuItem<TypePest>(
@@ -245,19 +259,16 @@ class _CreatePetViewState extends State<CreatePetView> {
                   validator: (value) =>
                       value == null ? 'Selecciona una especie' : null,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // ─── FECHA DE NACIMIENTO ───
                 InkWell(
                   onTap: () => _selectBirthDate(context),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppRadii.controlRadius,
                   child: InputDecorator(
                     decoration: const InputDecoration(
                       labelText: 'Fecha de nacimiento',
                       prefixIcon: Icon(Icons.cake_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
                     ),
                     child: Text(
                       _selectedBirthDate == null
@@ -266,24 +277,23 @@ class _CreatePetViewState extends State<CreatePetView> {
                       style: TextStyle(
                         fontSize: 16,
                         color: _selectedBirthDate == null
-                            ? Colors.grey[600]
-                            : Theme.of(context).colorScheme.onSurface,
+                            ? esquema.onSurfaceVariant
+                            : esquema.onSurface,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // ─── PESO ───
                 TextFormField(
                   controller: _weightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Peso (kg)',
                     prefixIcon: Icon(Icons.monitor_weight_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
                     suffixText: 'kg',
                   ),
                   validator: (value) {
@@ -296,18 +306,15 @@ class _CreatePetViewState extends State<CreatePetView> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // ─── ESTADO REPRODUCTIVO ───
                 Card(
-                  elevation: 0,
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                   child: SwitchListTile(
                     title: const Text('¿Está esterilizado / castrado?'),
-                    subtitle: const Text('Ajusta el cálculo calórico automáticamente'),
+                    subtitle: const Text(
+                      'Ajusta el cálculo calórico automáticamente',
+                    ),
                     value: _reproductiveStatus,
                     onChanged: (bool value) {
                       setState(() {
@@ -316,32 +323,26 @@ class _CreatePetViewState extends State<CreatePetView> {
                     },
                     secondary: const Icon(Icons.medical_services_outlined),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadii.cardRadius,
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: AppSpacing.xxxl),
 
                 // ─── BOTÓN DE GUARDAR ───
                 BlocBuilder<PetBloc, PetState>(
                   builder: (context, state) {
                     final isLoading = state is PetLoading;
 
-                    return FilledButton(
+                    return AppCtaButton(
                       onPressed: isLoading ? null : _submitForm,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                       child: isLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 24,
                               width: 24,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: esquema.onSurfaceVariant,
                               ),
                             )
                           : const Text(

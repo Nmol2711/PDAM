@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_field.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/account/domain/utils/account_validators.dart';
 import 'package:app_movil_pdam/features/account/presentation/bloc/account_bloc.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
@@ -55,6 +57,7 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     return Scaffold(
       appBar: AppBar(title: const Text('Actualización de perfil')),
       body: SafeArea(
@@ -67,7 +70,10 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
           listener: _alCambiarEstado,
           child: SingleChildScrollView(
             key: const Key('update_profile_scroll'),
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.pageFor(ancho),
+              vertical: AppSpacing.page,
+            ),
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 560),
@@ -146,7 +152,7 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
             message: MensajesCuenta.datosGuardados,
             icon: Icons.cloud_off_outlined,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
         ],
         if (avisoSinPerfil) ...<Widget>[
           ProfileNotice(
@@ -156,7 +162,7 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
             onAction: () =>
                 context.read<AccountBloc>().add(const ProfileRetryRequested()),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
         ],
         if (avisoOperacion) ...<Widget>[
           ProfileNotice(
@@ -165,7 +171,7 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
                 ? Icons.cloud_off_outlined
                 : Icons.error_outline,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
         ],
         TextField(
           key: const Key('update_profile_email'),
@@ -176,41 +182,32 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
           autocorrect: false,
           decoration: InputDecoration(
             labelText: 'Correo electrónico',
-            border: const OutlineInputBorder(),
             errorText: state.fieldErrors[CampoPerfil.correo],
           ),
         ),
-        const SizedBox(height: 16),
-        TextField(
+        const SizedBox(height: AppSpacing.fieldGap),
+        PasswordVisibilityField(
           key: const Key('update_profile_password'),
           controller: _passwordNueva,
           enabled: editable,
-          obscureText: true,
+          label: 'Contraseña nueva',
+          errorText: state.fieldErrors[CampoPerfil.passwordNueva],
           textInputAction: TextInputAction.next,
-          decoration: InputDecoration(
-            labelText: 'Contraseña nueva',
-            border: const OutlineInputBorder(),
-            errorText: state.fieldErrors[CampoPerfil.passwordNueva],
-          ),
         ),
-        const SizedBox(height: 16),
-        TextField(
+        const SizedBox(height: AppSpacing.fieldGap),
+        PasswordVisibilityField(
           key: const Key('update_profile_confirmation'),
           controller: _confirmacion,
           enabled: editable,
-          obscureText: true,
+          label: 'Confirmar contraseña nueva',
+          errorText: state.fieldErrors[CampoPerfil.confirmacion],
           textInputAction: TextInputAction.done,
           onSubmitted: (_) {
             if (editable) _enviar();
           },
-          decoration: InputDecoration(
-            labelText: 'Confirmar contraseña nueva',
-            border: const OutlineInputBorder(),
-            errorText: state.fieldErrors[CampoPerfil.confirmacion],
-          ),
         ),
         if (errorFormulario != null) ...<Widget>[
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.fieldGap),
           Text(
             errorFormulario,
             key: const Key('update_profile_form_error'),
@@ -219,11 +216,11 @@ class _UpdateProfileViewState extends State<UpdateProfileView> {
             ).textTheme.bodyMedium?.copyWith(color: colors.error),
           ),
         ],
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.sectionGap),
         Wrap(
           alignment: WrapAlignment.end,
-          spacing: 12,
-          runSpacing: 12,
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
           children: <Widget>[
             OutlinedButton(
               key: const Key('update_profile_cancel'),

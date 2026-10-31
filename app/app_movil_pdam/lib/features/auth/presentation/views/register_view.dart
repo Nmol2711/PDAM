@@ -1,3 +1,6 @@
+import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_field.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/account/domain/utils/account_validators.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
@@ -39,32 +42,50 @@ class _RegisterViewState extends State<RegisterView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final esquema = theme.colorScheme;
+    final semantica = AppSemanticColors.of(context);
+    final ancho = MediaQuery.sizeOf(context).width;
+
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state is AuthError) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(backgroundColor: Colors.red, content: Text(state.message)),
+            SnackBar(
+              backgroundColor: esquema.error,
+              content: Text(
+                state.message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: esquema.onError,
+                ),
+              ),
+            ),
           );
         }
 
         if (state is AuthRegister) {
           context.replace('/login');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Colors.green,
-              content: Text('Cuenta creada correctamente. Inicia sesión.'),
+            SnackBar(
+              backgroundColor: semantica.success,
+              content: Text(
+                'Cuenta creada correctamente. Inicia sesión.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: semantica.onSuccess,
+                ),
+              ),
             ),
           );
         }
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Crear Cuenta'), elevation: 0),
+        appBar: AppBar(title: const Text('Crear Cuenta')),
         body: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16.0,
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.pageFor(ancho),
+                vertical: AppSpacing.page,
               ),
               child: Form(
                 key: _formKey,
@@ -74,16 +95,19 @@ class _RegisterViewState extends State<RegisterView> {
                   children: [
                     Text(
                       'Únete a PDAM',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.sm),
                     Text(
                       'Crea una cuenta para automatizar la alimentación de tus '
                       'mascotas',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: esquema.onSurfaceVariant,
+                      ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: AppSpacing.xxxl),
 
                     // --- CORREO ---
                     TextFormField(
@@ -92,9 +116,6 @@ class _RegisterViewState extends State<RegisterView> {
                       decoration: const InputDecoration(
                         labelText: 'Correo Electrónico',
                         prefixIcon: Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
                       ),
                       validator: (value) {
                         final correo = normalizarCorreo(value ?? '');
@@ -107,20 +128,22 @@ class _RegisterViewState extends State<RegisterView> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.fieldGap),
 
                     // --- CONTRASEÑA ---
-                    _CampoPassword(
+                    PasswordVisibilityField(
                       controller: _passwordController,
-                      labelText: 'Contraseña',
+                      label: 'Contraseña',
+                      prefixIcon: const Icon(Icons.lock_outline),
                       validator: validarPasswordRegistro,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.fieldGap),
 
                     // --- CONFIRMAR CONTRASEÑA ---
-                    _CampoPassword(
+                    PasswordVisibilityField(
                       controller: _confirmPasswordController,
-                      labelText: 'Confirmar Contraseña',
+                      label: 'Confirmar Contraseña',
+                      prefixIcon: const Icon(Icons.lock_outline),
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Confirma tu contraseña';
@@ -131,7 +154,7 @@ class _RegisterViewState extends State<RegisterView> {
                         return null;
                       },
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.sectionGap),
 
                     // --- BOTÓN DE REGISTRO ---
                     BlocBuilder<AuthBloc, AuthState>(
@@ -139,18 +162,12 @@ class _RegisterViewState extends State<RegisterView> {
                         final isLoading = state is AuthLoading;
                         return FilledButton(
                           onPressed: isLoading ? null : _onRegisterPressed,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
                           child: isLoading
-                              ? const SizedBox(
+                              ? SizedBox(
                                   width: 24,
                                   height: 24,
                                   child: CircularProgressIndicator(
-                                    color: Colors.white,
+                                    color: esquema.onPrimary,
                                     strokeWidth: 2,
                                   ),
                                 )
@@ -161,7 +178,7 @@ class _RegisterViewState extends State<RegisterView> {
                         );
                       },
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.fieldGap),
 
                     // --- VOLVER A LOGIN ---
                     TextButton(
@@ -175,53 +192,6 @@ class _RegisterViewState extends State<RegisterView> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Campo de contraseña con su propio control de visibilidad.
-///
-/// El `setState` de la visibilidad vive aquí y no en la vista principal, que
-/// solo compone widgets (principio 3, RNF-03).
-class _CampoPassword extends StatefulWidget {
-  final TextEditingController controller;
-  final String labelText;
-  final String? Function(String?)? validator;
-
-  const _CampoPassword({
-    required this.controller,
-    required this.labelText,
-    this.validator,
-  });
-
-  @override
-  State<_CampoPassword> createState() => _CampoPasswordState();
-}
-
-class _CampoPasswordState extends State<_CampoPassword> {
-  bool _obscure = true;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextFormField(
-      controller: widget.controller,
-      obscureText: _obscure,
-      decoration: InputDecoration(
-        labelText: widget.labelText,
-        prefixIcon: const Icon(Icons.lock_outline),
-        border: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-        suffixIcon: IconButton(
-          icon: Icon(
-            _obscure
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
-          ),
-          onPressed: () => setState(() => _obscure = !_obscure),
-        ),
-      ),
-      validator: widget.validator,
     );
   }
 }

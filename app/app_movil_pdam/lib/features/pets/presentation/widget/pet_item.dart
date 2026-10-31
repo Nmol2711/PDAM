@@ -1,4 +1,6 @@
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
 
@@ -11,22 +13,23 @@ class PetItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final gutter = AppSpacing.pageFor(MediaQuery.sizeOf(context).width);
     return Card(
       clipBehavior: Clip.antiAlias,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      elevation: 2,
+      margin: EdgeInsets.symmetric(horizontal: gutter, vertical: AppSpacing.sm),
       child: InkWell(
         onTap: () {
           context.push('/detail_pet', extra: pet);
         },
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
           child: Row(
             children: [
               // ─── SECCIÓN DE LA IMAGEN ───
               _buildPetImage(),
 
-              const SizedBox(width: 16), // Espaciado entre imagen e información
+              const SizedBox(width: AppSpacing.lg),
               // ─── SECCIÓN DE LA INFORMACIÓN ───
               Expanded(
                 child: Column(
@@ -40,12 +43,12 @@ class PetItem extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       "Peso: ${pet.weight} kg",
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: TextStyle(color: esquema.onSurfaceVariant),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xs),
                   ],
                 ),
               ),
@@ -65,7 +68,7 @@ class PetItem extends StatelessWidget {
       // Concatenamos tu IP base con el path relativo del backend
 
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadii.controlRadius,
         child: Image.network(
           pet.imgUrl!,
           width: imageSize,
@@ -80,7 +83,7 @@ class PetItem extends StatelessWidget {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             );
           },
-          // 💡 AQUÍ CAPTURAMOS SI LA URL FALLA O DA ERROR
+          // AQUÍ CAPTURAMOS SI LA URL FALLA O DA ERROR
           errorBuilder: (context, error, stackTrace) {
             return _buildDefaultAssetImage(imageSize);
           },
@@ -110,7 +113,7 @@ class PetItem extends StatelessWidget {
     }
 
     return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: AppRadii.controlRadius,
       child: Image.asset(
         assetPath,
         width: size,

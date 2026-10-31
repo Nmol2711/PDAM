@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:app_movil_pdam/core/theme/app_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 
 class DispenserFoodProgressBar extends StatelessWidget {
@@ -20,8 +22,11 @@ class DispenserFoodProgressBar extends StatelessWidget {
     );
     final percentage = status.percentageRemaining;
     final isCritical = status.isCritical;
-    final progressColor = isCritical ? AppColors.warning : AppColors.primaryGreen;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final esquema = Theme.of(context).colorScheme;
+    final semantica = AppSemanticColors.of(context);
+    // El relleno crítico usa la alerta; el texto no, porque la alerta como
+    // texto no alcanza contraste en modo claro (RF-04).
+    final progressColor = isCritical ? semantica.alert : esquema.primary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -29,15 +34,15 @@ class DispenserFoodProgressBar extends StatelessWidget {
         Wrap(
           alignment: WrapAlignment.spaceBetween,
           crossAxisAlignment: WrapCrossAlignment.center,
-          spacing: 8,
-          runSpacing: 2,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
           children: [
-            const Text(
+            Text(
               'Alimento restante:',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: AppColors.textSecondary,
+                color: esquema.onSurfaceVariant,
               ),
             ),
             Text(
@@ -45,31 +50,35 @@ class DispenserFoodProgressBar extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
-                color: isCritical
-                    ? AppColors.warning
-                    : (isDark ? Colors.white : AppColors.textPrimary),
+                color: esquema.onSurface,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: percentage / 100.0,
-            backgroundColor: AppColors.textSecondary.withOpacity(0.2),
-            valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-            minHeight: 8,
+        const SizedBox(height: AppSpacing.xs),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: AppRadii.controlRadius,
+            border: Border.all(color: esquema.outline),
+          ),
+          child: ClipRRect(
+            borderRadius: AppRadii.controlRadius,
+            child: LinearProgressIndicator(
+              value: percentage / 100.0,
+              backgroundColor: esquema.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+              minHeight: 8,
+            ),
           ),
         ),
         if (isCritical) ...[
-          const SizedBox(height: 4),
-          const Text(
+          const SizedBox(height: AppSpacing.xs),
+          Text(
             'Atención: Nivel crítico de alimento (< 20%)',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: AppColors.warning,
+              color: esquema.onSurface,
             ),
           ),
         ],

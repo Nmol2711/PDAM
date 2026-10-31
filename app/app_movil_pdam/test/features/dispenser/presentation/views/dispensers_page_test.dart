@@ -98,29 +98,30 @@ void main() {
     expect(find.text('No hay dispositivos vinculados'), findsNothing);
   });
 
-  testWidgets('deslizar hacia abajo refresca el stock desde el repositorio (RF-5)', (
-    tester,
-  ) async {
-    final repository = MockDispenserRepository(
-      mockDispensers: const [
-        Dispenser(
-          id: 1,
-          macAddress: 'AA:BB:CC:DD:EE:FF',
-          name: 'Dispensador Sala',
-          isActive: true,
-          petId: 1,
-        ),
-      ],
-    );
-    await pumpPage(tester, repository: repository);
+  testWidgets(
+    'deslizar hacia abajo refresca el stock desde el repositorio (RF-5)',
+    (tester) async {
+      final repository = MockDispenserRepository(
+        mockDispensers: const [
+          Dispenser(
+            id: 1,
+            macAddress: 'AA:BB:CC:DD:EE:FF',
+            name: 'Dispensador Sala',
+            isActive: true,
+            petId: 1,
+          ),
+        ],
+      );
+      await pumpPage(tester, repository: repository);
 
-    await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pump(const Duration(seconds: 1));
+      await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 1));
 
-    expect(repository.refreshCalls, greaterThan(0));
-  });
+      expect(repository.refreshCalls, greaterThan(0));
+    },
+  );
 
   testWidgets('el sondeo no consulta si la pestaña no está visible (RNF-1)', (
     tester,
@@ -148,33 +149,34 @@ void main() {
     expect(repository.refreshCalls, 0);
   });
 
-  testWidgets('muestra el aviso de reabastecimiento exitoso una sola vez (RF-7)', (
-    tester,
-  ) async {
-    final bloc = await pumpPage(
-      tester,
-      repository: MockDispenserRepository(
-        mockDispensers: const [
-          Dispenser(
-            id: 1,
-            macAddress: 'AA:BB:CC:DD:EE:FF',
-            name: 'Dispensador Sala',
-            isActive: true,
-            petId: 1,
-            currentFoodGrams: 1500.0,
-          ),
-        ],
-      ),
-    );
+  testWidgets(
+    'muestra el aviso de reabastecimiento exitoso una sola vez (RF-7)',
+    (tester) async {
+      final bloc = await pumpPage(
+        tester,
+        repository: MockDispenserRepository(
+          mockDispensers: const [
+            Dispenser(
+              id: 1,
+              macAddress: 'AA:BB:CC:DD:EE:FF',
+              name: 'Dispensador Sala',
+              isActive: true,
+              petId: 1,
+              currentFoodGrams: 1500.0,
+            ),
+          ],
+        ),
+      );
 
-    bloc.add(
-      const RefillFoodEvent(dispenserId: '1', amount: 500.0, unit: 'g'),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+      bloc.add(
+        const RefillFoodEvent(dispenserId: '1', amount: 500.0, unit: 'g'),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Reabastecimiento con éxito'), findsOneWidget);
-  });
+      expect(find.text('Reabastecimiento con éxito'), findsOneWidget);
+    },
+  );
 
   testWidgets('muestra el aviso de límite cuando el servidor rechaza (RF-8)', (
     tester,
@@ -196,9 +198,7 @@ void main() {
       ),
     );
 
-    bloc.add(
-      const RefillFoodEvent(dispenserId: '1', amount: 500.0, unit: 'g'),
-    );
+    bloc.add(const RefillFoodEvent(dispenserId: '1', amount: 500.0, unit: 'g'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -280,6 +280,49 @@ void main() {
     expect(find.byType(DeviceCardWidget), findsOneWidget);
   });
 
+  testWidgets('la acción destructiva del reset usa el rol de error', (
+    tester,
+  ) async {
+    await pumpPage(
+      tester,
+      repository: MockDispenserRepository(
+        mockDispensers: const [
+          Dispenser(
+            id: 1,
+            macAddress: 'AA:BB:CC:DD:EE:FF',
+            name: 'Dispensador Sala',
+            isActive: true,
+            wifiSsid: 'HomeWiFi',
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.text('Resetear WiFi'));
+    await tester.pumpAndSettle();
+
+    final boton = tester.widget<ElevatedButton>(
+      find.widgetWithText(ElevatedButton, 'Eliminar'),
+    );
+    final esquema = AppTheme.lightTheme.colorScheme;
+    expect(
+      boton.style!.backgroundColor!.resolve(<WidgetState>{}),
+      esquema.error,
+    );
+    expect(
+      boton.style!.foregroundColor!.resolve(<WidgetState>{}),
+      esquema.onError,
+    );
+    expect(boton.style!.shape, isNull);
+    final forma =
+        AppTheme.lightTheme.elevatedButtonTheme.style!.shape!.resolve(
+              <WidgetState>{},
+            )!
+            as RoundedRectangleBorder;
+    expect(forma.borderRadius, BorderRadius.circular(8));
+    expect(find.text('Cancelar'), findsOneWidget);
+  });
+
   testWidgets('a 600 y 840 la cabecera real no dibuja la entrada y a 320 sí '
       'hay exactamente una', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
@@ -309,5 +352,40 @@ void main() {
     );
 
     expect(find.byTooltip('Abrir configuración'), findsOneWidget);
+  });
+
+  testWidgets('RF-08: el chip de unidad usa el radio 8 y no es píldora', (
+    tester,
+  ) async {
+    await pumpPage(
+      tester,
+      repository: MockDispenserRepository(
+        mockDispensers: const [
+          Dispenser(
+            id: 1,
+            macAddress: 'AA:BB:CC:DD:EE:FF',
+            name: 'Dispensador Sala',
+            isActive: true,
+            wifiSsid: 'HomeWiFi',
+          ),
+        ],
+      ),
+    );
+
+    await tester.tap(find.text('Reabastecer'));
+    await tester.pumpAndSettle();
+
+    final chips = tester
+        .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+        .toList();
+    expect(chips, hasLength(2));
+    for (final chip in chips) {
+      expect(chip.shape, isNull, reason: 'el chip no debe fijar su forma');
+    }
+
+    final forma =
+        AppTheme.lightTheme.chipTheme.shape! as RoundedRectangleBorder;
+    expect(forma.borderRadius, BorderRadius.circular(8));
+    expect(forma, isNot(isA<StadiumBorder>()));
   });
 }

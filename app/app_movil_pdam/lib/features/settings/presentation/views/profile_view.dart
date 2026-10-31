@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/account/domain/entity/user_profile.dart';
 import 'package:app_movil_pdam/features/account/domain/utils/account_validators.dart';
 import 'package:app_movil_pdam/features/account/presentation/bloc/account_bloc.dart';
@@ -28,6 +29,7 @@ class _ProfileViewState extends State<ProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    final ancho = MediaQuery.sizeOf(context).width;
     return Scaffold(
       appBar: AppBar(title: const Text('Perfil')),
       body: SafeArea(
@@ -35,7 +37,10 @@ class _ProfileViewState extends State<ProfileView> {
           builder: (context, state) {
             return SingleChildScrollView(
               key: const Key('profile_scroll'),
-              padding: const EdgeInsets.all(20),
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.pageFor(ancho),
+                vertical: AppSpacing.page,
+              ),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
@@ -61,7 +66,7 @@ class _ProfileViewState extends State<ProfileView> {
               message: MensajesCuenta.datosGuardados,
               icon: Icons.cloud_off_outlined,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
           ],
           _PerfilCard(profile: perfil),
         ],
@@ -70,7 +75,7 @@ class _ProfileViewState extends State<ProfileView> {
 
     if (state.isLoadingProfile) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 48),
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.xxxl),
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -108,9 +113,8 @@ class _PerfilCard extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
         child: Column(
           children: <Widget>[
             Semantics(
@@ -131,26 +135,26 @@ class _PerfilCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               'Correo electrónico',
               style: textTheme.labelMedium?.copyWith(
                 color: colors.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               profile.email,
               style: textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.xxl),
             const Divider(height: 1),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             Row(
               children: <Widget>[
                 Icon(Icons.verified_user_outlined, color: colors.primary),
-                const SizedBox(width: 12),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +165,7 @@ class _PerfilCard extends StatelessWidget {
                           color: colors.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: AppSpacing.xs),
                       Text(profile.estado, style: textTheme.titleMedium),
                     ],
                   ),

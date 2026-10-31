@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// Controles de página del historial (RF-32, RF-33).
@@ -23,10 +24,14 @@ class LogPaginationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final textos = Theme.of(context).textTheme;
     final colores = Theme.of(context).colorScheme;
+    final gutter = AppSpacing.pageFor(MediaQuery.sizeOf(context).width);
 
     return Container(
       color: colores.surfaceContainerLowest,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: gutter,
+        vertical: AppSpacing.xs,
+      ),
       child: SafeArea(
         top: false,
         child: Row(

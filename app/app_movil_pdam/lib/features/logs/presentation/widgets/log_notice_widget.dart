@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// Avisos de la pantalla de historial (RF-33, RF-34).
@@ -63,24 +64,25 @@ class LogNoticeWidget extends StatelessWidget {
     };
 
     return Card(
-      elevation: 0,
       color: fondo,
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.symmetric(
+        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.md,
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icono, size: 32, color: colores.onSurfaceVariant),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               titulo,
               textAlign: TextAlign.center,
               style: textos.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             if (detalle != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 detalle,
                 textAlign: TextAlign.center,
@@ -88,7 +90,7 @@ class LogNoticeWidget extends StatelessWidget {
               ),
             ],
             if (_sinDatosLocales) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'No hay datos locales guardados',
                 textAlign: TextAlign.center,
@@ -96,7 +98,7 @@ class LogNoticeWidget extends StatelessWidget {
               ),
             ],
             if (_tipo == _TipoAviso.error) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               TextButton(onPressed: _onRetry, child: const Text('Reintentar')),
             ],
           ],

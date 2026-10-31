@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 
 class BleScanPage extends StatefulWidget {
@@ -56,28 +57,32 @@ class _BleScanPageState extends State<BleScanPage> {
       ),
       body: BlocBuilder<DispenserBloc, DispenserState>(
         builder: (context, state) {
+          final esquema = Theme.of(context).colorScheme;
           if (state is BleScanningState) {
             final devices = state.scannedDevices;
             return Column(
               children: [
                 Expanded(
                   child: devices.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24.0),
+                      ? Center(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(AppSpacing.xxl),
                             child: Column(
+                              mainAxisSize: MainAxisSize.min,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CircularProgressIndicator(),
-                                SizedBox(height: 24),
-                                Text(
+                                const CircularProgressIndicator(),
+                                const SizedBox(height: AppSpacing.xxl),
+                                const Text(
                                   'Buscando dispensadores cercanos (PDAM-Config-*)...',
                                   textAlign: TextAlign.center,
                                 ),
-                                SizedBox(height: 8),
+                                const SizedBox(height: AppSpacing.sm),
                                 Text(
                                   'Asegúrate de que el dispositivo esté encendido y en modo de configuración.',
-                                  style: TextStyle(color: Colors.grey),
+                                  style: TextStyle(
+                                    color: esquema.onSurfaceVariant,
+                                  ),
                                   textAlign: TextAlign.center,
                                 ),
                               ],
@@ -91,11 +96,18 @@ class _BleScanPageState extends State<BleScanPage> {
                             return ListTile(
                               leading: const Icon(Icons.bluetooth),
                               title: Text(device.name),
-                              subtitle: Text('ID / MAC: ${device.remoteId} (RSSI: ${device.rssi})'),
-                              trailing: ElevatedButton(
+                              subtitle: Text(
+                                'ID / MAC: ${device.remoteId} (RSSI: ${device.rssi})',
+                              ),
+                              trailing: OutlinedButton(
                                 onPressed: () {
-                                  context.read<DispenserBloc>().add(StopScanBleEvent());
-                                  context.go('/dispensers/provision', extra: device);
+                                  context.read<DispenserBloc>().add(
+                                    StopScanBleEvent(),
+                                  );
+                                  context.go(
+                                    '/dispensers/provision',
+                                    extra: device,
+                                  );
                                 },
                                 child: const Text('Conectar'),
                               ),
@@ -104,7 +116,7 @@ class _BleScanPageState extends State<BleScanPage> {
                         ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(AppSpacing.lg),
                   child: SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
@@ -125,11 +137,11 @@ class _BleScanPageState extends State<BleScanPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                  const SizedBox(height: 16),
+                  Icon(Icons.error_outline, size: 64, color: esquema.error),
+                  const SizedBox(height: AppSpacing.lg),
                   Text('Error: ${state.message}'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
+                  const SizedBox(height: AppSpacing.lg),
+                  FilledButton(
                     onPressed: () {
                       context.read<DispenserBloc>().add(StartScanBleEvent());
                     },
@@ -140,7 +152,7 @@ class _BleScanPageState extends State<BleScanPage> {
             );
           }
           return Center(
-            child: ElevatedButton(
+            child: FilledButton(
               onPressed: () {
                 context.read<DispenserBloc>().add(StartScanBleEvent());
               },

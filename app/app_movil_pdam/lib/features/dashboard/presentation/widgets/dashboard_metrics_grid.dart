@@ -1,3 +1,5 @@
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 
 class MetricCard extends StatelessWidget {
@@ -18,14 +20,13 @@ class MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-        ),
+        color: esquema.surface,
+        borderRadius: AppRadii.cardRadius,
+        border: Border.all(color: esquema.outline),
       ),
       child: FittedBox(
         fit: BoxFit.scaleDown,
@@ -33,28 +34,26 @@ class MetricCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
                 color: backgroundColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: AppRadii.controlRadius,
               ),
               child: Icon(icon, color: iconColor, size: 24),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
+                color: esquema.tertiary,
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 11, color: esquema.onSurfaceVariant),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -82,6 +81,7 @@ class DashboardMetricsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
     final foodPercentage = foodTargetToday > 0
         ? (foodDispensedToday / foodTargetToday).clamp(0.0, 1.0)
         : 0.0;
@@ -91,47 +91,44 @@ class DashboardMetricsGrid extends StatelessWidget {
       children: [
         const Text(
           "Resumen del Sistema",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+          crossAxisSpacing: AppSpacing.md,
+          mainAxisSpacing: AppSpacing.md,
           childAspectRatio: 1.25,
           children: [
             MetricCard(
               label: "Total Mascotas",
               value: totalPets.toString(),
               icon: Icons.pets,
-              iconColor: const Color(0xFF00C853),
-              backgroundColor: const Color(0xFF00C853),
+              iconColor: esquema.tertiary,
+              backgroundColor: esquema.tertiary,
             ),
             MetricCard(
               label: "Mascotas Castradas",
               value: sterilizedPets.toString(),
               icon: Icons.medical_services_outlined,
-              iconColor: const Color(0xFF6C63FF),
-              backgroundColor: const Color(0xFF6C63FF),
+              iconColor: esquema.tertiary,
+              backgroundColor: esquema.tertiary,
             ),
             MetricCard(
               label: "Alimento Hoy (g)",
               value: foodDispensedToday.toStringAsFixed(0),
               icon: Icons.local_fire_department_outlined,
-              iconColor: const Color(0xFFFFB300),
-              backgroundColor: const Color(0xFFFFB300),
+              iconColor: esquema.tertiary,
+              backgroundColor: esquema.tertiary,
             ),
             MetricCard(
               label: "Cumplimiento Meta",
               value: "${(foodPercentage * 100).toInt()}%",
               icon: Icons.analytics_outlined,
-              iconColor: const Color(0xFF00B8D4),
-              backgroundColor: const Color(0xFF00B8D4),
+              iconColor: esquema.tertiary,
+              backgroundColor: esquema.tertiary,
             ),
           ],
         ),

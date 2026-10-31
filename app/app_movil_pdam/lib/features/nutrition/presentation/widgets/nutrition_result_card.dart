@@ -1,3 +1,4 @@
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:app_movil_pdam/features/nutrition/domain/entities/nutrition_result.dart';
 
@@ -12,23 +13,21 @@ class NutritionResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Card(
-      elevation: 0,
-      color: colors.primaryContainer.withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Resultado de dosificación',
-              style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             _MetricRow(
               label: 'Energía en reposo (RER)',
               value: '${result.rerKcal.toStringAsFixed(1)} kcal/día',
@@ -43,7 +42,7 @@ class NutritionResultCard extends StatelessWidget {
                   '${result.variabilityMinKcal.toStringAsFixed(1)} – '
                   '${result.variabilityMaxKcal.toStringAsFixed(1)} kcal/día',
             ),
-            const Divider(height: 24),
+            const Divider(height: AppSpacing.sectionGap),
             _MetricRow(
               label: 'Ración diaria',
               value: '${result.dailyRationGrams.toStringAsFixed(1)} g/día',
@@ -52,7 +51,7 @@ class NutritionResultCard extends StatelessWidget {
               label: 'Ración por comida (${result.mealsPerDay} comidas)',
               value: '${result.rationPerMealGrams.toStringAsFixed(1)} g',
             ),
-            const Divider(height: 24),
+            const Divider(height: AppSpacing.sectionGap),
             _MetricRow(
               label: 'Límite de snacks (10% del MER)',
               value: '${result.snackLimitKcal.toStringAsFixed(1)} kcal/día',
@@ -77,16 +76,27 @@ class _MetricRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final esquema = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(label, style: textTheme.bodyMedium)),
-          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: textTheme.bodyMedium?.copyWith(
+                color: esquema.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
           Text(
             value,
-            style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+            style: textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: esquema.tertiary,
+            ),
           ),
         ],
       ),

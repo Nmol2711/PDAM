@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
+import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
+import 'package:app_movil_pdam/core/theme/app_shape.dart';
+import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/pet_bloc/pet_bloc.dart';
 
@@ -41,7 +44,9 @@ class _EditPetViewState extends State<EditPetView> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.pet.name);
-    _weightController = TextEditingController(text: widget.pet.weight.toString());
+    _weightController = TextEditingController(
+      text: widget.pet.weight.toString(),
+    );
     _selectedSpecies = widget.pet.species;
     _selectedBirthDate = widget.pet.birthDate;
     _reproductiveStatus = widget.pet.reproductiveStatus;
@@ -76,9 +81,7 @@ class _EditPetViewState extends State<EditPetView> {
   void _showImageSourceActionSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppRadii.sheetRadius),
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
@@ -121,33 +124,39 @@ class _EditPetViewState extends State<EditPetView> {
   void _submitForm() {
     if (_formKey.currentState!.validate()) {
       context.read<PetBloc>().add(
-            PetUpdatePressed(
-              petId: widget.pet.id,
-              name: _nameController.text.trim(),
-              species: _selectedSpecies,
-              birthDate: _selectedBirthDate,
-              weight: double.parse(_weightController.text),
-              reproductiveStatus: _reproductiveStatus,
-              imageFile: _selectedImage,
-            ),
-          );
+        PetUpdatePressed(
+          petId: widget.pet.id,
+          name: _nameController.text.trim(),
+          species: _selectedSpecies,
+          birthDate: _selectedBirthDate,
+          weight: double.parse(_weightController.text),
+          reproductiveStatus: _reproductiveStatus,
+          imageFile: _selectedImage,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final esquema = Theme.of(context).colorScheme;
+    final semantica = AppSemanticColors.of(context);
+    final ancho = MediaQuery.sizeOf(context).width;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Editar ${widget.pet.name}'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: Text('Editar ${widget.pet.name}')),
       body: BlocListener<PetBloc, PetState>(
         listener: (context, state) {
           if (state is PetActionSuccess) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.green,
+                backgroundColor: semantica.success,
+                content: Text(
+                  state.message,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: semantica.onSuccess),
+                ),
               ),
             );
             context.read<PetBloc>().add(PetsLoadedRequested());
@@ -156,14 +165,22 @@ class _EditPetViewState extends State<EditPetView> {
           } else if (state is PetError) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
+                backgroundColor: esquema.error,
+                content: Text(
+                  state.message,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: esquema.onError),
+                ),
               ),
             );
           }
         },
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.pageFor(ancho),
+            vertical: AppSpacing.page,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -180,37 +197,46 @@ class _EditPetViewState extends State<EditPetView> {
                           height: 112,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer
+                                .withValues(alpha: 0.4),
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: _selectedImage != null
                               ? Image.file(_selectedImage!, fit: BoxFit.cover)
-                              : (widget.pet.imgUrl != null && widget.pet.imgUrl!.isNotEmpty
-                                  ? Image.network(
-                                      widget.pet.imgUrl!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Image.asset(
-                                          _getDefaultAssetPath(widget.pet.species),
-                                          fit: BoxFit.cover,
-                                        );
-                                      },
-                                    )
-                                  : Image.asset(
-                                      _getDefaultAssetPath(widget.pet.species),
-                                      fit: BoxFit.cover,
-                                    )),
+                              : (widget.pet.imgUrl != null &&
+                                        widget.pet.imgUrl!.isNotEmpty
+                                    ? Image.network(
+                                        widget.pet.imgUrl!,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                              return Image.asset(
+                                                _getDefaultAssetPath(
+                                                  widget.pet.species,
+                                                ),
+                                                fit: BoxFit.cover,
+                                              );
+                                            },
+                                      )
+                                    : Image.asset(
+                                        _getDefaultAssetPath(
+                                          widget.pet.species,
+                                        ),
+                                        fit: BoxFit.cover,
+                                      )),
                         ),
                         Positioned(
                           right: 0,
                           bottom: 0,
                           child: CircleAvatar(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            backgroundColor: esquema.primary,
                             radius: 18,
-                            child: const Icon(
+                            child: Icon(
                               Icons.edit,
                               size: 16,
-                              color: Colors.white,
+                              color: esquema.onPrimary,
                             ),
                           ),
                         ),
@@ -218,7 +244,7 @@ class _EditPetViewState extends State<EditPetView> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: AppSpacing.sectionGap),
 
                 // --- NOMBRE ---
                 TextFormField(
@@ -226,9 +252,6 @@ class _EditPetViewState extends State<EditPetView> {
                   decoration: const InputDecoration(
                     labelText: 'Nombre de la mascota',
                     prefixIcon: Icon(Icons.badge_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
@@ -237,7 +260,7 @@ class _EditPetViewState extends State<EditPetView> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // --- ESPECIE ---
                 DropdownButtonFormField<TypePest>(
@@ -246,9 +269,6 @@ class _EditPetViewState extends State<EditPetView> {
                   decoration: const InputDecoration(
                     labelText: 'Especie',
                     prefixIcon: Icon(Icons.pets_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
                   ),
                   items: TypePest.values.map((TypePest type) {
                     return DropdownMenuItem<TypePest>(
@@ -267,41 +287,34 @@ class _EditPetViewState extends State<EditPetView> {
                     }
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // --- FECHA DE NACIMIENTO ---
                 InkWell(
                   onTap: () => _selectBirthDate(context),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: AppRadii.controlRadius,
                   child: InputDecorator(
                     decoration: const InputDecoration(
                       labelText: 'Fecha de nacimiento',
                       prefixIcon: Icon(Icons.cake_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
                     ),
                     child: Text(
                       '${_selectedBirthDate.toLocal()}'.split(' ')[0],
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
+                      style: TextStyle(fontSize: 16, color: esquema.onSurface),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // --- PESO ---
                 TextFormField(
                   controller: _weightController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(
                     labelText: 'Peso (kg)',
                     prefixIcon: Icon(Icons.monitor_weight_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
                     suffixText: 'kg',
                   ),
                   validator: (value) {
@@ -314,18 +327,15 @@ class _EditPetViewState extends State<EditPetView> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.fieldGap),
 
                 // --- ESTADO REPRODUCTIVO ---
                 Card(
-                  elevation: 0,
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
                   child: SwitchListTile(
                     title: const Text('¿Está esterilizado / castrado?'),
-                    subtitle: const Text('Ajusta el cálculo calórico automáticamente'),
+                    subtitle: const Text(
+                      'Ajusta el cálculo calórico automáticamente',
+                    ),
                     value: _reproductiveStatus,
                     onChanged: (bool value) {
                       setState(() {
@@ -334,11 +344,11 @@ class _EditPetViewState extends State<EditPetView> {
                     },
                     secondary: const Icon(Icons.medical_services_outlined),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: AppRadii.cardRadius,
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: AppSpacing.xxxl),
 
                 // --- BOTÓN DE ACTUALIZAR ---
                 BlocBuilder<PetBloc, PetState>(
@@ -347,19 +357,13 @@ class _EditPetViewState extends State<EditPetView> {
 
                     return FilledButton(
                       onPressed: isLoading ? null : _submitForm,
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                       child: isLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 24,
                               width: 24,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: Colors.white,
+                                color: esquema.onSurfaceVariant,
                               ),
                             )
                           : const Text(

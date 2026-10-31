@@ -34,8 +34,9 @@ void main() {
         ),
         GoRoute(
           path: '/dispensers/provision',
-          builder: (context, state) =>
-              const Scaffold(body: Center(child: Text('Aprovisionamiento WiFi'))),
+          builder: (context, state) => const Scaffold(
+            body: Center(child: Text('Aprovisionamiento WiFi')),
+          ),
         ),
       ],
     );
@@ -124,5 +125,48 @@ void main() {
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
+  });
+
+  testWidgets('RF-05: la acción de escaneo es la única principal', (
+    tester,
+  ) async {
+    await pumpPage(
+      tester,
+      repository: MockDispenserRepository(shouldFail: true),
+    );
+
+    expect(
+      find.widgetWithText(FilledButton, 'Reintentar Escaneo'),
+      findsOneWidget,
+    );
+    expect(find.byType(FilledButton), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('RF-05: «Conectar» es secundaria y navega al aprovisionamiento', (
+    tester,
+  ) async {
+    await pumpPage(tester, repository: MockDispenserRepository());
+
+    final boton = find.widgetWithText(OutlinedButton, 'Conectar');
+    expect(boton, findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Conectar'), findsNothing);
+    expect(tester.widget<OutlinedButton>(boton).style, isNull);
+
+    await tester.tap(boton);
+    await tester.pumpAndSettle();
+    expect(find.text('Aprovisionamiento WiFi'), findsOneWidget);
+  });
+
+  testWidgets('RF-05: el listado no muestra varias acciones principales', (
+    tester,
+  ) async {
+    await pumpPage(tester, repository: MockDispenserRepository());
+
+    expect(find.widgetWithText(OutlinedButton, 'Conectar'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Conectar'), findsNothing);
+    expect(find.byType(FilledButton), findsNothing);
   });
 }
