@@ -1505,12 +1505,15 @@ class TestTrazabilidad015(unittest.TestCase):
         )
         self.assertTrue(vista.is_file())
         codigo = vista.read_text(encoding="utf-8")
+        # El campo de contraseña local de la 015 pasó a ser el componente
+        # compartido PasswordVisibilityField en la 017. La comprobación fija el
+        # componente actual de la vista, no el nombre antiguo ya eliminado.
         for fragmento in (
             "normalizarCorreo(",
             "esCorreoValido(",
             "validarPasswordRegistro",
             "MensajesCuenta.passwordsNoCoinciden",
-            "class _CampoPassword",
+            "PasswordVisibilityField(",
         ):
             self.assertIn(fragmento, codigo)
 
