@@ -46,3 +46,6 @@ Archivos y responsabilidades · Funciones puras (con "hoy" como parámetro) · A
 Máximo 20-30 min por tarea, en orden de dependencia. Si salen más de 10, propón dividir la spec.
 ## Implementación
 Una sola tarea cada vez: tests primero (en rojo), después el código, tests en verde, marcar la tarea y parar.
+
+## Tener en cuenta
+El archivo generado spec.md debe ser conciso con los requerimientos solicitados, sin tanta toxto innecesario, solo lo necesario para el desarrollo, alcance y planteamento del plan y tareas, No se necesita un archivo exageradamente largo. Pero tampoco obmitas cosas importante, pero manten todo conciso.

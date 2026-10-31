@@ -1,8 +1,10 @@
 #include <unity.h>
 
 #include <cmath>
+#include <cstring>
 
 #include "config/dispensing_cycle.h"
+#include "config/report_utils.h"
 
 using namespace dispensing;
 
@@ -317,26 +319,118 @@ FakeReading profileTargetAndStall(unsigned long nowMs) {
   return validGrams(10.0f);
 }
 
-// El peso salta por encima del objetivo en pleno retroceso.
+// El peso salta por encima del objetivo en pleno retroceso con un incremento
+// plausible: 25 g con una orden de 10 g (tope 30 g). Antes saltaba a 50 g, que
+// con la plausibilidad de la Spec 016 cerraría por tope; el perfil conserva así
+// su propósito de la 013 (objetivo en retroceso) con resultado COMPLETED.
 FakeReading profileTargetInReverse(unsigned long nowMs) {
   if (nowMs < kStallExpiryMs + kSamplePeriodMs) {
     return validGrams(0.0f);
   }
-  return validGrams(50.0f);
+  return validGrams(25.0f);
 }
 
-// El peso salta por encima del objetivo ya en la pausa del reintento.
+// El peso salta por encima del objetivo ya en la pausa del reintento, también
+// con un incremento plausible (25 g con orden de 10 g).
 FakeReading profileTargetInPause(unsigned long nowMs) {
   if (nowMs < kStallExpiryMs + 5 * kSamplePeriodMs) {
     return validGrams(0.0f);
   }
-  return validGrams(50.0f);
+  return validGrams(25.0f);
 }
 
 // La celda no responde nunca: la verificación no se supera.
 FakeReading profileNoSensor(unsigned long nowMs) {
   (void)nowMs;
   return noAnswer();
+}
+
+// --- Perfiles de línea base (Spec 016, RF-2, RF-3, RF-4, RF-8) ---
+
+// La última lectura de la ventana se separa 1,01 g de la anterior: la base se
+// rechaza por inestable.
+FakeReading profileUnstableBaseline(unsigned long nowMs) {
+  if (nowMs == kVerificationWindowMs - kSamplePeriodMs) {
+    return validGrams(1.01f);
+  }
+  return validGrams(0.0f);
+}
+
+// Paso de exactamente 1,0 g en la última lectura de la ventana: el límite se
+// incluye y la base se acepta; después fluye 0,5 g/s desde 1 g.
+FakeReading profileBaselineStepOneGram(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    const bool lastSample = nowMs == kVerificationWindowMs - kSamplePeriodMs;
+    return validGrams(lastSample ? 1.0f : 0.0f);
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kVerificationWindowMs) / 1000.0f;
+  return validGrams(1.0f + 0.5f * seconds);
+}
+
+// Cuatro lecturas válidas y seis inválidas sin llegar nunca a tres consecutivas:
+// la ventana expira por tiempo con menos de cinco válidas.
+FakeReading profileFourValidBaseline(unsigned long nowMs) {
+  const unsigned index = nowMs / kSamplePeriodMs;
+  if (index == 2 || index == 5 || index >= 8) {
+    return validGrams(0.0f);
+  }
+  return noAnswer();
+}
+
+// Lecturas negativas que la 013 clasifica como inválidas: no entran en la
+// mediana y dejan la ventana con cuatro válidas, también sin tres inválidas
+// consecutivas.
+FakeReading profileNegativeReadings(unsigned long nowMs) {
+  const unsigned index = nowMs / kSamplePeriodMs;
+  if (index == 2 || index == 5 || index >= 8) {
+    return validGrams(0.0f);
+  }
+  return validGrams(-5.0f);
+}
+
+// Cinco válidas estables y después tres inválidas consecutivas: la ventana se
+// aborta con cinco válidas ya guardadas (RF-4 de la 013, RF-8).
+FakeReading profileAbortedBaseline(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs - 1000) {
+    return validGrams(0.0f);
+  }
+  return noAnswer();
+}
+
+// Ocho válidas con paso de 1,0 g y dos inválidas al final: la mediana de todas
+// las válidas es el promedio de las centrales, 3,5 g.
+FakeReading profileEvenMedianBaseline(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    const unsigned index = nowMs / kSamplePeriodMs;
+    if (index >= 8) {
+      return noAnswer();
+    }
+    return validGrams(static_cast<float>(index));
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kVerificationWindowMs) / 1000.0f;
+  return validGrams(7.0f + 0.5f * seconds);
+}
+
+// Nueve válidas: cuatro a 0,0 g, un pico de 4 g y una bajada de 1 g por lectura
+// hasta 0,0 g, más una inválida al final. Las últimas cinco se separan 1,0 g
+// exacto y la mediana de todas las válidas es 0,0 g (la de las últimas cinco
+// sería 2,0 g).
+FakeReading profileOddMedianBaseline(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    const unsigned index = nowMs / kSamplePeriodMs;
+    if (index == 9) {
+      return noAnswer();
+    }
+    if (index < 4) {
+      return validGrams(0.0f);
+    }
+    return validGrams(8.0f - static_cast<float>(index));
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kVerificationWindowMs) / 1000.0f;
+  return validGrams(0.5f * seconds);
 }
 
 // Flujo realista por encima de 0,4 g/s: 1 g/s con ruido alterno de 0,4 g.
@@ -417,6 +511,205 @@ FakeReading profileRiseDuringRetry(unsigned long nowMs) {
   const float seconds =
       static_cast<float>(nowMs - kRiseInRetryResumeMs) / 1000.0f;
   return validGrams(0.75f + 2.0f * seconds);
+}
+
+// --- Perfiles de plausibilidad del incremento (Spec 016, RF-5, RF-6) ---
+// La comprobación se hace en las tres fases. Con una orden de 20 g el tope es
+// max(3 x 20, 20 + 10) = 60 g y el suelo -10 g respecto de la línea base.
+
+// Tres lecturas consecutivas de 80 g con una orden de 20 g: el incremento
+// imposible cierra el ciclo en el tercer muestreo del avance.
+FakeReading profileAboveTopInAdvance(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(0.0f);
+  }
+  return validGrams(80.0f);
+}
+
+// Línea base de 12 g: el peso sube a 20 g (incremento plausible de 8 g) y cae a
+// 0 g, doce gramos por debajo de la base y por tanto bajo el suelo de -10 g.
+FakeReading profileBelowFloorInAdvance(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  const unsigned long index =
+      (nowMs - kVerificationWindowMs) / kSamplePeriodMs;
+  if (index < 3) {
+    return validGrams(20.0f);
+  }
+  return validGrams(0.0f);
+}
+
+// Dos lecturas por encima del tope y una dentro del intervalo: el contador se
+// reinicia y el ciclo completa la orden con un flujo de 2 g/s.
+constexpr unsigned long kTwoOutsideResetMs =
+    kVerificationWindowMs + 3 * kSamplePeriodMs;
+
+FakeReading profileTwoAboveTopOneInside(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(0.0f);
+  }
+  const unsigned long index =
+      (nowMs - kVerificationWindowMs) / kSamplePeriodMs;
+  if (index < 2) {
+    return validGrams(80.0f);
+  }
+  if (index == 2) {
+    return validGrams(0.0f);
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kTwoOutsideResetMs) / 1000.0f;
+  return validGrams(2.0f * seconds);
+}
+
+// Dos fuera, una inválida (que reinicia el contador porque RF-5 exige lecturas
+// válidas consecutivas) y una más fuera: tampoco cierra. El flujo posterior es
+// rápido (6 g/s) para llegar al objetivo antes del vencimiento de la ventana de
+// estancamiento, que la mediana móvil abrió con el pico de 80 g.
+constexpr unsigned long kTwoOutsideInvalidFlowMs =
+    kVerificationWindowMs + 4 * kSamplePeriodMs;
+
+FakeReading profileTwoAboveTopOneInvalid(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(0.0f);
+  }
+  const unsigned long index =
+      (nowMs - kVerificationWindowMs) / kSamplePeriodMs;
+  if (index < 2) {
+    return validGrams(80.0f);
+  }
+  if (index == 2) {
+    return noAnswer();
+  }
+  if (index == 3) {
+    return validGrams(80.0f);
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kTwoOutsideInvalidFlowMs) / 1000.0f;
+  return validGrams(6.0f * seconds);
+}
+
+// Una lectura que alcanza el objetivo y supera el tope a la vez: con orden de
+// 10 g el tope es 30 g y el objetivo 10 g, así que 31 g cumple ambos. Prevalece
+// el tope y no se declara objetivo alcanzado.
+FakeReading profileTargetAndTop(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(0.0f);
+  }
+  return validGrams(31.0f);
+}
+
+// Con la línea base en 12 g el peso no progresa: el atasco se declara a los 7 s
+// de motor (gracia más ventana), ya con la base aceptada.
+constexpr unsigned long kBaselineStallExpiryMs =
+    kVerificationWindowMs + kStallGraceMs + kStallWindowMs;
+
+// La tercera lectura bajo el suelo coincide con el vencimiento de la ventana de
+// estancamiento: la 013 declararía ahí el atasco y retrocedería; RF-6 exige que
+// el cierre por suelo gane y que no haya retroceso.
+constexpr unsigned long kFloorAtStallExpiryMs =
+    kBaselineStallExpiryMs - 2 * kSamplePeriodMs;
+
+FakeReading profileFloorAtStallExpiry(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  if (nowMs < kFloorAtStallExpiryMs) {
+    return validGrams(12.0f);
+  }
+  return validGrams(0.0f);
+}
+
+// El salto imposible llega en pleno retroceso: 50 g con una orden de 10 g
+// (tope 30 g), tres lecturas antes de que termine el giro inverso.
+FakeReading profileAboveTopInReverse(unsigned long nowMs) {
+  if (nowMs < kStallExpiryMs + kSamplePeriodMs) {
+    return validGrams(0.0f);
+  }
+  return validGrams(50.0f);
+}
+
+// El salto imposible llega ya en la pausa del reintento: cierra por tope antes
+// de reanudar el avance.
+FakeReading profileAboveTopInPause(unsigned long nowMs) {
+  if (nowMs < kStallExpiryMs + 5 * kSamplePeriodMs) {
+    return validGrams(0.0f);
+  }
+  return validGrams(50.0f);
+}
+
+// La pérdida de masa llega durante el retroceso abierto por el atasco.
+constexpr unsigned long kFloorReverseDropMs =
+    kBaselineStallExpiryMs + 2 * kSamplePeriodMs;
+
+FakeReading profileBelowFloorInReverse(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  if (nowMs < kFloorReverseDropMs) {
+    return validGrams(12.0f);
+  }
+  return validGrams(0.0f);
+}
+
+// La pérdida de masa llega con la pausa del reintento: la tercera lectura cae
+// dentro de los 0,3 s de pausa, antes de la reanudación prevista.
+constexpr unsigned long kFloorPauseDropMs = kBaselineStallExpiryMs + 1000;
+
+FakeReading profileBelowFloorInPause(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  if (nowMs < kFloorPauseDropMs) {
+    return validGrams(12.0f);
+  }
+  return validGrams(0.0f);
+}
+
+// Flujo constante de 0,5 g/s desde una línea base de 12 g: el incremento se mide
+// respecto de la base, es plausible y el ciclo termina en objetivo alcanzado.
+FakeReading profileFlowFromBaseline(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kVerificationWindowMs) / 1000.0f;
+  return validGrams(12.0f + 0.5f * seconds);
+}
+
+// Bajada pequeña dentro del suelo: con línea base de 12 g el peso queda en 9 g,
+// un incremento de -3 g que no es implausible y debe comportarse como la 013.
+FakeReading profileSmallDropStalled(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  return validGrams(9.0f);
+}
+
+// Línea base de 12 g y lecturas de 0 g desde el primer muestreo del motor: todos
+// los incrementos del ciclo son negativos (-12 g), así que el mayor observado es
+// el primero de ellos y no el cero de partida (RF-5, RF-6).
+FakeReading profileAllIncrementsNegative(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(12.0f);
+  }
+  return validGrams(0.0f);
+}
+
+// --- Caso feliz completo (Spec 016) ---
+
+// Línea base estable de 0 g y flujo de 1 g/s desde el arranque del motor: una
+// orden de 20 g se alcanza a los 20 s, dentro del presupuesto de 30 s, con un
+// incremento máximo de 20,4 g muy por debajo del tope de 60 g. El plan citaba
+// 50 g con 1 g/s, que exigirían 50 s de motor y superarían el presupuesto de la
+// 013; se usa la cantidad mayor que cabe con ese flujo.
+FakeReading profileHappyPath(unsigned long nowMs) {
+  if (nowMs < kVerificationWindowMs) {
+    return validGrams(0.0f);
+  }
+  const float seconds =
+      static_cast<float>(nowMs - kVerificationWindowMs) / 1000.0f;
+  return validGrams(1.0f * seconds);
 }
 
 } // namespace
@@ -867,6 +1160,20 @@ void test_motor_cycle_never_exceeds_budget_and_ends_stopped(void) {
       {profileTransientInReverse, 50.0f},
       {profileSensorFailureInReverse, 50.0f},
       {profileSensorFailureInPause, 50.0f},
+      {profileAboveTopInAdvance, 20.0f},
+      {profileBelowFloorInAdvance, 20.0f},
+      {profileTwoAboveTopOneInside, 20.0f},
+      {profileTwoAboveTopOneInvalid, 20.0f},
+      {profileTargetAndTop, 10.0f},
+      {profileFloorAtStallExpiry, 20.0f},
+      {profileAboveTopInReverse, 10.0f},
+      {profileAboveTopInPause, 10.0f},
+      {profileBelowFloorInReverse, 20.0f},
+      {profileBelowFloorInPause, 20.0f},
+      {profileFlowFromBaseline, 5.0f},
+      {profileSmallDropStalled, 20.0f},
+      {profileAllIncrementsNegative, 20.0f},
+      {profileHappyPath, 20.0f},
   };
 
   for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
@@ -953,6 +1260,608 @@ void test_verification_failure_fills_diagnostics(void) {
   TEST_ASSERT_FALSE(result.incrementAvailable);
 }
 
+// --- Línea base validada en el ciclo (Spec 016, RF-2, RF-3, RF-4, RF-8) ---
+// La ventana de 2 s de la 013 solo abre el ciclo con una base aceptada: cinco
+// válidas como mínimo y paso de 1 g como máximo entre las últimas cinco. Todo
+// rechazo detiene el servo antes de que arranque y deja el motivo en el
+// diagnóstico, que es lo único que lo distingue de un sensor desconectado.
+
+void test_unstable_baseline_rejects_without_moving_servo(void) {
+  CycleHarness harness{};
+  harness.profile = profileUnstableBaseline;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::UNSTABLE),
+                        static_cast<int>(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_STRING("inestable",
+                           baselineStatusText(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(10), diagnostics.valid);
+  // La mediana de todas las válidas queda disponible para el log aunque el
+  // veredicto la rechace.
+  TEST_ASSERT_TRUE(diagnostics.hasBaseline);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, diagnostics.baselineGrams);
+  // El servo no arranca: solo queda la parada del cierre (RF-3, RNF-2).
+  TEST_ASSERT_EQUAL_UINT(0, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(1, harness.servoCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_FALSE(result.baselineAvailable);
+}
+
+void test_four_valid_readings_reject_with_insufficient_readings(void) {
+  CycleHarness harness{};
+  harness.profile = profileFourValidBaseline;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::INSUFFICIENT_READINGS),
+                        static_cast<int>(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_STRING(
+      "lecturas_insuficientes",
+      baselineStatusText(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(4), diagnostics.valid);
+  TEST_ASSERT_EQUAL_UINT(0, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(1, harness.servoCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_FALSE(result.baselineAvailable);
+}
+
+void test_negative_readings_leave_insufficient_baseline(void) {
+  CycleHarness harness{};
+  harness.profile = profileNegativeReadings;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  // La celda responde en todas las muestras, pero las negativas son inválidas:
+  // no entran en la mediana y dejan la ventana sin cinco válidas (RF-4).
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(10), diagnostics.samples);
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(10), diagnostics.responded);
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(4), diagnostics.valid);
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::INSUFFICIENT_READINGS),
+                        static_cast<int>(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_UINT(0, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(1, harness.servoCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_FALSE(result.baselineAvailable);
+}
+
+void test_aborted_window_by_invalid_readings_has_no_baseline_verdict(void) {
+  CycleHarness harness{};
+  harness.profile = profileAbortedBaseline;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  // Cierre de RF-4 de la 013: con cinco válidas previas la mediana existiría y
+  // assessBaseline podría aceptar una base de una ventana abortada, así que el
+  // aborto por inválidas se resuelve antes y sin veredicto de base.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::NOT_EVALUATED),
+                        static_cast<int>(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_STRING("sin_veredicto",
+                           baselineStatusText(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(kMinValidReadings),
+                         diagnostics.valid);
+  TEST_ASSERT_EQUAL_UINT(
+      static_cast<unsigned>(kMaxConsecutiveInvalidReadings),
+      diagnostics.consecutiveInvalid);
+  TEST_ASSERT_FALSE(diagnostics.hasBaseline);
+  TEST_ASSERT_EQUAL_UINT(0, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(1, harness.servoCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_FALSE(result.baselineAvailable);
+}
+
+void test_baseline_step_limit_is_one_gram_exactly(void) {
+  // 1,0 g exacto entre las últimas cinco: el límite se incluye y el ciclo
+  // progresa hasta el objetivo.
+  CycleHarness acceptedHarness{};
+  acceptedHarness.profile = profileBaselineStepOneGram;
+
+  CycleDiagnostics acceptedDiagnostics{};
+  const DispenseResult acceptedResult =
+      runHarness(&acceptedHarness, 5.0f, &acceptedDiagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::ACCEPTED),
+                        static_cast<int>(acceptedDiagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(acceptedResult.reason));
+  TEST_ASSERT_TRUE(acceptedResult.baselineAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, acceptedResult.baselineGrams);
+  TEST_ASSERT_EQUAL_UINT(1, acceptedHarness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, acceptedResult.retryCount);
+
+  // 1,01 g: inestable, sin arranque del servo.
+  CycleHarness rejectedHarness{};
+  rejectedHarness.profile = profileUnstableBaseline;
+
+  CycleDiagnostics rejectedDiagnostics{};
+  const DispenseResult rejectedResult =
+      runHarness(&rejectedHarness, 5.0f, &rejectedDiagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::UNSTABLE),
+                        static_cast<int>(rejectedDiagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(rejectedResult.reason));
+  TEST_ASSERT_EQUAL_UINT(0, rejectedHarness.advanceCount);
+}
+
+void test_baseline_median_uses_all_valid_readings_with_even_and_odd_counts(void) {
+  // Número par: ocho válidas de 0 a 7 g; la mediana promedia las centrales y da
+  // 3,5 g, no los 5,0 g de las últimas cinco.
+  CycleHarness evenHarness{};
+  evenHarness.profile = profileEvenMedianBaseline;
+
+  CycleDiagnostics evenDiagnostics{};
+  const DispenseResult evenResult =
+      runHarness(&evenHarness, 5.0f, &evenDiagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::ACCEPTED),
+                        static_cast<int>(evenDiagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(8), evenDiagnostics.valid);
+  TEST_ASSERT_TRUE(evenResult.baselineAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(3.5f, evenResult.baselineGrams);
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(evenResult.reason));
+
+  // Número impar: nueve válidas con el pico fuera de las últimas cinco; la
+  // mediana de todas es 0,0 g, no los 2,0 g de las últimas cinco.
+  CycleHarness oddHarness{};
+  oddHarness.profile = profileOddMedianBaseline;
+
+  CycleDiagnostics oddDiagnostics{};
+  const DispenseResult oddResult =
+      runHarness(&oddHarness, 5.0f, &oddDiagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::ACCEPTED),
+                        static_cast<int>(oddDiagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(9), oddDiagnostics.valid);
+  TEST_ASSERT_TRUE(oddResult.baselineAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, oddResult.baselineGrams);
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(oddResult.reason));
+}
+
+// --- Plausibilidad del incremento dentro del ciclo (Spec 016, RF-5, RF-6) ---
+// La comprobación se hace en las tres fases del motor, antes del objetivo y del
+// atasco. Tres lecturas válidas consecutivas fuera del intervalo [suelo, tope]
+// cierran como sensor_no_disponible, sin retroceso, sin reanudación, sin
+// reintento y sin declarar objetivo alcanzado.
+
+void test_three_readings_above_top_close_without_reverse_or_resume(void) {
+  CycleHarness harness{};
+  harness.profile = profileAboveTopInAdvance;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::ABOVE_TOP),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_STRING("plausibilidad_tope",
+                           plausibilityCauseText(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_FLOAT(60.0f, diagnostics.topGrams);
+  TEST_ASSERT_EQUAL_FLOAT(80.0f, diagnostics.maxIncrementGrams);
+  // Tercera lectura del avance: ni retroceso ni reanudación ni reintento.
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(kVerificationWindowMs + 2 * kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  // El peso final se conserva para el log serie; el reporte lo omitirá porque el
+  // motivo es sensor_no_disponible (RF-7).
+  TEST_ASSERT_TRUE(result.baselineAvailable);
+  TEST_ASSERT_TRUE(result.finalAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(80.0f, result.finalGrams);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(80.0f, result.incrementGrams);
+}
+
+void test_three_readings_below_floor_close_without_reverse(void) {
+  CycleHarness harness{};
+  harness.profile = profileBelowFloorInAdvance;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::BELOW_FLOOR),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_STRING("plausibilidad_suelo",
+                           plausibilityCauseText(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_FLOAT(60.0f, diagnostics.topGrams);
+  // El mayor incremento del ciclo fue el de la subida plausible previa (8 g
+  // sobre una base de 12 g); la lectura que cierra cae 12 g por debajo.
+  TEST_ASSERT_EQUAL_FLOAT(8.0f, diagnostics.maxIncrementGrams);
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(kVerificationWindowMs + 5 * kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_TRUE(result.baselineAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(12.0f, result.baselineGrams);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(-12.0f, result.incrementGrams);
+}
+
+// Ciclo íntegramente negativo: la bandeja se retira desde la primera muestra del
+// motor. El mayor incremento observado es el primero (el menos negativo), no el
+// cero con el que arrancaría un máximo sin lectura previa.
+void test_all_negative_increments_report_the_least_negative_max(void) {
+  CycleHarness harness{};
+  harness.profile = profileAllIncrementsNegative;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::BELOW_FLOOR),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_STRING("plausibilidad_suelo",
+                           plausibilityCauseText(diagnostics.plausibility));
+  // Todos los incrementos son de -12 g: el máximo observado es ese valor y no
+  // 0 g, que es solo el valor de partida del seguimiento (solo log).
+  TEST_ASSERT_EQUAL_FLOAT(-12.0f, diagnostics.maxIncrementGrams);
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(kVerificationWindowMs + 2 * kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_TRUE(result.baselineAvailable);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(-12.0f, result.incrementGrams);
+}
+
+void test_two_outside_one_inside_does_not_close_the_cycle(void) {
+  CycleHarness harness{};
+  harness.profile = profileTwoAboveTopOneInside;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  // La lectura dentro del intervalo reinicia el contador: el ciclo sigue y
+  // alcanza el objetivo.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::PLAUSIBLE),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_TRUE(result.incrementGrams >= 20.0f);
+}
+
+void test_two_outside_one_invalid_then_outside_does_not_close(void) {
+  CycleHarness harness{};
+  harness.profile = profileTwoAboveTopOneInvalid;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  // RF-5 exige tres lecturas VÁLIDAS consecutivas: la inválida reinicia el
+  // contador aunque no se cuente como lectura fuera de límites.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::PLAUSIBLE),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_TRUE(result.incrementGrams >= 20.0f);
+}
+
+void test_top_prevails_over_target_on_same_sample(void) {
+  CycleHarness harness{};
+  harness.profile = profileTargetAndTop;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 10.0f, &diagnostics);
+
+  // 31 g con orden de 10 g alcanza el objetivo y supera el tope de 30 g en la
+  // misma lectura: prevalece el tope y no se declara objetivo alcanzado.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::ABOVE_TOP),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_FLOAT(30.0f, diagnostics.topGrams);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(kVerificationWindowMs + 2 * kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+// --- Prioridad de la plausibilidad sobre el objetivo y el atasco (RF-6) ---
+
+// El tope solo puede prevalecer sobre el atasco en una muestra en la que la 013
+// lo declararía, y eso es inalcanzable: cualquier incremento mayor que el tope
+// (>= cantidad + 10 g) supera también el objetivo, que la 013 comprueba antes del
+// atasco, y con tres lecturas por encima del tope la mediana móvil supera el
+// progreso mínimo y reinicia la ventana de estancamiento. La prioridad sobre el
+// atasco queda fijada con el caso del suelo, que sí puede coincidir con el
+// vencimiento de la ventana.
+void test_floor_prevails_over_stall_on_same_sample(void) {
+  CycleHarness harness{};
+  harness.profile = profileFloorAtStallExpiry;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  // La tercera lectura bajo el suelo llega justo al vencer la ventana de
+  // estancamiento: la 013 declararía ahí el atasco y retrocedería, pero el
+  // cierre por suelo gana y el servo no ejecuta ningún retroceso (RF-6).
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::BELOW_FLOOR),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_EQUAL_UINT32(static_cast<unsigned long>(kBaselineStallExpiryMs),
+                           lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+void test_top_during_reverse_stops_without_extra_reverse(void) {
+  CycleHarness harness{};
+  harness.profile = profileAboveTopInReverse;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 10.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::ABOVE_TOP),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_FLOAT(30.0f, diagnostics.topGrams);
+  TEST_ASSERT_EQUAL_FLOAT(50.0f, diagnostics.maxIncrementGrams);
+  // Solo el retroceso del atasco previo: ni otro retroceso ni reanudación.
+  TEST_ASSERT_EQUAL_UINT(1, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+
+  unsigned long reverseMs = 0;
+  TEST_ASSERT_TRUE(firstReverseMs(harness, &reverseMs));
+  TEST_ASSERT_EQUAL_UINT32(static_cast<unsigned long>(reverseMs + 3 * kSamplePeriodMs),
+                           lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionMs(harness) < reverseMs + kReverseMs);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+void test_top_during_pause_stops_without_resuming_advance(void) {
+  CycleHarness harness{};
+  harness.profile = profileAboveTopInPause;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 10.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::ABOVE_TOP),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(1, harness.reverseCount);
+  // El avance no se reanuda y el reintento no se cuenta.
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+
+  unsigned long reverseMs = 0;
+  TEST_ASSERT_TRUE(firstReverseMs(harness, &reverseMs));
+  // La tercera lectura cae dentro de la pausa y el ciclo se detiene antes de la
+  // reanudación prevista para el final de los 0,3 s.
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(reverseMs + kReverseMs + kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionMs(harness) <
+                   reverseMs + kReverseMs + kPauseMs);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+void test_floor_during_reverse_stops_without_extra_reverse(void) {
+  CycleHarness harness{};
+  harness.profile = profileBelowFloorInReverse;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::BELOW_FLOOR),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_FLOAT(60.0f, diagnostics.topGrams);
+  TEST_ASSERT_EQUAL_UINT(1, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+
+  unsigned long reverseMs = 0;
+  TEST_ASSERT_TRUE(firstReverseMs(harness, &reverseMs));
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(kFloorReverseDropMs + 2 * kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionMs(harness) < reverseMs + kReverseMs);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+void test_floor_during_pause_stops_without_resuming_advance(void) {
+  CycleHarness harness{};
+  harness.profile = profileBelowFloorInPause;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::SENSOR_UNAVAILABLE),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::BELOW_FLOOR),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(1, harness.reverseCount);
+  // La tercera lectura cae en la pausa: el avance no se reanuda.
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_EQUAL_UINT32(
+      static_cast<unsigned long>(kFloorPauseDropMs + 2 * kSamplePeriodMs),
+      lastActionMs(harness));
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+void test_plausible_increment_from_baseline_completes_with_measurements(void) {
+  CycleHarness harness{};
+  harness.profile = profileFlowFromBaseline;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 5.0f, &diagnostics);
+
+  // El incremento se mide respecto de la línea base de 12 g y se mantiene dentro
+  // del intervalo: objetivo alcanzado con medidos disponibles.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::PLAUSIBLE),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_TRUE(result.baselineAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(12.0f, result.baselineGrams);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  TEST_ASSERT_TRUE(result.incrementGrams >= 5.0f);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+// --- Caso feliz completo (Spec 016): asentamiento ganado, compuerta abierta,
+// línea base estable, incremento plausible y «objetivo alcanzado» con medidos
+// disponibles en el reporte de la 014.
+
+void test_happy_path_settles_accepts_the_order_and_completes_with_measurements(
+    void) {
+  // 1) Asentamiento: 14 lecturas válidas estables no bastan y la 15 lo gana.
+  SettlementState settlement{};
+  invalidateSettlement(&settlement);
+  const WeightSample stableSample = makeSample(true, 0, kTestFactor, kTestSign);
+  TEST_ASSERT_TRUE(isReadingValid(stableSample));
+  for (unsigned i = 1; i < kSettlementReadings; ++i) {
+    TEST_ASSERT_EQUAL_INT(
+        static_cast<int>(SettlementOutcome::IN_PROGRESS),
+        static_cast<int>(recordSettlementSample(&settlement, stableSample)));
+  }
+  TEST_ASSERT_FALSE(settlementGained(settlement));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(SettlementOutcome::GAINED),
+                        static_cast<int>(recordSettlementSample(
+                            &settlement, stableSample)));
+  TEST_ASSERT_TRUE(settlementGained(settlement));
+
+  // 2) Compuerta de entrada: con asentamiento la orden de dispensación se abre.
+  TEST_ASSERT_EQUAL_INT(
+      static_cast<int>(DispenseEntry::DISPENSE),
+      static_cast<int>(decideDispenseEntry(OrderAction::DISPENSE,
+                                           settlementGained(settlement))));
+
+  // 3) Ciclo completo: base estable de 0 g, flujo de 1 g/s hasta 20 g y sin
+  // reintentos ni retrocesos.
+  CycleHarness harness{};
+  harness.profile = profileHappyPath;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::COMPLETED),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(BaselineStatus::ACCEPTED),
+                        static_cast<int>(diagnostics.baselineRejection));
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::PLAUSIBLE),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_EQUAL_UINT(1, harness.advanceCount);
+  TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_UINT(0, result.retryCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+  TEST_ASSERT_TRUE(result.baselineAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, result.baselineGrams);
+  TEST_ASSERT_TRUE(result.finalAvailable);
+  TEST_ASSERT_TRUE(result.incrementAvailable);
+  // Incremento plausible: alcanza la cantidad pedida y no supera el tope.
+  TEST_ASSERT_TRUE(result.incrementGrams >= 20.0f);
+  TEST_ASSERT_TRUE(result.incrementGrams <= plausibilityTopGrams(20.0f));
+  // RNF-2: el motor no pasa de 30 s ni el ciclo completo de 32 s.
+  TEST_ASSERT_LESS_OR_EQUAL_UINT32(static_cast<unsigned long>(kMotorBudgetMs),
+                                   motorDurationMs(harness));
+  TEST_ASSERT_LESS_OR_EQUAL_UINT32(
+      static_cast<unsigned long>(kVerificationWindowMs + kMotorBudgetMs),
+      lastActionMs(harness));
+
+  // 4) Reporte de la 014: «objetivo_alcanzado» con los medidos disponibles, que
+  // es lo que el servidor usa para descontar el stock.
+  const reporting::ReporteCiclo reporte =
+      reporting::reporteDesdeResultado(result, true, 7);
+  TEST_ASSERT_TRUE(reporte.medidosAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(result.incrementGrams, reporte.medidos);
+  TEST_ASSERT_TRUE(reporte.solicitadosAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(20.0f, reporte.solicitados);
+  TEST_ASSERT_EQUAL_UINT(0, reporte.reintentos);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_NOT_NULL(std::strstr(json, "\"order_id\":7"));
+  TEST_ASSERT_NOT_NULL(std::strstr(json, "\"motivo\":\"objetivo_alcanzado\""));
+  TEST_ASSERT_NOT_NULL(std::strstr(json, "\"gramos_medidos\":"));
+}
+
+void test_small_negative_increment_inside_floor_keeps_013_behaviour(void) {
+  CycleHarness harness{};
+  harness.profile = profileSmallDropStalled;
+
+  CycleDiagnostics diagnostics{};
+  const DispenseResult result = runHarness(&harness, 20.0f, &diagnostics);
+
+  // -3 g está dentro del intervalo: no cierra por suelo y el estancamiento se
+  // resuelve como en la 013, con retrocesos y reintentos.
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(PlausibilityVerdict::PLAUSIBLE),
+                        static_cast<int>(diagnostics.plausibility));
+  TEST_ASSERT_GREATER_THAN_UINT(0, harness.reverseCount);
+  TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::STALL_UNRESOLVED),
+                        static_cast<int>(result.reason));
+  TEST_ASSERT_EQUAL_UINT(static_cast<unsigned>(kMaxStallRetries),
+                         result.retryCount);
+  TEST_ASSERT_TRUE(lastActionIsStop(harness));
+}
+
+void test_invalid_factor_does_not_touch_ports(void) {
+  // Caso (d) en la llamada directa al ciclo, como la 013: el factor cero,
+  // negativo, NaN o infinito se rechaza sin leer la celda ni mover el servo.
+  const float factors[] = {0.0f, -1.0f, NAN, INFINITY};
+  for (unsigned i = 0; i < sizeof(factors) / sizeof(factors[0]); ++i) {
+    CycleHarness harness{};
+    harness.profile = profileFlow;
+
+    const DispenseResult result =
+        runHarness(&harness, 50.0f, nullptr, factors[i]);
+
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(DispenseReason::INVALID_CONFIG),
+                          static_cast<int>(result.reason));
+    TEST_ASSERT_EQUAL_UINT(0, harness.advanceCount);
+    TEST_ASSERT_EQUAL_UINT(0, harness.reverseCount);
+    TEST_ASSERT_EQUAL_UINT(0, harness.stopCount);
+    TEST_ASSERT_EQUAL_UINT(0, harness.readCount);
+  }
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_cycle_limits_default_to_approved_constants);
@@ -977,5 +1886,26 @@ int main(int, char **) {
   RUN_TEST(test_motor_cycle_never_exceeds_budget_and_ends_stopped);
   RUN_TEST(test_sampling_period_holds_in_all_phases);
   RUN_TEST(test_verification_failure_fills_diagnostics);
+  RUN_TEST(test_unstable_baseline_rejects_without_moving_servo);
+  RUN_TEST(test_four_valid_readings_reject_with_insufficient_readings);
+  RUN_TEST(test_negative_readings_leave_insufficient_baseline);
+  RUN_TEST(test_aborted_window_by_invalid_readings_has_no_baseline_verdict);
+  RUN_TEST(test_baseline_step_limit_is_one_gram_exactly);
+  RUN_TEST(test_baseline_median_uses_all_valid_readings_with_even_and_odd_counts);
+  RUN_TEST(test_three_readings_above_top_close_without_reverse_or_resume);
+  RUN_TEST(test_three_readings_below_floor_close_without_reverse);
+  RUN_TEST(test_two_outside_one_inside_does_not_close_the_cycle);
+  RUN_TEST(test_two_outside_one_invalid_then_outside_does_not_close);
+  RUN_TEST(test_top_prevails_over_target_on_same_sample);
+  RUN_TEST(test_floor_prevails_over_stall_on_same_sample);
+  RUN_TEST(test_top_during_reverse_stops_without_extra_reverse);
+  RUN_TEST(test_top_during_pause_stops_without_resuming_advance);
+  RUN_TEST(test_floor_during_reverse_stops_without_extra_reverse);
+  RUN_TEST(test_floor_during_pause_stops_without_resuming_advance);
+  RUN_TEST(test_plausible_increment_from_baseline_completes_with_measurements);
+  RUN_TEST(test_happy_path_settles_accepts_the_order_and_completes_with_measurements);
+  RUN_TEST(test_small_negative_increment_inside_floor_keeps_013_behaviour);
+  RUN_TEST(test_all_negative_increments_report_the_least_negative_max);
+  RUN_TEST(test_invalid_factor_does_not_touch_ports);
   return UNITY_END();
 }

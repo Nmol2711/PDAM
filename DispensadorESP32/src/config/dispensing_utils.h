@@ -43,6 +43,37 @@ constexpr long kRawSaturationMax = 8388607L;
 // Muestras válidas que se conservan para calcular la mediana.
 constexpr unsigned kMedianBufferSize = 16;
 
+// El buffer de la mediana no es un anillo: se llena con el índice storedCount.
+// Si baja de 11, la mediana dejaría de ser la de todas las válidas de la
+// ventana de 2 s (RNF-3 de la Spec 016).
+static_assert(kMedianBufferSize >= 11,
+              "El buffer de la mediana debe cubrir todas las lecturas validas "
+              "de la ventana de 2 s");
+
+// --- Validación de línea base y plausibilidad del incremento (Spec 016) ---
+// Se definen únicamente aquí, junto a los umbrales de la Spec 013 (RNF-3).
+
+// Lecturas válidas consecutivas, con paso acotado, que ganan el asentamiento
+// de la celda (≈3 s con el muestreo de 5 Hz).
+constexpr unsigned kSettlementReadings = 15;
+
+// Paso máximo en gramos entre dos lecturas válidas consecutivas: conserva la
+// racha de asentamiento y la estabilidad de la línea base.
+constexpr float kSettlementMaxStepGrams = 1.0f;
+
+// Tope de plausibilidad: el mayor entre este factor por la cantidad solicitada
+// y la cantidad más el margen; un incremento lo supera solo si es mayor.
+constexpr float kPlausibilityFactor = 3.0f;
+constexpr float kPlausibilityMarginGrams = 10.0f;
+
+// Suelo de plausibilidad: por debajo, la variación es pérdida de masa y no
+// dispensado. Un incremento cae bajo el suelo solo si es estrictamente menor.
+constexpr float kPlausibilityFloorGrams = -10.0f;
+
+// Lecturas válidas consecutivas fuera del intervalo [suelo, tope] que cierran
+// el ciclo como fallo.
+constexpr unsigned kPlausibilityConsecutiveReadings = 3;
+
 // --- Umbrales de detección y resolución de atascos (RF-14 a RF-17, RNF-7) ---
 // Se definen únicamente aquí; ajustarlos no exige cambiar la lógica de decisión.
 

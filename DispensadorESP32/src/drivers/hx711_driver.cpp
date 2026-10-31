@@ -7,7 +7,11 @@
 // Instancia única de la celda de carga para todo el firmware.
 static HX711 hx711;
 
-void initHx711() {
+// Inicialización única: el muestreo del asentamiento (services/scale_guard_service)
+// y el ciclo de dispensado (services/dispensing_service) comparten esta begin().
+static bool hx711Initialized = false;
+
+static void beginHx711() {
   hx711.begin(hx711DtPin, hx711SckPin);
 
   // Si el módulo HX711 se desconecta del ESP32, el pin DT queda flotando; el
@@ -22,6 +26,14 @@ void initHx711() {
   Serial.printf("HX711 inicializado: DT=%d, SCK=%d, factor=%.1f, signo=%+.1f.\n",
                 hx711DtPin, hx711SckPin, hx711CalibrationFactor,
                 hx711RawSign);
+}
+
+void ensureHx711Initialized() {
+  if (hx711Initialized) {
+    return;
+  }
+  beginHx711();
+  hx711Initialized = true;
 }
 
 bool readHx711Raw(long *rawOut, unsigned long timeoutMs) {

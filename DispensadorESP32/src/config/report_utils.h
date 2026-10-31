@@ -92,10 +92,14 @@ inline ReporteCiclo reporteVacio(dispensing::DispenseReason motivo) {
   return reporte;
 }
 
-// Traduce el resultado del ciclo al reporte (RF-36).
+// Traduce el resultado del ciclo al reporte (RF-36 de la 014, RF-7 de la 016).
 //
 // Los gramos medidos son el incremento del ciclo: sin línea base no hay
-// incremento atribuible y el campo se declara ausente.
+// incremento atribuible y el campo se declara ausente. Además, un cierre por
+// `SENSOR_UNAVAILABLE` nunca los declara —aunque el ciclo hubiera podido
+// calcularlos— porque la 016 exige los medidos como «no disponible» en los
+// cierres sin medición fiable; el resto de motivos los conserva. La regla vive
+// aquí para no alterar las banderas de `DispenseResult` que usa el log serie.
 inline ReporteCiclo reporteDesdeResultado(const dispensing::DispenseResult &result,
                                           bool orderIdAvailable, long orderId) {
   ReporteCiclo reporte{};
@@ -104,8 +108,11 @@ inline ReporteCiclo reporteDesdeResultado(const dispensing::DispenseResult &resu
   reporte.motivo = result.reason;
   reporte.solicitadosAvailable = result.requestedGrams > 0.0f;
   reporte.solicitados = reporte.solicitadosAvailable ? result.requestedGrams : 0.0f;
-  reporte.medidosAvailable = result.incrementAvailable;
-  reporte.medidos = result.incrementAvailable ? result.incrementGrams : 0.0f;
+  const bool medidosDeclarables =
+      result.incrementAvailable &&
+      result.reason != dispensing::DispenseReason::SENSOR_UNAVAILABLE;
+  reporte.medidosAvailable = medidosDeclarables;
+  reporte.medidos = medidosDeclarables ? result.incrementGrams : 0.0f;
   reporte.reintentos = result.retryCount;
   return reporte;
 }

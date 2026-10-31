@@ -29,6 +29,9 @@ ENV/
 # Herramientas de agentes
 .cline/
 
+# Scripts locales de ejecución
+run.sh
+
 # Subidas de usuario en tiempo de ejecución
 api/static/pets/*
 !api/static/pets/064a0f1d-28d8-4a15-91ee-70fe31f16e3d.jpg

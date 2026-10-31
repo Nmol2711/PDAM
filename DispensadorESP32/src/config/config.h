@@ -19,6 +19,12 @@
 //   - presupuesto de motor: 30 000 ms (kMotorBudgetMs)
 //   - presupuesto mínimo de reintento: 3 500 ms (kMinRetryBudgetMs)
 
+// Umbrales de la validación de línea base y de la plausibilidad (Spec 016):
+// 15 lecturas de asentamiento, paso máximo de 1,0 g, factor 3,0 del tope,
+// margen de 10,0 g, suelo de -10,0 g y 3 lecturas consecutivas de
+// plausibilidad. Se definen y documentan en dispensing_utils.h; este archivo no
+// duplica sus valores (RNF-3).
+
 // UUIDs para el servicio BLE de aprovisionamiento (RF-05, RF-06)
 #define SERVICE_UUID               "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
 #define CHARACTERISTIC_UUID_SSID   "beb5483e-36e1-4688-b7f5-ea07361b26a6"

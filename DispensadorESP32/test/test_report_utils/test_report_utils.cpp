@@ -231,6 +231,138 @@ void test_sin_identificador_de_orden_el_reporte_lo_declara_ausente() {
   TEST_ASSERT_FALSE(reporte.orderIdAvailable);
 }
 
+void test_sensor_no_disponible_no_declara_gramos_medidos() {
+  // Aunque el ciclo hubiera calculado un incremento, un cierre por sensor no
+  // disponible lo declara ausente (RF-7 de la spec 016). El resto de campos de
+  // la 014 se conservan: order_id, solicitados y reintentos.
+  const auto result = resultado(dispensing::DispenseReason::SENSOR_UNAVAILABLE,
+                                50.0f, true, 50.4f, 0);
+  const reporting::ReporteCiclo reporte =
+      reporting::reporteDesdeResultado(result, true, 12);
+
+  TEST_ASSERT_FALSE(reporte.medidosAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, reporte.medidos);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"sensor_no_disponible\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":0}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
+void test_sensor_no_disponible_conserva_los_reintentos_sin_medidos() {
+  // Omitir la medición no puede perder el contador de reintentos (RF-37 de la
+  // 014, RF-7 de la 016).
+  const auto result = resultado(dispensing::DispenseReason::SENSOR_UNAVAILABLE,
+                                50.0f, true, 50.4f, 2);
+  const reporting::ReporteCiclo reporte =
+      reporting::reporteDesdeResultado(result, true, 12);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"sensor_no_disponible\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":2}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
+void test_sin_incremento_por_causa_distinta_al_sensor_tampoco_hay_medidos() {
+  // El criterio de los medidos tiene dos mitades: el motivo no puede ser
+  // `sensor_no_disponible` Y el ciclo debe haber podido calcular el incremento.
+  // Este caso fija la segunda mitad con motivos que sí los declararían si los
+  // hubiera (RF-7 de la 016): sin línea base no hay incremento atribuible y el
+  // JSON no puede inventar `gramos_medidos`.
+  const auto sinAlcanzar =
+      resultado(dispensing::DispenseReason::NOT_REACHED, 50.0f, false, 0.0f, 0);
+  const reporting::ReporteCiclo reporteSinAlcanzar =
+      reporting::reporteDesdeResultado(sinAlcanzar, true, 12);
+  TEST_ASSERT_FALSE(reporteSinAlcanzar.medidosAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, reporteSinAlcanzar.medidos);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson(
+      "AA:BB:CC:DD:AB:1F", reporteSinAlcanzar, json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"objetivo_no_alcanzado\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":0}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+
+  // Fallo del sensor sin medición calculable y con reintentos: tampoco declara
+  // medidos y conserva el contador (RF-37 de la 014).
+  const auto fallo =
+      resultado(dispensing::DispenseReason::SENSOR_FAILURE, 50.0f, false, 0.0f,
+                1);
+  const reporting::ReporteCiclo reporteFallo =
+      reporting::reporteDesdeResultado(fallo, true, 12);
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F",
+                                                   reporteFallo, json,
+                                                   sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"fallo_sensor_dispensacion\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":1}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
+void test_los_demas_motivos_conservan_los_medidos_disponibles() {
+  // Solo `sensor_no_disponible` omite los medidos: los otros seis motivos del
+  // catálogo los conservan cuando el ciclo pudo calcularlos.
+  const dispensing::DispenseReason motivos[] = {
+      dispensing::DispenseReason::COMPLETED,
+      dispensing::DispenseReason::NOT_REACHED,
+      dispensing::DispenseReason::SENSOR_FAILURE,
+      dispensing::DispenseReason::STALL_UNRESOLVED,
+      dispensing::DispenseReason::INVALID_CONFIG,
+      dispensing::DispenseReason::INVALID_AMOUNT};
+
+  for (const auto motivo : motivos) {
+    const auto result = resultado(motivo, 50.0f, true, 50.4f, 0);
+    const reporting::ReporteCiclo reporte =
+        reporting::reporteDesdeResultado(result, true, 12);
+
+    TEST_ASSERT_TRUE(reporte.medidosAvailable);
+    TEST_ASSERT_EQUAL_FLOAT(50.4f, reporte.medidos);
+
+    char json[256];
+    TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F",
+                                                     reporte, json,
+                                                     sizeof(json)));
+    TEST_ASSERT_NOT_NULL(std::strstr(json, "\"gramos_medidos\":50.40"));
+  }
+}
+
+void test_reporte_vacio_de_sensor_no_disponible_tampoco_declara_medidos() {
+  // `reporteVacio` se usa en la compuerta de entrada y ya nace sin medidos; con
+  // orden y solicitados conocidos, el JSON mantiene el contrato de la 014 y no
+  // gana claves.
+  reporting::ReporteCiclo reporte =
+      reporting::reporteVacio(dispensing::DispenseReason::SENSOR_UNAVAILABLE);
+  reporte.orderIdAvailable = true;
+  reporte.orderId = 34;
+  reporte.solicitadosAvailable = true;
+  reporte.solicitados = 25.0f;
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":34,"
+      "\"motivo\":\"sensor_no_disponible\",\"gramos_solicitados\":25.00,"
+      "\"reintentos\":0}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
 // --- Clasificación de la respuesta (RF-39) ---
 
 void test_un_200_descarta_el_reporte() {
@@ -418,6 +550,11 @@ int main(int argc, char **argv) {
   RUN_TEST(test_el_reporte_usa_el_incremento_medido_del_ciclo);
   RUN_TEST(test_sin_incremento_disponible_no_hay_medidos);
   RUN_TEST(test_sin_identificador_de_orden_el_reporte_lo_declara_ausente);
+  RUN_TEST(test_sensor_no_disponible_no_declara_gramos_medidos);
+  RUN_TEST(test_sensor_no_disponible_conserva_los_reintentos_sin_medidos);
+  RUN_TEST(test_sin_incremento_por_causa_distinta_al_sensor_tampoco_hay_medidos);
+  RUN_TEST(test_los_demas_motivos_conservan_los_medidos_disponibles);
+  RUN_TEST(test_reporte_vacio_de_sensor_no_disponible_tampoco_declara_medidos);
   RUN_TEST(test_un_200_descarta_el_reporte);
   RUN_TEST(test_los_tres_400_enumerados_se_descartan);
   RUN_TEST(test_un_400_no_enumerado_tambien_se_descarta);

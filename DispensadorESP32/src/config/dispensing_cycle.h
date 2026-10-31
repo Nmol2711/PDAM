@@ -4,6 +4,7 @@
 #include <cstdint>
 
 #include "dispensing_utils.h"
+#include "scale_guard_utils.h"
 
 // Ciclo completo de dispensado por peso como unidad pura (Spec 013).
 // Cabecera sin <Arduino.h>: el servo, la celda, el reloj y la espera se inyectan
@@ -28,6 +29,38 @@ struct CyclePorts {
   void (*waitUntil)(void *context, unsigned long deadlineMs);
 };
 
+// Veredicto de la línea base al cerrar la ventana de verificación, con un valor
+// «sin veredicto» para el aborto por 3 lecturas inválidas consecutivas: en ese
+// camino la base no llega a evaluarse (RF-4 de la 013, RF-8). Los otros cuatro
+// valores son los de BaselineVerdict de scale_guard_utils.h; se nombran aquí
+// porque NOT_EVALUATED no existe en el veredicto puro (Spec 016).
+enum class BaselineStatus {
+  NOT_EVALUATED,
+  ACCEPTED,
+  UNSTABLE,
+  INSUFFICIENT_READINGS,
+  INVALID_BASELINE
+};
+
+// Texto en español del estado de la línea base para el registro serie (RNF-4).
+// Los cuatro veredictos reales delegan en baselineRejectionText() para no
+// duplicar sus textos.
+inline const char *baselineStatusText(BaselineStatus status) {
+  switch (status) {
+  case BaselineStatus::ACCEPTED:
+    return baselineRejectionText(BaselineVerdict::ACCEPTED);
+  case BaselineStatus::UNSTABLE:
+    return baselineRejectionText(BaselineVerdict::UNSTABLE);
+  case BaselineStatus::INSUFFICIENT_READINGS:
+    return baselineRejectionText(BaselineVerdict::INSUFFICIENT_READINGS);
+  case BaselineStatus::INVALID_BASELINE:
+    return baselineRejectionText(BaselineVerdict::INVALID_BASELINE);
+  case BaselineStatus::NOT_EVALUATED:
+    return "sin_veredicto";
+  }
+  return "sin_veredicto";
+}
+
 // Diagnóstico de la ventana de verificación, para que el servicio lo imprima
 // como hasta ahora cuando no se supera (RF-4).
 struct CycleDiagnostics {
@@ -38,6 +71,15 @@ struct CycleDiagnostics {
   long lastRaw;                // último valor en bruto respondido
   float lastGrams;             // últimos gramos respondidos
   bool hasLastReading;         // false si nunca respondió
+  BaselineStatus baselineRejection; // veredicto de la base; NOT_EVALUATED si la
+                                    // ventana se abortó por inválidas
+  bool hasBaseline;            // mediana de todas las válidas calculable
+  float baselineGrams;         // mediana de todas las válidas (solo log)
+  PlausibilityVerdict plausibility; // cierre por plausibilidad; PLAUSIBLE si el
+                                    // ciclo no se cerró por incremento imposible
+  float topGrams;              // tope de plausibilidad de la orden (solo log)
+  float maxIncrementGrams;     // mayor incremento observado del ciclo de motor,
+                               // incluido un ciclo íntegramente negativo (solo log)
 };
 
 // Límites del ciclo de motor. Los valores por defecto son exactamente las
@@ -101,6 +143,21 @@ inline WeightSample unavailableSample(float factor, float sign) {
   return makeSample(false, 0, factor, sign);
 }
 
+// Traslada el veredicto puro de la línea base al estado del diagnóstico.
+inline BaselineStatus baselineStatusOf(BaselineVerdict verdict) {
+  switch (verdict) {
+  case BaselineVerdict::ACCEPTED:
+    return BaselineStatus::ACCEPTED;
+  case BaselineVerdict::UNSTABLE:
+    return BaselineStatus::UNSTABLE;
+  case BaselineVerdict::INSUFFICIENT_READINGS:
+    return BaselineStatus::INSUFFICIENT_READINGS;
+  case BaselineVerdict::INVALID_BASELINE:
+    return BaselineStatus::INVALID_BASELINE;
+  }
+  return BaselineStatus::NOT_EVALUATED;
+}
+
 } // namespace detail
 
 // Alimenta la mediana móvil y el máximo observado sin evaluar atascos.
@@ -130,9 +187,11 @@ inline StallAction decideStallAction(unsigned retriesDone,
 }
 
 // Ejecuta el ciclo completo: valida las entradas, verifica la celda durante 2 s,
-// fija la línea base, avanza, mide en las tres fases, resuelve atascos dentro del
-// presupuesto de motor y detiene el servo en toda salida (RF-5 a RF-9, RF-12,
-// RF-14 a RF-17, RNF-1, RNF-3).
+// acepta la línea base solo con 5 válidas y paso de 1 g como máximo entre las
+// últimas 5, avanza, mide en las tres fases, cierra por incremento imposible
+// antes que por objetivo o atasco, resuelve atascos dentro del presupuesto de
+// motor y detiene el servo en toda salida (RF-5 a RF-9, RF-12, RF-14 a RF-17,
+// RNF-1, RNF-3; RF-2 a RF-8 de la 016).
 inline DispenseResult runDispenseCycle(const CyclePorts &ports,
                                        float amountGrams, float factor,
                                        float sign,
@@ -181,6 +240,8 @@ inline DispenseResult runDispenseCycle(const CyclePorts &ports,
   const unsigned long verificationDeadlineMs =
       verification.startMs + kVerificationWindowMs;
   unsigned long nextSampleMs = verification.startMs;
+  // Solo se conserva para la guarda del aborto por inválidas: sobre la ventana
+  // agotada por tiempo decide assessBaseline (Spec 016).
   VerificationOutcome verificationOutcome = VerificationOutcome::IN_PROGRESS;
 
   while (true) {
@@ -241,15 +302,35 @@ inline DispenseResult runDispenseCycle(const CyclePorts &ports,
     diagnostics->consecutiveInvalid = verification.consecutiveInvalid;
   }
 
-  // RF-4: nunca dispensar a ciegas; el servo no llega a arrancar.
-  if (verificationOutcome != VerificationOutcome::PASSED) {
+  // Guarda previa obligatoria (RF-4 de la 013, RF-8): el break del bucle de
+  // verificación no distingue el motivo y cae aquí, así que una ventana abortada
+  // por 3 inválidas consecutivas no evalúa la línea base. Sin esta guarda,
+  // assessBaseline aceptaría la base de una ventana abortada en cuanto hubiera 5
+  // válidas ya guardadas. El cierre es el de la 013 y no produce veredicto.
+  if (verificationOutcome == VerificationOutcome::ABORTED_BY_INVALID) {
     ports.stop(ports.context);
     result.reason = DispenseReason::SENSOR_UNAVAILABLE;
     return result;
   }
 
+  // RF-4 de la 013 y RF-2, RF-3, RF-4 de la 016: nunca dispensar a ciegas. Esta
+  // evaluación sustituye a la comprobación `verificationOutcome != PASSED` de la
+  // 013 y exige, además de 5 válidas, una mediana en rango y un paso de 1 g como
+  // máximo entre las últimas 5 válidas. Desde el ciclo solo son alcanzables
+  // UNSTABLE e INSUFFICIENT_READINGS; INVALID_BASELINE es defensivo.
   float baseline = 0.0f;
-  if (!verificationBaseline(&verification, &baseline)) {
+  const BaselineVerdict verdict = assessBaseline(verification, &baseline);
+
+  if (diagnostics != nullptr) {
+    diagnostics->baselineRejection = detail::baselineStatusOf(verdict);
+    // Mediana de todas las válidas solo para el log del servicio: se muestra
+    // aunque el veredicto la rechace, para que el operador vea con qué base se
+    // decidió. No interviene en la decisión.
+    diagnostics->hasBaseline =
+        verificationBaseline(&verification, &diagnostics->baselineGrams);
+  }
+
+  if (verdict != BaselineVerdict::ACCEPTED) {
     ports.stop(ports.context);
     result.reason = DispenseReason::SENSOR_UNAVAILABLE;
     return result;
@@ -265,6 +346,17 @@ inline DispenseResult runDispenseCycle(const CyclePorts &ports,
   startRotation(&rotation, budgetStartMs);
   StallState stall;
   startAdvance(&stall, budgetStartMs);
+
+  // Contador de plausibilidad del incremento en cero al abrir el ciclo de motor
+  // (RF-5). El estado es de tamaño fijo y no reserva memoria (RNF-4).
+  PlausibilityState plausibility;
+  resetPlausibility(&plausibility);
+  // Mayor incremento observado del ciclo. Arranca con el primer incremento válido
+  // (bandera hasIncrement) y no con cero, de modo que un ciclo íntegramente
+  // negativo informe del menos negativo y no de un 0 que nunca se midió. Solo
+  // alimenta el log: no interviene en ninguna decisión.
+  float maxIncrementGrams = 0.0f;
+  bool hasIncrement = false;
 
   const unsigned long budgetDeadlineMs = budgetStartMs + limits.motorBudgetMs;
   MotorPhase phase = MotorPhase::ADVANCE;
@@ -308,6 +400,39 @@ inline DispenseResult runDispenseCycle(const CyclePorts &ports,
       const bool responded = ports.readRaw(ports.context, &raw, kReadTimeoutMs);
       const unsigned long sampleTimeMs = ports.nowMs(ports.context);
       const WeightSample sample = makeSample(responded, raw, factor, sign);
+
+      // RF-5 y RF-6: la plausibilidad del incremento se evalúa en las tres fases
+      // y antes del objetivo y del atasco, de modo que el cierre por incremento
+      // imposible gana a ambos. Una lectura inválida reinicia el contador porque
+      // RF-5 exige tres lecturas VÁLIDAS consecutivas.
+      PlausibilityVerdict plausibilityVerdict = PlausibilityVerdict::PLAUSIBLE;
+      if (isReadingValid(sample)) {
+        const float incrementGrams = sample.grams - baseline;
+        // El primer incremento válido fija el máximo aunque sea negativo; los
+        // siguientes solo lo elevan si son mayores.
+        if (!hasIncrement || incrementGrams > maxIncrementGrams) {
+          maxIncrementGrams = incrementGrams;
+          hasIncrement = true;
+        }
+        plausibilityVerdict = recordPlausibilitySample(
+            &plausibility, incrementGrams, amountGrams);
+      } else {
+        resetPlausibility(&plausibility);
+      }
+
+      if (plausibilityVerdict != PlausibilityVerdict::PLAUSIBLE) {
+        if (diagnostics != nullptr) {
+          diagnostics->plausibility = plausibilityVerdict;
+          diagnostics->topGrams = plausibilityTopGrams(amountGrams);
+          diagnostics->maxIncrementGrams = maxIncrementGrams;
+        }
+        // El peso final se conserva para el log serie; el reporte lo omitirá
+        // porque el motivo es SENSOR_UNAVAILABLE (RF-7).
+        rotation.hasLastValid = true;
+        rotation.lastValidGrams = sample.grams;
+        reason = DispenseReason::SENSOR_UNAVAILABLE;
+        break;
+      }
 
       // El objetivo y el fallo del sensor se comprueban en las tres fases
       // (RF-7, RF-9) y el objetivo tiene prioridad sobre el atasco (RF-14).
