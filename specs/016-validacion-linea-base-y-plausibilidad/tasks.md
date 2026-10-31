@@ -328,14 +328,9 @@ SUCCESS y `pio test -e native` en verde. Cada tarea declara su validación frent
     en `api/`: 685 passed y 848 subtests, sin cambios; la 013 y la 014 no cambian de expectativa salvo los dos
     perfiles declarados en T5.
 
-- [ ] **T9. Pruebas físicas (a)–(d), no regresión física y `MEMORY.md`.**
+- [x] **T9. Pruebas físicas (a)–(d), no regresión física y `MEMORY.md`.**
   Archivos: `MEMORY.md` (actualizar); checklist documentado en la propia tarea o en `specs/016-.../tasks.md`.
   RF: RF-1 a RF-8, RNF-1, RNF-4, RNF-5.
-  > **Estado (2026-10-30):** **Pendiente** de las pruebas físicas (a)–(d) y de la no regresión física de la 013; el
-  > resto de la tarea está documentado. El usuario decidió aplazar esas pruebas por ahora. No queda trabajo de código:
-  > el plan ya está alineado con lo implementado (§5.3 y §5.4, y §9.2 con el caso feliz a 20 g en lugar de 50 g
-  > porque 50 g a 1 g/s superarían el presupuesto de 30 s de motor de RNF-2). T9 se marcará hecha solo con la
-  > evidencia del checklist siguiente anotada.
   Objetivo: validar sobre la celda real lo que la lógica pura no puede demostrar y dejar el estado del proyecto al día.
   - Hecho cuando: (a) al encender y pedir una orden de inmediato el servo no se mueve, el intento se cierra como
     `sensor_no_disponible` con `order_id`, no hay descuento, el log muestra la ausencia de asentamiento y la consulta
@@ -349,7 +344,7 @@ SUCCESS y `pio test -e native` en verde. Cada tarea declara su validación frent
   - Dependencias: T8.
   - Constitución: Modelo en V (evidencia física de los RF cuyo efecto es físico); política de tests (la prueba física
     no sustituye a la automatizada); español; sin datos sensibles en `MEMORY.md`.
-  - Checklist ejecutable (pendiente; la evidencia se anota aquí mismo, con fecha):
+  - Checklist ejecutado el 2026-10-30 y el 2026-10-31 (la evidencia queda anotada en el cierre de esta tarea):
     1. Preparación: `cd DispensadorESP32 && pio run --target upload` y, en otra terminal,
        `cd DispensadorESP32 && pio device monitor`. Anotar fecha, versión cargada y la línea de arranque; dejar la
        báscula vacía y estable durante 10 s antes de (d).
@@ -380,6 +375,35 @@ SUCCESS y `pio test -e native` en verde. Cada tarea declara su validación frent
        alcanzado» o el cierre propio de la 013). Anotar fecha y resultado de cada caso.
     7. Cierre: marcar T9 como hecha solo si los seis puntos anteriores tienen evidencia anotada; si algo falla,
        dejarla abierta con la línea de log y abrir la corrección como tarea nueva.
+  - Cierre (2026-10-31): hecha. Firmware ensayado: rama `pruebas/endpoint-fijo-hx711`, `HEAD 05703d5`, con fuentes de
+    fecha de modificación no posterior al 2026-10-30 14:13:50 y `firmware.bin` del 2026-10-30 14:18; la placa informa
+    `Build guardado en NVS: Oct 30 2026 14:18:04` y `Build actual de compilacion: Oct 30 2026 14:18:04`, así que lo
+    ejecutado es lo compilado. `pio test -e native` en verde con 230/230 sobre ese mismo `HEAD`.
+    Pruebas (a), (b), (c), fallo de sensor sin retroceso y atasco resuelto: validadas el 2026-10-30 con las órdenes 6 a
+    13. Los tres cierres `sensor_no_disponible` pesaron 114 y 115 bytes y no llevaron `gramos_medidos`; los reportes de
+    las órdenes 135, 136 y 141 sí llevaron medidos; las órdenes 7 a 11 dejaron `discounted_grams` en NULL y el stock
+    constante en 4979,96 g; la orden 13 (50 g solicitados, 54,32 g medidos) descontó 54,32 g y bajó el stock de
+    4957,55 g a 4903,23 g, con lo que la exactitud física de la 013 (50 g entre 50 y 55 g) queda cubierta.
+    (d), el 2026-10-31 con la orden 19 y captura con filtro `time`: 10,0 g solicitados, base 363,6 g, final 375,8 g,
+    incremento 12,2 g, tope 30 g, cero reintentos, cierre `objetivo_alcanzado` y reporte HTTP 200. La cantidad de (d) es
+    de 10 g y no de 50 g: ni la spec ni el plan fijan gramos para ese caso, y la exactitud física de la 013 ya quedó
+    cubierta por la orden 13.
+    5 Hz (RNF-1): `Asentamiento alcanzado` a las 17:41:31.886, tras la consulta que terminó a las 17:41:29.079, da
+    2,807 s para 14 intervalos, es decir 200,5 ms por muestra sobre el suelo de 2,800 s que impone la guarda; el segundo
+    asentamiento, a las 17:41:56.749 tras el cierre del ciclo a las 17:41:53.541, tarda 3,208 s porque incluye la
+    estabilización posterior al motor. El primer asentamiento llega 8,677 s después de «Entrando en estado normal»
+    porque la consulta bloquea `loop()` durante 5,865 s (17:41:23.214 a 17:41:29.079).
+    20 s (RF-13 de la 013): 17:41:29.079 → 17:41:49.084 = 20,005 s y 17:41:53.541 → 17:42:13.548 = 20,007 s, con
+    `lastCheckTime = millis()` después de `checkDispenserAction` (`dispenser_task.cpp:128` y `:72`) y
+    `CHECK_INTERVAL = 20000` (`config.h:60`). La ventana de verificación de 2 s sigue intacta (17:41:49.216 a
+    17:41:51.218 = 2,002 s) y el motor giró 2,2 s, dentro de las cotas de RNF-2.
+    Entorno del ensayo: consultas de hasta 5,865 s con un endpoint real de unos 3 ms y algún `HTTP -1` de TCP en tandas
+    previas; encaja con la limitación aceptada «Asentamiento tras un bloqueo del bucle» y no con un defecto de la 016.
+    No observable en físico y cubierto por prueba nativa o revisión de código: que la racha no se gane «ni con 14» (el
+    log solo imprime al ganar, así que lo fija `test_scale_guard_utils`) y la rama defensiva `storedCount <
+    kMinValidReadings` de `assessBaseline`, inalcanzable con el buffer de 16.
+    Deuda observada: la consulta HTTP bloquea `loop()`; con respuestas lentas (unos 5,9 s) el asentamiento se retrasa y
+    la primera orden tras encender se cierra como `sensor_no_disponible`, que es la limitación ya aceptada en la spec.
 
 ## Nota de alcance
 

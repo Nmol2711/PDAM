@@ -1,6 +1,6 @@
 # Spec 016 — Validación de línea base y plausibilidad del dispensado
 
-Estado: aprobada (2026-10-30)
+Estado: implementada (2026-10-31)
 
 ## Contexto y objetivo
 
