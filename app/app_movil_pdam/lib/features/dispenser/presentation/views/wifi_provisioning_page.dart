@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:go_router/go_router.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_field.dart';
 import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
@@ -7,11 +10,20 @@ import 'package:app_movil_pdam/core/theme/app_shape.dart';
 import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/widgets/provisioning_stage_messages.dart';
 
 class WifiProvisioningPage extends StatefulWidget {
   final ScannedDevice device;
 
-  const WifiProvisioningPage({super.key, required this.device});
+  /// Abre los ajustes del sistema. Inyectable en pruebas (RF-17); por defecto
+  /// usa los ajustes de la aplicación con una espera acotada a 3 s.
+  final Future<void> Function()? openSettings;
+
+  const WifiProvisioningPage({
+    super.key,
+    required this.device,
+    this.openSettings,
+  });
 
   @override
   State<WifiProvisioningPage> createState() => _WifiProvisioningPageState();
@@ -27,6 +39,20 @@ class _WifiProvisioningPageState extends State<WifiProvisioningPage> {
     _ssidController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  /// RF-17: ofrece abrir los ajustes sin bloquear el botón ni la pantalla.
+  Future<void> _openSettings() async {
+    final open = widget.openSettings ?? _openSystemSettings;
+    try {
+      await open().timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Un fallo o un plazo vencido no bloquea el reintento.
+    }
+  }
+
+  Future<void> _openSystemSettings() async {
+    await openAppSettings();
   }
 
   void _submit() {
@@ -64,12 +90,39 @@ class _WifiProvisioningPageState extends State<WifiProvisioningPage> {
               ),
             );
             context.go('/dispensers');
-          } else if (state is DispenserErrorState) {
+          } else if (state is ProvisioningFailureState) {
+            // Fallo tipado: copy del catálogo, nunca texto de la excepción
+            // (RNF-01). El botón queda habilitado porque el estado no es de
+            // progreso (RF-20).
+            final failure = state.failure;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 backgroundColor: esquema.error,
                 content: Text(
-                  state.message,
+                  provisioningFailureMessage(failure),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: esquema.onError),
+                ),
+                action: failure.permission == null
+                    ? null
+                    : SnackBarAction(
+                        label: 'Abrir ajustes',
+                        textColor: esquema.onError,
+                        onPressed: () {
+                          unawaited(_openSettings());
+                        },
+                      ),
+              ),
+            );
+          } else if (state is DispenserErrorState) {
+            // RNF-01: el estado legado puede llevar un mensaje derivado de una
+            // excepción; en la vista se usa un copy fijo en español.
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                backgroundColor: esquema.error,
+                content: Text(
+                  'No se pudo completar la operación. Vuelve a intentarlo.',
                   style: Theme.of(
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: esquema.onError),

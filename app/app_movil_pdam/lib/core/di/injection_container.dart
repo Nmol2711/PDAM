@@ -70,6 +70,8 @@ import 'package:app_movil_pdam/features/logs/domain/repository/log_repositories.
 import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_adapter.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_permissions.dart';
 import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
 import 'package:app_movil_pdam/features/nutrition/domain/usecases/calculate_nutrition_usecase.dart';
 import 'package:app_movil_pdam/features/nutrition/presentation/bloc/nutrition_cubit.dart';
@@ -196,8 +198,23 @@ Future<void> setup() async {
     ),
   );
 
+  // Fronteras del ciclo BLE: hardware y permisos con implementación real; las
+  // pruebas inyectan dobles y el servicio recibe duraciones propias.
+  sl.registerLazySingleton<BleAdapter>(
+    () => const FlutterBluePlusBleAdapter(),
+  );
+
+  sl.registerLazySingleton<BlePermissions>(
+    () => const PermissionHandlerBlePermissions(),
+  );
+
   sl.registerLazySingleton<BleProvisioningService>(
-    () => BleProvisioningService(),
+    () => BleProvisioningService(
+      adapter: sl<BleAdapter>(),
+      permissions: sl<BlePermissions>(),
+      window: BleProvisioningService.scanWindow,
+      cooldown: BleProvisioningService.scanCooldown,
+    ),
   );
 
   sl.registerLazySingleton<DispenserRepositories>(

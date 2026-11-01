@@ -1,52 +1,43 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **Specs 001–017 aprobadas e implementadas.** La 017 (apariencia) cerrada; la 015, cerrada. La 016 (solo firmware)
-  queda cerrada: T1–T9, pruebas físicas (a)–(d) y no regresión física validadas el 2026-10-30 y el 2026-10-31, con el
-  firmware del 2026-10-30 14:18:04 (`HEAD 05703d5` en `pruebas/endpoint-fijo-hx711`), todavía sin merge.
-* **Cifras:** `flutter test` 897/897 y `flutter analyze` 0 errores; `pytest` 685 passed (848 subtests);
+* **Specs 001–018 aprobadas e implementadas.** 018 (ciclo de escaneo BLE) cerrada el 2026-11-01 con T1–T10:
+  solo app Flutter, sin firmware ni backend.
+* **Cifras:** `flutter test` 1101/1101 y `flutter analyze` 0 errores; `pytest` 685 passed (848 subtests);
   `pio test -e native` 230/230; `pio run` SUCCESS (RAM 19,7 %, Flash 64,5 %).
-* **Documentación:** diagrama de los 7 procesos en `docs/informes/informe-diagrama-flujo-sistema-2026-10-30.md`;
-  `docs/docs-diagramas/Diagrama-Flujo.md` sigue desactualizado.
+* 016 cerrada con el firmware del 2026-10-30 14:18:04 (`HEAD 05703d5` en `pruebas/endpoint-fijo-hx711`), sin merge.
 
 ## Decisiones clave
-* 017 — tokens claro/oscuro en un único archivo de HEX; `ColorScheme` explícito (secundario verde, terciario
-  azul); CTA fuera del esquema (`AppSemanticColors` + botón propio); tarjetas `surface` + borde `outline` +
-  elevación 0.
-* 017 — radio 8 en controles, tarjetas, chip, FAB y aviso; 12 en diálogos, hojas y menús; escala
-  4/8/12/16/20/24/32; cursor en `textSelectionTheme` (`ThemeData.cursorColor` ya no existe).
-* 017 — ojo en un `PasswordVisibilityField` propio compartido por siete campos; historial plegable en
-  `LogFiltersBar` (estado local, no BLoC) y `TickerMode` al ocultar la rama de `StatefulShellRoute.indexedStack`.
-* 017 — pruebas estáticas `no_color_literals`, `spacing_scale` y `responsive_theme`.
-* 016 — `scale_guard_utils`/`dispensing_utils` como única lógica pura; asentamiento a 5 Hz;
-  `decideDispenseEntry` antes del factor y sin tocar servo sin asentamiento.
-* 015 — `SessionEvents` es el canal único interceptor→`AuthBloc`; el 401 limpia token, tipo, credenciales y
-  perfil y conserva mascotas, horarios, historial y `user_theme_mode`; la baja ordena marca → token →
-  credenciales → perfil → Isar acotado → borrar marca.
-* 015 — `debeMostrarEntrada(ancho, ubicacion)` decide cabecera (<600) o barra (>=600), nunca ambas;
-  `ThemeCubit` solo emite el modo.
-* Stock: descuento al cerrar con éxito con `UPDATE` relativo y `rowcount` (tope 5000); entrega incompleta o
-  reporte tardío no descuentan. Firmware: timeout 10 s, reintentos 5/15 s, pendiente en NVS.
+* 018 — ciclo con identidad (`cycleId`): la ventana de 15 s cuenta desde el escaneo activo; el cierre libera solo
+  su ciclo y la detención es idempotente. `BleScanStoppedState` es la única cesión a la lista (RF-24).
+* 018 — apertura, renovación y detención van por una cola de comandos secuencial propia, sin `bloc_concurrency`;
+  tres ventanas vacías pasan al estado final. Sin dependencias nuevas.
+* 018 — frontera `BleAdapter`/`BlePermissions` con implementación real por defecto; las pruebas usan
+  `FakeBleAdapter`/`FakeBlePermissions` y el plugin real se verifica a mano en dispositivo.
+* 018 — `neverForLocation`: `androidUsesFineLocation` y `androidCheckLocationServices` solo en Android ≤11
+  (`AndroidScanLocationPolicy`); ubicación en el manifiesto con `maxSdkVersion="30"`.
+* 018 — aprovisionamiento acotado a 15/10/10/5 s y presupuesto de 60 s; etapas tipadas, pérdida de conexión y copy
+  en `provisioning_stage_messages.dart`. Avisos con «Abrir ajustes»/«Reintentar» y `scanFailed` con copy propio.
+  Un aviso de adaptador prevalece sobre permisos/ubicación y `scanFailed` (`canReplaceScanNotice`, único punto de
+  emisión) y la apertura comprueba el adaptador antes que los permisos. Con un aviso vigente, `_stopScan` no emite
+  «detenido» (RF-24 prevalece).
+* 017 — tokens claro/oscuro, `ColorScheme` explícito, radios 8/12 y escala 4–32.
+* 015 — `SessionEvents` es el canal único; la baja ordena marca → token → credenciales → perfil → Isar.
+* Stock: descuento con `UPDATE` relativo y `rowcount` (tope 5000); firmware con timeout 10 s y pendiente en NVS.
 
 ## Errores a evitar
-* `gramos_medidos`: un `SENSOR_UNAVAILABLE` no prueba `incrementAvailable = false`; hace falta
-  `NOT_REACHED`/`SENSOR_FAILURE`. El mutante que quita `incrementAvailable &&` pasaba.
-* `StatefulShellRoute.indexedStack` mantiene las ramas montadas: ocultar una pestaña no desmonta; usar
-  `TickerMode` o estado local para reiniciar el plegado.
-* No comparar `AppColors` consigo mismo en pruebas: un token sustituido por su alias no detecta el cambio;
-  comparar el HEX/rol esperado.
-* El contraste se mide sobre el fondo compuesto real (crema, superficie, velo), no sobre blanco;
-  éxito/alerta sobre crema son 2,20:1 y 1,80:1.
-* No volcar estados completos en `AppBlocObserver`; no usar `RadioListTile`; no limpiar la sesión desde el
-  interceptor; no crear `DioClient` sin `SessionEvents`.
-* No crear BLoC en `setUp` de un `testWidgets` ni usar `pumpAndSettle` con indicadores animados.
+* No duplicar duraciones (ventana/cooldown/poll) fuera del servicio; no leer `Platform` fuera de
+  `AndroidLocationRequirement` y no exigir ubicación si el parseo falla.
+* No emitir listas (`LoadDispensersEvent`, refresco o reabastecimiento) sin `_puedeEmitirLista()`: pisaría
+  apertura, escaneo, avisos o aprovisionamiento.
+* No usar textos de excepciones en la UI (RNF-01): siempre etapa tipada o copy fijo en español.
+* `StatefulShellRoute.indexedStack` mantiene las ramas montadas: usar `TickerMode` o estado local.
+* No volcar estados completos en `AppBlocObserver`; no crear BLoC en `setUp` de un `testWidgets`.
+* Las pruebas de logs de la 019 fallan por carga de forma intermitente: repetir, no tocarlas.
 
 ## Deuda aceptada y riesgos
-* 016: la consulta HTTP bloquea `loop()`; con respuestas lentas (unos 5,9 s) el asentamiento se retrasa y la primera
-  orden tras encender se cierra como `sensor_no_disponible` (limitación aceptada en la spec).
-* 017: QR probado por banda; heurísticas de las pruebas estáticas (case-insensitive, `fromRGBO`, lista blanca
-  18/180/220 solo con `child`); erratas WCAG corregidas; emojis `⚠️` ×2 y `💧` retirados por decisión.
-* `workspace.json` de Obsidian es ajeno al repositorio; no versionarlo. Marca de baja sin identidad y dispensadores
-  con `petRemoteId == null` se borran siempre: perfil local único.
-* Intermitencia preexistente de las dos pruebas de rendimiento con umbral ≤100 ms: fallan por carga, no por
-  regresión.
+* 018: plugin BLE real pendiente de verificación manual (permisos, ubicación y `openAppSettings`); «Abrir ajustes de
+  ubicación» abre los ajustes de la app (no hay API directa sin dependencia nueva); textos legados del listado de 010
+  sin tocar.
+* Tensión RF-04/RF-05: en resultados conservados y final conviven «Volver a buscar» y «Cancelar»; en ventana abierta
+  solo cancelar. `workspace.json` de Obsidian es ajeno al repositorio.

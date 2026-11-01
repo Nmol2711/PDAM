@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_adapter_status.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_scan_event.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
@@ -20,7 +22,14 @@ class MockDispenserRepository implements DispenserRepositories {
   final bool failDelete;
   final bool failRefill;
   final Object? refillError;
+
+  /// Si se informa, el aprovisionamiento falla con este error (T7).
+  final Object? provisioningError;
   int refreshCalls = 0;
+
+  /// Si es `false`, el escaneo no emite dispositivos (ciclo abierto sin
+  /// resultados).
+  final bool emitScanResults;
 
   MockDispenserRepository({
     this.mockDispensers = const [],
@@ -30,6 +39,8 @@ class MockDispenserRepository implements DispenserRepositories {
     this.failDelete = false,
     this.failRefill = false,
     this.refillError,
+    this.provisioningError,
+    this.emitScanResults = true,
   });
 
   @override
@@ -61,21 +72,31 @@ class MockDispenserRepository implements DispenserRepositories {
   }
 
   @override
-  Stream<List<ScannedDevice>> scanBleDispensers() async* {
+  Stream<BleScanEvent> scanBleDispensers({
+    required int cycleId,
+    Duration? window,
+  }) async* {
     if (shouldFail) {
       throw Exception('Error de escaneo');
     }
-    yield [
-      const ScannedDevice(
-        name: 'PDAM-Config-[123456]',
-        remoteId: 'AA:BB:CC:DD:EE:FF',
-        rssi: -50,
-      ),
-    ];
+    if (!emitScanResults) return;
+    yield BleScanDevices(
+      cycleId: cycleId,
+      devices: const [
+        ScannedDevice(
+          name: 'PDAM-Config-[123456]',
+          remoteId: 'AA:BB:CC:DD:EE:FF',
+          rssi: -50,
+        ),
+      ],
+    );
   }
 
   @override
-  Future<void> stopBleScan() async {}
+  Future<void> stopBleScan({int? cycleId}) async {}
+
+  @override
+  Stream<BleAdapterStatus> get adapterStatus => const Stream.empty();
 
   @override
   Future<void> connectAndProvisionBle({
@@ -83,6 +104,8 @@ class MockDispenserRepository implements DispenserRepositories {
     required String ssid,
     required String password,
   }) async {
+    final error = provisioningError;
+    if (error != null) throw error;
     if (shouldFail) throw Exception('Error de aprovisionamiento');
   }
 
@@ -230,13 +253,13 @@ void main() {
       await bloc.close();
     });
 
-    test('emits [BleScanningState] when StartScanBleEvent is added', () async {
+    test('emits [BleScanOpeningState, BleScanningState] when StartScanBleEvent is added', () async {
       final bloc = buildDispenserBloc(MockDispenserRepository());
 
       expect(
         bloc.stream,
         emitsInOrder([
-          const BleScanningState(scannedDevices: []),
+          isA<BleScanOpeningState>(),
           const BleScanningState(
             scannedDevices: [
               ScannedDevice(

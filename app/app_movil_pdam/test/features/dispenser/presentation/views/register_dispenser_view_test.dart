@@ -4,8 +4,9 @@ import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
 import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_adapter_status.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_scan_event.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
-import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/activate_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/associate_dispenser_uc.dart';
@@ -114,10 +115,16 @@ class _FakeDispenserRepository implements DispenserRepositories {
   Future<void> discountFood(String dispenserId, double grams) async {}
 
   @override
-  Stream<List<ScannedDevice>> scanBleDispensers() => const Stream.empty();
+  Stream<BleScanEvent> scanBleDispensers({
+    required int cycleId,
+    Duration? window,
+  }) => const Stream.empty();
 
   @override
-  Future<void> stopBleScan() async {}
+  Future<void> stopBleScan({int? cycleId}) async {}
+
+  @override
+  Stream<BleAdapterStatus> get adapterStatus => const Stream.empty();
 
   @override
   Future<void> connectAndProvisionBle({

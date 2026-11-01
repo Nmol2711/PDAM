@@ -7,9 +7,10 @@ import 'package:app_movil_pdam/core/services/storage_service.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_dispenser_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_adapter_status.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_scan_event.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
-import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:app_movil_pdam/features/logs/domain/utils/operation_id_utils.dart';
 import 'package:dio/dio.dart';
@@ -430,14 +431,20 @@ class DispenserRepositoryImpl implements DispenserRepositories {
   }
 
   @override
-  Stream<List<ScannedDevice>> scanBleDispensers() {
-    return _bleService.scanDevices();
+  Stream<BleScanEvent> scanBleDispensers({
+    required int cycleId,
+    Duration? window,
+  }) {
+    return _bleService.scanBleDispensers(cycleId: cycleId, window: window);
   }
 
   @override
-  Future<void> stopBleScan() async {
-    await _bleService.stopScan();
+  Future<void> stopBleScan({int? cycleId}) async {
+    await _bleService.stopBleScan(cycleId: cycleId);
   }
+
+  @override
+  Stream<BleAdapterStatus> get adapterStatus => _bleService.adapterStatus;
 
   @override
   Future<void> connectAndProvisionBle({
