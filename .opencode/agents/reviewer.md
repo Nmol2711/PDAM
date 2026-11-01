@@ -39,7 +39,7 @@ Revísala como un QA muy profesional y lista: (1) ambigüedades, (2) contradicci
 
 ## Si te piden validar la implementación
 1. Lee spec.md, plan.md y tasks.md, y los cambios (usa git diff).
-2. Ejecuta los tests correspondientes y si es necesario pídele al usuario la dirección de las DevTools de la aplicación si se está ejecutando.
+2. Ejecuta los tests correspondientes ya sea de hardware, firmware, flutter y python (FastApi).
 3. Recorre la spec RF por RF: qué test lo cubre y su resultado. Los RF de interfaz.
 4. Comprueba los criterios de finalización, docs/constitution.md y las reglas del proyecto y interfaz (skills flutter-build-responsive-layout, mobile-android-design).
 
