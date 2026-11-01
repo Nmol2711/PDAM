@@ -1,10 +1,10 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **Specs 001–018 aprobadas e implementadas.** 018 (ciclo de escaneo BLE) cerrada el 2026-11-01 con T1–T10: solo
+* **Specs 001–019 aprobadas e implementadas.** 018 (ciclo de escaneo BLE) cerrada el 2026-11-01 con T1–T10: solo
   app Flutter, sin firmware ni backend.
-* **019 implementada (T1 y T2 APTA, T3 parcial):** suite y `MEMORY.md` hechos; falta la verificación manual en el
-  móvil, por eso la spec sigue en `Estado: aprobada`.
+* **019 implementada y cerrada el 2026-11-01 (T1–T3):** suite, `MEMORY.md` y verificación manual en el móvil
+  correctos.
 * **Cifras:** `flutter test` 1077/1077 (164/164 en `test/features/logs`) y `flutter analyze` 91 issues con 0
   errores; `pytest` 685 passed (848 subtests); `pio test -e native` 230/230; `pio run` SUCCESS (RAM 19,7 %,
   Flash 64,5 %).

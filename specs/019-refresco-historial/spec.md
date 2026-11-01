@@ -1,6 +1,6 @@
 # Spec 019 — Recarga manual y automática del historial
 
-Estado: aprobada
+Estado: implementada
 
 ## Contexto y objetivo
 

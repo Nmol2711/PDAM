@@ -14,7 +14,7 @@ Orden: T1 → T2 → T3. Tests primero en cada tarea.
 - Hecho cuando: `flutter test test/features/logs` en verde, con CP-1 a CP-5 y CP-9 cubiertos, sin debilitar las aserciones de plegado de la prueba adaptada, y `flutter analyze` sin errores.
 - Depende de: T1.
 
-- [ ] **T3. Cierre y verificación.** RF-1 a RF-6, RNF-1 a RNF-6
+- [x] **T3. Cierre y verificación.** RF-1 a RF-6, RNF-1 a RNF-6
 - Incluye: suite completa, checklist manual en el móvil y actualización de `MEMORY.md`.
 - Hecho cuando: `flutter analyze` con 0 errores, `flutter test` completo en verde, checklist manual cumplido y `MEMORY.md` actualizado con las decisiones de la 019.
 - Depende de: T2.
