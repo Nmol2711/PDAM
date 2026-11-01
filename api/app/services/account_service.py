@@ -211,6 +211,10 @@ def contar_huerfanos(
             _predicado_cola(mascotas, dispensadores, horarios),
         ),
         (
+            models.ManualDispensingRequest,
+            models.ManualDispensingRequest.dispenser_id.in_(dispensadores),
+        ),
+        (
             models.DispensingOrder,
             _predicado_ordenes(user_id, mascotas, dispensadores),
         ),
@@ -258,6 +262,9 @@ def _borrar_datos(db: Session, user_id: int, public_id: str) -> bool:
 
     db.query(models.DispensingQueue).filter(
         _predicado_cola(ids_mascotas, ids_dispensadores, ids_horarios)
+    ).delete(synchronize_session=False)
+    db.query(models.ManualDispensingRequest).filter(
+        models.ManualDispensingRequest.dispenser_id.in_(ids_dispensadores)
     ).delete(synchronize_session=False)
 
     # Instantánea de los identificadores para `contar_huerfanos`: al terminar el

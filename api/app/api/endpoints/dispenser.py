@@ -16,6 +16,7 @@ from app.schemas.schemas import (
     DispenserRefillRequest,
 )
 from app.schemas.reports import DispenserReportRequest, DispenserReportResponse
+from app.schemas.dispenser import QuickDispenseRequest, QuickDispenseResponse
 from app.domain.catalogos import ErrorDominio
 
 from app.services import pet_service, dispenser_service, order_service
@@ -151,6 +152,47 @@ def reset_dispenser_wifi(
     return dispenser_service.reset_wifi_credentials(
         db=db, dispenser_id=id, user_id=current_user.id
     )
+
+
+@router.post(
+    "/{dispenser_id}/quick-dispense",
+    response_model=QuickDispenseResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def quick_dispense(
+    current_user: CurrentUser,
+    dispenser_id: int,
+    cuerpo: Any = Body(default=None),
+    db: Session = Depends(get_db),
+):
+    """Dispensación rápida manual (spec 020).
+
+    El cuerpo se recibe como `Any`: un cuerpo que no sea un objeto JSON responde
+    400 `operacion_invalida` porque no puede traer el identificador de operación.
+    Los demás rechazos (cantidad, stock, estado, orden en curso o identificador
+    inválido) responden 400 con el código del catálogo, nunca 422. El servicio
+    valida dueño, idempotencia, stock y orden en curso, y cubre las ocurrencias
+    de horario de la ventana de coincidencia.
+    """
+    if not isinstance(cuerpo, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorDominio("operacion_invalida").detail,
+        )
+
+    try:
+        solicitud = QuickDispenseRequest.model_validate(cuerpo)
+        return order_service.solicitar_dispensacion_rapida(
+            db=db,
+            dispenser_id=dispenser_id,
+            cantidad=solicitud.amount,
+            operation_id=solicitud.operation_id,
+            user_id=current_user.id,
+        )
+    except ErrorDominio as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=error.detail
+        )
 
 
 @router.post("/{dispenser_id}/refill", response_model=Dispenser)

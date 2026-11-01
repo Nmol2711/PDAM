@@ -218,6 +218,51 @@ class DispensingQueue(Base):
     )
 
 
+class ManualDispensingRequest(Base):
+    """Solicitud de dispensación rápida manual (spec 020).
+
+    Vive aparte de `dispensing_queue` para no compartir la clave de ocurrencia
+    programada: una solicitud manual no tiene horario y debe entregarse antes
+    que cualquier comida en espera. `consumed_at` marca la reclamación atómica
+    que crea la orden; una solicitud consumida no se vuelve a dispensar.
+
+    `operation_id` identifica la operación que envía la app y sostiene la
+    idempotencia de RF-14: un reintento con el mismo valor devuelve la misma
+    solicitud. Es anulable para las filas anteriores a la spec 020; la migración
+    de `app/db/database.py` las rellena con `legado:<id>`.
+    """
+
+    __tablename__ = "manual_dispensing_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    dispenser_id = Column(
+        Integer, ForeignKey("dispensers.id", ondelete="CASCADE"), nullable=False
+    )
+    pet_id = Column(Integer, nullable=True)
+    amount = Column(Float, nullable=False)
+    operation_id = Column(String, nullable=True)
+    requested_at = Column(DateTime, nullable=False)
+    consumed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_manual_dispensing_pending",
+            "dispenser_id",
+            "consumed_at",
+            "requested_at",
+        ),
+        # Una operación se registra una sola vez por dispensador (RF-14). El
+        # índice también lo crea la migración en bases existentes, porque
+        # `create_all` no añade índices a tablas ya creadas.
+        Index(
+            "ux_manual_dispensing_operacion",
+            "dispenser_id",
+            "operation_id",
+            unique=True,
+        ),
+    )
+
+
 class RefillOperation(Base):
     """Reabastecimiento idempotente por `operation_id` (RF-11).
 

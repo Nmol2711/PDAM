@@ -176,6 +176,27 @@ class DispenserRepositoryImpl implements DispenserRepositories {
   }
 
   @override
+  Future<Either<Failures, bool>> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  ) async {
+    if (!await _syncService.hasConnection()) {
+      return Left(ConnectivityRequiredFailures(_sinConexionAlDispensar));
+    }
+    try {
+      final result = await _dispenserRemoteDatasource.quickDispense(
+        dispenserId,
+        grams,
+        operationId,
+      );
+      return Right(result);
+    } catch (e) {
+      return Left(_failureFrom(e));
+    }
+  }
+
+  @override
   Future<Either<Failures, bool>> deleteDispenser(int petId) async {
     if (!await _syncService.hasConnection()) {
       return Left(ConnectivityRequiredFailures(_sinConexionAlEliminar));
@@ -514,6 +535,8 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       'No hay conexión con el servidor para desactivar el dispensador';
   static const String _sinConexionAlEliminar =
       'No hay conexión con el servidor para eliminar el dispensador';
+  static const String _sinConexionAlDispensar =
+      'No hay conexión con el servidor para dispensar la cantidad';
   static const String _codeRefillExceedsCapacity = 'supera_capacidad';
   static const String _origenServidor = 'servidor';
   static const String _origenSincronizacion = 'sincronizacion_sin_conexion';
@@ -555,6 +578,14 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       // `pet_already_has_dispenser` y `server_error` conservan el copy actual.
       case 'pet_already_has_dispenser':
       case ApiException.serverErrorCode:
+        return ServerFailures(message);
+      // Dispensación rápida manual (spec 020): el rechazo se presenta con el
+      // mensaje del catálogo y nunca con el `toString()` de la excepción.
+      case 'cantidad_rapida_invalida':
+      case 'stock_insuficiente':
+      case 'dispensador_desactivado':
+      case 'dispensacion_en_curso':
+      case 'operacion_invalida':
         return ServerFailures(message);
       default:
         return ServerFailures(message);

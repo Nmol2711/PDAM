@@ -31,6 +31,15 @@ class MockDispenserRepository implements DispenserRepositories {
   /// resultados).
   final bool emitScanResults;
 
+  /// Estado del dispensador que devuelve `getDispenserByPet`.
+  final bool dispenserActive;
+
+  /// Stock que devuelve `getDispenserByPet` (RF-11).
+  final double dispenserStock;
+
+  /// Llamadas a la dispensación rápida del flujo de la ficha.
+  int quickDispenseCalls = 0;
+
   MockDispenserRepository({
     this.mockDispensers = const [],
     this.shouldFail = false,
@@ -41,6 +50,8 @@ class MockDispenserRepository implements DispenserRepositories {
     this.refillError,
     this.provisioningError,
     this.emitScanResults = true,
+    this.dispenserActive = true,
+    this.dispenserStock = 5000.0,
   });
 
   @override
@@ -173,8 +184,9 @@ class MockDispenserRepository implements DispenserRepositories {
       Dispenser(
         id: 1,
         macAddress: 'AA:BB:CC:DD:EE:FF',
-        isActive: true,
+        isActive: dispenserActive,
         petId: petId,
+        currentFoodGrams: dispenserStock,
       ),
     );
   }
@@ -192,6 +204,16 @@ class MockDispenserRepository implements DispenserRepositories {
       petId: petId,
     ),
   );
+
+  @override
+  Future<Either<Failures, bool>> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  ) async {
+    quickDispenseCalls++;
+    return const Right(true);
+  }
 }
 
 DispenserBloc buildDispenserBloc(DispenserRepositories repository) {

@@ -51,6 +51,13 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
   Dispenser? refillResult;
   Object? refillThrowObject;
 
+  int quickDispenseCalls = 0;
+  int? quickDispenseDispenserId;
+  double? quickDispenseGrams;
+  String? quickDispenseOperationId;
+  bool quickDispenseResult = true;
+  Object? quickDispenseThrowObject;
+
   @override
   Future<Dispenser> associateDispenser(String macAddress, int petId, String secretKeyQr) async {
     if (shouldThrow) {
@@ -101,6 +108,22 @@ class MockDispenserRemoteDatasource implements DispenserRemoteDatasource {
 
   @override
   Future<bool> deleteDispenserByPet(int petId) async => true;
+
+  @override
+  Future<bool> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  ) async {
+    quickDispenseCalls++;
+    quickDispenseDispenserId = dispenserId;
+    quickDispenseGrams = grams;
+    quickDispenseOperationId = operationId;
+    if (quickDispenseThrowObject != null) {
+      throw quickDispenseThrowObject!;
+    }
+    return quickDispenseResult;
+  }
 
   @override
   Future<Dispenser> refillDispenser(
@@ -868,6 +891,131 @@ void main() {
       await expectLater(
         repository.refillFood('7', -10.0),
         throwsA(isA<RefillLimitException>()),
+      );
+    });
+  });
+
+  group('quickDispense', () {
+    test('sin conexión no llama al servidor (RF-12)', () async {
+      syncService.setHasConnection(false);
+
+      final result = await repository.quickDispense(7, 50.0, 'operacion-1');
+
+      expect(result.isLeft(), true);
+      result.fold(
+        (failure) => expect(failure, isA<ConnectivityRequiredFailures>()),
+        (_) => fail('No debería devolver Right'),
+      );
+      expect(remoteDatasource.quickDispenseCalls, 0);
+    });
+
+    test('con conexión devuelve Right y delega en el datasource', () async {
+      syncService.setHasConnection(true);
+
+      final result = await repository.quickDispense(7, 50.0, 'operacion-1');
+
+      expect(result, const Right(true));
+      expect(remoteDatasource.quickDispenseCalls, 1);
+    });
+
+    test('propaga dispensador, cantidad y operation_id al datasource', () async {
+      syncService.setHasConnection(true);
+
+      await repository.quickDispense(7, 50.5, 'operacion-abc');
+
+      expect(remoteDatasource.quickDispenseDispenserId, 7);
+      expect(remoteDatasource.quickDispenseGrams, 50.5);
+      expect(remoteDatasource.quickDispenseOperationId, 'operacion-abc');
+    });
+
+    test('un rechazo del catálogo conserva el mensaje del servidor', () async {
+      syncService.setHasConnection(true);
+      remoteDatasource.quickDispenseThrowObject = const ApiException(
+        code: 'stock_insuficiente',
+        message: 'La cantidad solicitada supera el stock disponible del dispensador.',
+        status: 400,
+      );
+
+      final result = await repository.quickDispense(7, 50.0, 'operacion-1');
+
+      result.fold(
+        (failure) {
+          expect(failure, isA<ServerFailures>());
+          expect(
+            failure.message,
+            'La cantidad solicitada supera el stock disponible del dispensador.',
+          );
+        },
+        (_) => fail('No debería devolver Right'),
+      );
+    });
+
+    test('los cinco códigos nuevos se mapean a ServerFailures con su mensaje', () async {
+      syncService.setHasConnection(true);
+      const mensajes = {
+        'cantidad_rapida_invalida':
+            'La cantidad rápida debe ser mayor que 0 y no superar 200 g.',
+        'stock_insuficiente':
+            'La cantidad solicitada supera el stock disponible del dispensador.',
+        'dispensador_desactivado': 'El dispensador está desactivado.',
+        'dispensacion_en_curso':
+            'Ya hay una dispensación en curso para este dispensador.',
+        'operacion_invalida':
+            'El identificador de operación es obligatorio y debe ser válido.',
+      };
+
+      for (final entry in mensajes.entries) {
+        remoteDatasource.quickDispenseThrowObject = ApiException(
+          code: entry.key,
+          message: entry.value,
+          status: 400,
+        );
+
+        final result = await repository.quickDispense(7, 50.0, 'operacion-1');
+
+        result.fold(
+          (failure) {
+            expect(failure, isA<ServerFailures>(), reason: entry.key);
+            expect(failure.message, entry.value, reason: entry.key);
+          },
+          (_) => fail('No debería devolver Right para ${entry.key}'),
+        );
+      }
+    });
+
+    test('un código desconocido conserva el mensaje del catálogo', () async {
+      syncService.setHasConnection(true);
+      remoteDatasource.quickDispenseThrowObject = const ApiException(
+        code: 'codigo_no_previsto',
+        message: 'Mensaje visible del servidor.',
+        status: 500,
+      );
+
+      final result = await repository.quickDispense(7, 50.0, 'operacion-1');
+
+      result.fold(
+        (failure) {
+          expect(failure, isA<ServerFailures>());
+          expect(failure.message, 'Mensaje visible del servidor.');
+          expect(failure.message, isNot(contains('ApiException')));
+        },
+        (_) => fail('No debería devolver Right'),
+      );
+    });
+
+    test('un fallo de red se traduce a ConnectivityRequiredFailures', () async {
+      syncService.setHasConnection(true);
+      remoteDatasource.quickDispenseThrowObject = DioException(
+        requestOptions: RequestOptions(path: '/dispenser/7/quick-dispense'),
+        message: 'sin red',
+        type: DioExceptionType.connectionError,
+      );
+
+      final result = await repository.quickDispense(7, 50.0, 'operacion-1');
+
+      result.fold(
+        (failure) => expect(failure, isA<ConnectivityRequiredFailures>()),
+        (_) => fail('No debería devolver Right'),
       );
     });
   });

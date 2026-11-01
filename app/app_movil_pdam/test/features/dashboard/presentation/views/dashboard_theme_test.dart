@@ -129,6 +129,11 @@ Future<void> _pumpDashboard(
         path: '/home',
         builder: (context, state) => const DashboardView(),
       ),
+      GoRoute(
+        path: '/dispensers',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Sección de dispensadores'))),
+      ),
     ],
   );
   addTearDown(router.dispose);
@@ -422,5 +427,17 @@ void main() {
         reason: '${archivo.path} usa Colors.* fuera de transparent',
       );
     }
+  });
+
+  testWidgets('«Dispositivos» abre la sección de dispensadores y no la de mascotas', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+
+    await tester.ensureVisible(find.text('Dispositivos'));
+    await tester.tap(find.text('Dispositivos'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sección de dispensadores'), findsOneWidget);
   });
 }

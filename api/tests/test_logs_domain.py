@@ -105,6 +105,19 @@ ERRORES_ESPERADOS = {
     "stock_fuera_de_rango": (
         "El stock resultante quedaría fuera del intervalo de 0 a 5000 g."
     ),
+    "cantidad_rapida_invalida": (
+        "La cantidad rápida debe ser mayor que 0 y no superar 200 g."
+    ),
+    "stock_insuficiente": (
+        "La cantidad solicitada supera el stock disponible del dispensador."
+    ),
+    "dispensador_desactivado": "El dispensador está desactivado.",
+    "dispensacion_en_curso": (
+        "Ya hay una dispensación en curso para este dispensador."
+    ),
+    "operacion_invalida": (
+        "El identificador de operación es obligatorio y debe ser válido."
+    ),
 }
 
 # Valores que no pueden colarse como código de ningún catálogo cerrado.

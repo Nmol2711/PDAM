@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:app_movil_pdam/core/network/session_events.dart';
+import 'package:app_movil_pdam/core/error/api_exception.dart';
 import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/network/dio_client.dart';
 import 'package:app_movil_pdam/core/offline/sync_service.dart';
@@ -251,5 +252,50 @@ void main() {
         expect(localDatasource.saved?.pendingRefillId, isNull);
       },
     );
+  });
+
+  group('quickDispense (spec 020)', () {
+    test('el POST envía solo amount y operation_id con la ruta correcta', () async {
+      adapter.respuestas.add((
+        status: 202,
+        body: {'status': 'pending', 'requested_grams': 50.0, 'stock_grams': 950.0},
+      ));
+
+      final aceptada = await datasource.quickDispense(7, 50.0, 'operacion-abc');
+
+      expect(aceptada, true);
+      final peticion = adapter.requests.single;
+      expect(peticion.method, 'POST');
+      expect(peticion.uri.path, '/dispensers/7/quick-dispense');
+      expect(adapter.cuerpos.single, {
+        'amount': 50.0,
+        'operation_id': 'operacion-abc',
+      });
+    });
+
+    test('un rechazo del catálogo llega como ApiException', () async {
+      adapter.respuestas.add((
+        status: 400,
+        body: {
+          'detail': {
+            'code': 'cantidad_rapida_invalida',
+            'message': 'La cantidad rápida debe ser mayor que 0 y no superar 200 g.',
+          },
+        },
+      ));
+
+      await expectLater(
+        datasource.quickDispense(7, 201.0, 'operacion-abc'),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.code, 'code', 'cantidad_rapida_invalida')
+              .having(
+                (e) => e.message,
+                'message',
+                'La cantidad rápida debe ser mayor que 0 y no superar 200 g.',
+              ),
+        ),
+      );
+    });
   });
 }

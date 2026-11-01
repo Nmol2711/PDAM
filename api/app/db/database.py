@@ -34,6 +34,11 @@ INDICE_UNICO_ORDEN_PENDIENTE = "ux_dispensing_orders_pending_dispenser"
 # RF-19) en bases migradas. En bases nuevas lo crea SQLAlchemy desde el modelo.
 INDICE_UNICO_PUBLIC_ID = "ux_users_public_id"
 
+# Índice único que impide registrar dos solicitudes rápidas con el mismo
+# `operation_id` en un dispensador (spec 020, RF-14). En bases nuevas lo crea
+# SQLAlchemy desde el modelo; en las existentes lo crea la migración.
+INDICE_UNICO_SOLICITUD_RAPIDA = "ux_manual_dispensing_operacion"
+
 # Bases ya migradas en este proceso. La migración se ejecuta una sola vez por
 # archivo y proceso: el listener `connect` corre en cada conexión nueva y repetir
 # DDL con varias conexiones simultáneas puede provocar `database is locked`.
@@ -507,6 +512,54 @@ def _crear_tabla_tokens_revocados(cursor) -> None:
     )
 
 
+def _migrar_solicitudes_rapidas(dbapi_connection, cursor) -> None:
+    """Añade `manual_dispensing_requests.operation_id` y su índice único.
+
+    Sigue el patrón de las demás migraciones: DDL directo sobre la conexión
+    SQLite al abrirla, sin framework de migraciones. En una base anterior a la
+    spec 020 la columna no existe; se añade anulable, se rellenan las filas
+    existentes con `legado:<id>` (por lo que nunca chocan entre sí) y se crea el
+    índice único `(dispenser_id, operation_id)` que sostiene la idempotencia de
+    RF-14. No se borra ni se reconstruye ninguna fila.
+
+    Si la tabla no existe, no hace nada: `Base.metadata.create_all` la crea ya
+    con la columna y el índice. Es idempotente, así que una segunda apertura solo
+    comprueba que no falte el índice.
+    """
+    if not _tabla_existe(cursor, "manual_dispensing_requests"):
+        return
+
+    try:
+        columnas = _columnas_de_tabla(cursor, "manual_dispensing_requests")
+        if "operation_id" not in columnas:
+            cursor.execute(
+                "ALTER TABLE manual_dispensing_requests "
+                "ADD COLUMN operation_id VARCHAR"
+            )
+
+        # Backfill: solo las filas aún vacías, sin tocar las ya migradas.
+        pendientes = cursor.execute(
+            "SELECT id FROM manual_dispensing_requests WHERE operation_id IS NULL"
+        ).fetchall()
+        for (id_solicitud,) in pendientes:
+            cursor.execute(
+                "UPDATE manual_dispensing_requests SET operation_id = ? WHERE id = ?",
+                (f"legado:{id_solicitud}", id_solicitud),
+            )
+
+        cursor.execute(
+            f"CREATE UNIQUE INDEX IF NOT EXISTS {INDICE_UNICO_SOLICITUD_RAPIDA} "
+            "ON manual_dispensing_requests (dispenser_id, operation_id)"
+        )
+    except Exception:
+        # El DDL y los rellenos son transaccionales en SQLite: la reversión deja
+        # la base exactamente como estaba.
+        dbapi_connection.rollback()
+        raise
+
+    dbapi_connection.commit()
+
+
 # Esto asegura que SQLite verifique las llaves foráneas
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
@@ -566,6 +619,10 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         # Índice único parcial de la orden pendiente (RNF-3). Se crea aquí porque
         # `create_all` no añade índices a una tabla que ya existe.
         _crear_indice_orden_pendiente(cursor)
+
+        # Dispensación rápida (spec 020, RF-14): una base existente recibe
+        # `operation_id` y su índice único antes de `Base.metadata.create_all`.
+        _migrar_solicitudes_rapidas(dbapi_connection, cursor)
 
         # Identidad estable de la cuenta y tabla de tokens revocados (RF-10,
         # RF-19). Se ejecutan antes de `Base.metadata.create_all` (que vive en

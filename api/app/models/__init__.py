@@ -6,6 +6,7 @@ from .models import (
     ActivityLog,
     DispensingOrder,
     DispensingQueue,
+    ManualDispensingRequest,
     RefillOperation,
     RevokedToken,
 )

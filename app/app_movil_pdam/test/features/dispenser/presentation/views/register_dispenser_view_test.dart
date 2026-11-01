@@ -93,6 +93,13 @@ class _FakeDispenserRepository implements DispenserRepositories {
       Left(LocalStorageFailures('Sin dispensador local'));
 
   @override
+  Future<Either<Failures, bool>> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  ) async => const Right(true);
+
+  @override
   Future<Either<Failures, Dispenser>> updateDispenserMac(
     int dispenserId,
     int petId,

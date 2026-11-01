@@ -40,8 +40,10 @@ import 'package:app_movil_pdam/features/dispenser/domain/use_case/check_pending_
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/dasactivate_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/delete_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/get_dispenser_by_pet_uc.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/use_case/quick_dispense_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/update_dispenser_mac_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/bloc/quick_dispense_cubit.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/local/local_pet_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/local/local_schedule_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/remote/pet_remote_datasource.dart';
@@ -336,6 +338,13 @@ Future<void> setup() async {
 
   sl.registerLazySingleton(
     () => UpdateDispenserMacUc(repository: sl<DispenserRepositories>()),
+  );
+
+  sl.registerLazySingleton(
+    () => QuickDispenseUc(repository: sl<DispenserRepositories>()),
+  );
+  sl.registerFactory(
+    () => QuickDispenseCubit(quickDispenseUc: sl<QuickDispenseUc>()),
   );
 
   // Nutrición (motor WSAVA, Spec 011)

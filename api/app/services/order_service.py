@@ -13,6 +13,9 @@ Responsabilidades de esta capa:
   tolerancia de 1 s ya venció, sin descuento y sin exigir reporte (RF-19, RF-40).
 - `encolar_comida`: guarda en `dispensing_queue` cada ocurrencia programada una
   sola vez, aunque el dispensador esté ocupado o desactivado (RF-25).
+- `solicitar_dispensacion_rapida`: registra la solicitud manual de la spec 020,
+  cubre las ocurrencias de la ventana de coincidencia y la entrega antes que la
+  cola programada.
 
 La transición de la orden se hace siempre con `UPDATE ... WHERE status='pending'`
 y `rowcount`, porque SQLite no bloquea filas: la escritura condicional deja un
@@ -38,7 +41,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain import catalogos, cierre, stock, tiempo
+from app.domain import catalogos, cierre, dispensado_rapido, stock, tiempo
 from app.domain.catalogos import ErrorDominio
 from app.models import models
 from app.services import activity_service
@@ -188,6 +191,413 @@ def _crear_orden_pendiente(
     return orden
 
 
+# --- Dispensación rápida manual (spec 020) -----------------------------------
+
+
+def _dispensador_del_usuario(
+    db: Session, dispenser_id: int, user_id: int
+) -> models.Dispenser:
+    """Dispensador del usuario o 404 sin revelar datos de otra cuenta (RF-6)."""
+    dispensador = (
+        db.query(models.Dispenser)
+        .filter(models.Dispenser.id == dispenser_id)
+        .first()
+    )
+    if dispensador is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dispensador no encontrado.",
+        )
+
+    mascota = (
+        db.query(models.Pet)
+        .filter(
+            models.Pet.id == dispensador.pet_id,
+            models.Pet.user_id == user_id,
+        )
+        .first()
+    )
+    if mascota is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Dispensador no encontrado.",
+        )
+    return dispensador
+
+
+def _solicitud_por_operacion(
+    db: Session, dispenser_id: int, operation_id: str
+) -> Optional[models.ManualDispensingRequest]:
+    """Solicitud ya registrada para ese dispensador y operación (RF-14)."""
+    return (
+        db.query(models.ManualDispensingRequest)
+        .filter(
+            models.ManualDispensingRequest.dispenser_id == dispenser_id,
+            models.ManualDispensingRequest.operation_id == operation_id,
+        )
+        .first()
+    )
+
+
+def _respuesta_solicitud(
+    solicitud: models.ManualDispensingRequest, dispensador: models.Dispenser
+) -> dict:
+    """Cuerpo `{status, requested_grams, stock_grams}` de la solicitud pendiente."""
+    return {
+        "status": "pending",
+        "requested_grams": float(solicitud.amount),
+        "stock_grams": float(dispensador.current_food_grams or 0.0),
+    }
+
+
+def _cantidades_pendientes(db: Session, dispenser_id: int) -> list[float]:
+    """Cantidades de las solicitudes manuales todavía no consumidas (RF-3)."""
+    filas = (
+        db.query(models.ManualDispensingRequest.amount)
+        .filter(
+            models.ManualDispensingRequest.dispenser_id == dispenser_id,
+            models.ManualDispensingRequest.consumed_at.is_(None),
+        )
+        .all()
+    )
+    return [float(cantidad) for (cantidad,) in filas]
+
+
+def _stock_reservado(db: Session, dispensador: models.Dispenser) -> float:
+    """Stock disponible tras descontar las solicitudes manuales pendientes.
+
+    Solo cuentan las solicitudes todavía no consumidas (`consumed_at` nulo): una
+    vez entregada, la cantidad deja de reservarse y el descuento real lo aplica
+    el cierre de la spec 014 (RF-3, RNF-9).
+    """
+    return dispensado_rapido.stock_reservado(
+        float(dispensador.current_food_grams or 0.0),
+        _cantidades_pendientes(db, dispensador.id),
+    )
+
+
+def _hay_orden_en_curso(
+    db: Session, dispenser_id: int, instante: datetime
+) -> bool:
+    """Indica si hay una orden pendiente dentro de su plazo (RF-5)."""
+    return any(
+        tiempo.dentro_del_plazo(orden.delivered_at, instante)
+        for orden in _ordenes_pendientes(db, dispenser_id)
+    )
+
+
+def _consumir_ocurrencia(
+    db: Session, ocurrencia: models.DispensingQueue, instante: datetime
+) -> None:
+    """Marca una ocurrencia como cubierta con `UPDATE` condicional y `rowcount`."""
+    filas = (
+        db.query(models.DispensingQueue)
+        .filter(
+            models.DispensingQueue.id == ocurrencia.id,
+            models.DispensingQueue.consumed_at.is_(None),
+        )
+        .update(
+            {models.DispensingQueue.consumed_at: instante},
+            synchronize_session=False,
+        )
+    )
+    if filas:
+        return
+
+    actual = (
+        db.query(models.DispensingQueue)
+        .filter(models.DispensingQueue.id == ocurrencia.id)
+        .first()
+    )
+    if actual is None:
+        # La ocurrencia desapareció (por ejemplo, se borró el horario o el
+        # dispensador): no queda nada que cubrir y no procede bloquear.
+        return
+    if actual.consumed_at is not None:
+        return
+    # Rama defensiva: solo se alcanza si la fila sigue sin consumir tras un
+    # `UPDATE` condicional que no afectó filas, lo que indicaría una carrera
+    # anómala. Hasta ahora no es reproducible de forma determinista en pruebas.
+    raise ErrorDominio("dispensacion_en_curso")
+
+
+def _cubrir_ocurrencias_programadas(
+    db: Session, dispensador: models.Dispenser, instante: datetime
+) -> None:
+    """Cubre las ocurrencias de la ventana de coincidencia (RF-7).
+
+    Si la ocurrencia ya está en la cola se marca consumida; si el planificador
+    todavía no la encoló se inserta ya consumida, de modo que la clave única
+    impide que se encole después. Todo ocurre en la transacción de la solicitud.
+    """
+    instante_local = tiempo.a_local_naive(instante)
+    horarios = (
+        db.query(models.Schedule)
+        .filter(models.Schedule.pet_id == dispensador.pet_id)
+        .all()
+    )
+
+    for horario in horarios:
+        for ocurrencia in dispensado_rapido.ocurrencias_en_ventana(
+            horario.time, instante_local
+        ):
+            fila = (
+                db.query(models.DispensingQueue)
+                .filter(
+                    models.DispensingQueue.dispenser_id == dispensador.id,
+                    models.DispensingQueue.schedule_id == horario.id,
+                    models.DispensingQueue.scheduled_for == ocurrencia,
+                )
+                .first()
+            )
+            if fila is not None:
+                if fila.consumed_at is None:
+                    _consumir_ocurrencia(db, fila, instante)
+                continue
+
+            try:
+                # Punto de guardado por ocurrencia: si el planificador inserta
+                # la misma clave a la vez, se consume la fila ganadora.
+                with db.begin_nested():
+                    item = models.DispensingQueue(
+                        dispenser_id=dispensador.id,
+                        pet_id=horario.pet_id,
+                        schedule_id=horario.id,
+                        amount=horario.amount,
+                        scheduled_for=ocurrencia,
+                        consumed_at=instante,
+                    )
+                    db.add(item)
+                    db.flush()
+            except IntegrityError:
+                fila = (
+                    db.query(models.DispensingQueue)
+                    .filter(
+                        models.DispensingQueue.dispenser_id == dispensador.id,
+                        models.DispensingQueue.schedule_id == horario.id,
+                        models.DispensingQueue.scheduled_for == ocurrencia,
+                    )
+                    .first()
+                )
+                if fila is not None and fila.consumed_at is None:
+                    _consumir_ocurrencia(db, fila, instante)
+
+
+def solicitar_dispensacion_rapida(
+    db: Session,
+    dispenser_id: int,
+    cantidad: Any,
+    operation_id: Any,
+    user_id: int,
+    ahora: Optional[datetime] = None,
+) -> dict:
+    """Registra una solicitud rápida y cubre los horarios coincidentes (spec 020).
+
+    Orden de comprobación: identificador de operación, dueño del dispensador,
+    reintento idempotente, cierre de órdenes vencidas, cantidad, stock reservado,
+    estado y orden en curso. El reintento con el mismo `operation_id` devuelve la
+    solicitud ya registrada sin volver a validar ni a cubrir horarios (RF-14).
+
+    La solicitud y la cobertura se confirman en una única transacción (RF-7). No
+    crea la orden: se entrega en la consulta siguiente del dispositivo, con
+    prioridad sobre la comida programada.
+    """
+    instante = tiempo.a_utc_naive(ahora or tiempo.ahora_utc())
+
+    # RF-14: el identificador se valida antes de buscar el dispensador y antes
+    # de evaluar cantidad, stock u orden en curso.
+    operacion = dispensado_rapido.normalizar_operation_id(operation_id)
+
+    dispensador = _dispensador_del_usuario(db, dispenser_id, user_id)
+
+    existente = _solicitud_por_operacion(db, dispensador.id, operacion)
+    if existente is not None:
+        return _respuesta_solicitud(existente, dispensador)
+
+    # Una orden vencida deja de bloquear; el cierre escribe su registro
+    # `sin_reporte` como en la spec 014 (RF-5).
+    cerrar_vencidas(db, instante, dispenser_id=dispensador.id)
+
+    cantidad_normalizada = dispensado_rapido.normalizar_cantidad_rapida(cantidad)
+    codigo = dispensado_rapido.codigo_rechazo(
+        cantidad=cantidad_normalizada,
+        stock_reservado=_stock_reservado(db, dispensador),
+        activo=bool(dispensador.is_active),
+        orden_en_curso=_hay_orden_en_curso(db, dispensador.id, instante),
+    )
+    if codigo is not None:
+        raise ErrorDominio(codigo)
+
+    try:
+        solicitud = models.ManualDispensingRequest(
+            dispenser_id=dispensador.id,
+            pet_id=dispensador.pet_id,
+            amount=cantidad_normalizada,
+            operation_id=operacion,
+            requested_at=instante,
+        )
+        db.add(solicitud)
+        # La escritura toma el bloqueo de SQLite y deja ver cualquier orden que
+        # otra consulta haya entregado mientras se validaba esta solicitud.
+        db.flush()
+
+        # Segunda comprobación bajo el bloqueo de escritura (RF-3): la suma
+        # incluye la solicitud recién insertada, así que dos peticiones
+        # simultáneas no pueden reservar más que el stock actual. El stock se
+        # relee porque otra transacción pudo cambiarlo antes del bloqueo.
+        pendiente = sum(_cantidades_pendientes(db, dispensador.id))
+        stock_actual = (
+            db.query(models.Dispenser.current_food_grams)
+            .filter(models.Dispenser.id == dispensador.id)
+            .scalar()
+        )
+        if pendiente > float(stock_actual or 0.0):
+            db.rollback()
+            raise ErrorDominio("stock_insuficiente")
+
+        # Segunda comprobación bajo el bloqueo de escritura (RF-5): si el
+        # dispositivo recibió una orden mientras se validaba, se revierte todo.
+        if _hay_orden_en_curso(db, dispensador.id, instante):
+            db.rollback()
+            raise ErrorDominio("dispensacion_en_curso")
+
+        _cubrir_ocurrencias_programadas(db, dispensador, instante)
+        db.commit()
+        db.refresh(solicitud)
+    except (ErrorDominio, HTTPException):
+        db.rollback()
+        raise
+    except IntegrityError:
+        # Otra petición con el mismo `operation_id` ganó la clave única: se
+        # devuelve su solicitud sin crear otra ni cubrir de nuevo (RF-14).
+        db.rollback()
+        existente = _solicitud_por_operacion(db, dispensador.id, operacion)
+        if existente is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=MENSAJE_ERROR_ENTREGA,
+            )
+        return _respuesta_solicitud(existente, dispensador)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=MENSAJE_ERROR_ENTREGA,
+        )
+
+    return _respuesta_solicitud(solicitud, dispensador)
+
+
+def entregar_solicitud_manual(
+    db: Session,
+    dispensador: models.Dispenser,
+    ahora: Optional[datetime] = None,
+    simular: bool = False,
+) -> Optional[dict]:
+    """Entrega la solicitud manual más antigua, antes que la cola programada.
+
+    La reclamación es atómica con `UPDATE ... WHERE consumed_at IS NULL` y
+    `rowcount`; si otra consulta gana, se prueba la siguiente. La orden resultante
+    es la misma entidad de la spec 014 y conserva su plazo, reporte y cierre.
+
+    Si el dispensador se reasignó a otra mascota, una solicitud de la mascota
+    anterior se marca consumida y se descarta sin orden ni evento (RF-16); el
+    bucle continúa con la siguiente solicitud vigente.
+    """
+    instante = tiempo.a_utc_naive(ahora or tiempo.ahora_utc())
+
+    # En modo simulado no se escribe: las solicitudes descartables se omiten
+    # solo en memoria para no repetirlas en la siguiente vuelta del bucle.
+    descartadas: set[int] = set()
+
+    while True:
+        consulta = db.query(models.ManualDispensingRequest).filter(
+            models.ManualDispensingRequest.dispenser_id == dispensador.id,
+            models.ManualDispensingRequest.consumed_at.is_(None),
+        )
+        if descartadas:
+            consulta = consulta.filter(
+                ~models.ManualDispensingRequest.id.in_(descartadas)
+            )
+        solicitud = consulta.order_by(
+            models.ManualDispensingRequest.requested_at,
+            models.ManualDispensingRequest.id,
+        ).first()
+        if solicitud is None:
+            return None
+
+        solicitud_id = solicitud.id
+        amount = solicitud.amount
+        pet_id = solicitud.pet_id
+
+        if pet_id != dispensador.pet_id:
+            if simular:
+                descartadas.add(solicitud_id)
+                continue
+
+            try:
+                filas = (
+                    db.query(models.ManualDispensingRequest)
+                    .filter(
+                        models.ManualDispensingRequest.id == solicitud_id,
+                        models.ManualDispensingRequest.consumed_at.is_(None),
+                    )
+                    .update(
+                        {models.ManualDispensingRequest.consumed_at: instante},
+                        synchronize_session=False,
+                    )
+                )
+                if not filas:
+                    db.rollback()
+                    continue
+
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=MENSAJE_ERROR_ENTREGA,
+                )
+
+            continue
+
+        if simular:
+            return {"serve": True, "amount": amount}
+
+        try:
+            filas = (
+                db.query(models.ManualDispensingRequest)
+                .filter(
+                    models.ManualDispensingRequest.id == solicitud_id,
+                    models.ManualDispensingRequest.consumed_at.is_(None),
+                )
+                .update(
+                    {models.ManualDispensingRequest.consumed_at: instante},
+                    synchronize_session=False,
+                )
+            )
+            if not filas:
+                db.rollback()
+                continue
+
+            orden = _crear_orden_pendiente(
+                db, dispensador, amount, instante, pet_id=pet_id
+            )
+            db.commit()
+            db.refresh(orden)
+        except IntegrityError:
+            db.rollback()
+            return dict(REPOSO)
+        except Exception:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=MENSAJE_ERROR_ENTREGA,
+            )
+
+        return {"serve": True, "amount": amount, "order_id": orden.id}
+
+
 # --- Entrega de la orden -----------------------------------------------------
 
 
@@ -205,11 +615,12 @@ def entregar_orden(
 
     Orden de comprobación de RF-25:
     1. una orden pendiente dentro de su plazo bloquea la entrega y **no** consume
-       la comida en espera;
+       la comida en espera ni la solicitud manual;
     2. una orden pendiente con el plazo vencido se cierra en esta misma consulta y
        la cola sigue esperando: la comida se entrega en la consulta siguiente;
     3. un dispensador desactivado no dispensa y tampoco consume la cola;
-    4. si no hay bloqueo, se entrega la comida en espera más antigua.
+    4. si no hay bloqueo, se entrega primero la solicitud manual más antigua y
+       después la comida en espera más antigua.
 
     `simular=True` es el modo del endpoint de diagnóstico: responde lo mismo que
     la entrega real pero no escribe nada (ni orden, ni cierre, ni banderas).
@@ -251,6 +662,10 @@ def entregar_orden(
     if not dispensador.is_active:
         # RF-25: desactivado no dispensa ni consume la cola; espera la reactivación.
         return dict(REPOSO)
+
+    entrega = entregar_solicitud_manual(db, dispensador, instante, simular=simular)
+    if entrega is not None:
+        return entrega
 
     entrega = entregar_comida_en_espera(db, dispensador, instante, simular=simular)
     if entrega is not None:
@@ -740,24 +1155,11 @@ def _cerrar_vencida(db: Session, order_id: int, instante: datetime) -> bool:
 def _ocurrencias_del_horario(texto: Any, instante_local: datetime) -> list[datetime]:
     """Ocurrencias de un horario `HH:MM` dentro de la ventana del barrido.
 
-    `instante_local` es la hora local del servidor y la ocurrencia se guarda con
-    esa misma forma (hora de pared sin zona): así el horario se interpreta en la
-    zona local vigente y un cambio de zona no convierte las programaciones ya
-    existentes. Se acepta la ocurrencia del día en curso y la del día anterior
-    para cubrir la ventana que cruza medianoche.
+    La ventana y la interpretación de la hora viven en
+    `domain.dispensado_rapido` para que la cobertura de la dispensación rápida
+    use exactamente el mismo criterio (spec 020, RF-7).
     """
-    try:
-        hora, minuto = (int(parte) for parte in str(texto).split(":")[:2])
-        hora_base = time(hour=hora, minute=minuto)
-    except (TypeError, ValueError):
-        return []
-
-    ocurrencias = []
-    for dia in (instante_local.date(), instante_local.date() - timedelta(days=1)):
-        ocurrencia = datetime.combine(dia, hora_base)
-        if instante_local - tiempo.VENTANA_OCURRENCIA < ocurrencia <= instante_local:
-            ocurrencias.append(ocurrencia)
-    return ocurrencias
+    return dispensado_rapido.ocurrencias_en_ventana(texto, instante_local)
 
 
 def encolar_comida(

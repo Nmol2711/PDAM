@@ -213,7 +213,7 @@ class DashboardView extends StatelessWidget {
                 icon: Icons.bluetooth_outlined,
                 color: colors.primary,
                 onTap: () {
-                  context.push('/pets');
+                  context.go('/dispensers');
                 },
               ),
             ),

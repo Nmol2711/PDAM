@@ -27,6 +27,16 @@ abstract class DispenserRepositories {
   Future<Either<Failures, bool>> activateDispenser(int dispenserId, int petId);
   Future<Either<Failures, Dispenser>> getDispenserByPet(int petId);
 
+  /// Solicita una dispensación rápida manual (spec 020). Requiere conexión: la
+  /// solicitud y la cobertura de horarios viven en el servidor. [operationId]
+  /// identifica la operación y hace idempotente el reintento (RF-14): debe
+  /// reutilizarse mientras la cantidad no cambie.
+  Future<Either<Failures, bool>> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  );
+
   /// Cambia la dirección MAC de un dispensador ya registrado (RF-04, RF-14).
   /// Requiere conexión: el cambio de MAC solo existe si el servidor lo acepta.
   Future<Either<Failures, Dispenser>> updateDispenserMac(
