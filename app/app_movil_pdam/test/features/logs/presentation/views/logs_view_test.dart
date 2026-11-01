@@ -170,10 +170,13 @@ void main() {
 
   /// Los BLoC se crean dentro del cuerpo del test para que sus microtareas
   /// corran en la zona de tiempo simulado de `testWidgets`.
-  void crearBlocs() {
+  ///
+  /// [ahora] permite fijar el reloj de la ventana de refresco (RNF-2).
+  void crearBlocs({DateTime Function()? ahora}) {
     logBloc = LogBloc(
       getLogsUc: GetLogsUc(repository: repository),
       getLogCatalogUc: GetLogCatalogUc(repository: repository),
+      ahora: ahora,
     );
     final petsRepository = _FakePetsRepository();
     petBloc = PetBloc(
@@ -249,6 +252,29 @@ void main() {
     );
   }
 
+  /// Monta la vista en un `Navigator` de rama anidado en el navegador raíz,
+  /// como en `StatefulShellRoute.indexedStack`: los diálogos abiertos con
+  /// `useRootNavigator: true` caen en el navegador raíz, no en la rama.
+  Future<void> montarRama(WidgetTester tester) async {
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<LogBloc>.value(value: logBloc!),
+          BlocProvider<PetBloc>.value(value: petBloc!),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Navigator(
+            onGenerateRoute: (settings) => MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => const LogsView(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> pumpView(
     WidgetTester tester, {
     bool settle = true,
@@ -272,6 +298,23 @@ void main() {
   Future<void> abrirFiltros(WidgetTester tester) async {
     await tester.tap(find.byKey(const Key('logs_filters_toggle')));
     await tester.pumpAndSettle();
+  }
+
+  /// Desliza la lista hacia abajo desde su inicio para pedir un refresco
+  /// manual. Usa `pump` acotado: el indicador del gesto anima sin parar
+  /// (MEMORY).
+  Future<void> deslizarRecarga(WidgetTester tester) async {
+    await tester.fling(find.byType(ListView), const Offset(0, 300), 1000);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+  }
+
+  /// Simula la vuelta de la aplicación a primer plano.
+  Future<void> reanudarApp(WidgetTester tester) async {
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
   }
 
   group('lista del historial (RF-33, RF-41)', () {
@@ -802,34 +845,38 @@ void main() {
       expect(find.text('Mascota'), findsOneWidget);
     });
 
-    testWidgets('se pliega al volver a la pestaña con el shell real', (
-      tester,
-    ) async {
-      crearBlocs();
-      final visible = ValueNotifier<bool>(true);
-      addTearDown(visible.dispose);
+    testWidgets(
+      'se pliega al volver a la pestaña con una consulta automática (017, 019)',
+      (tester) async {
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        final visible = ValueNotifier<bool>(true);
+        addTearDown(visible.dispose);
 
-      await montarShell(tester, visible);
-      await asentar(tester);
-      await abrirFiltros(tester);
-      expect(find.text('Mascota'), findsOneWidget);
+        await montarShell(tester, visible);
+        await asentar(tester);
+        await abrirFiltros(tester);
+        expect(find.text('Mascota'), findsOneWidget);
 
-      final llamadas = repository.calls;
-      final filtros = repository.lastFilters;
+        final llamadas = repository.calls;
+        final filtros = repository.lastFilters;
 
-      // La pestaña deja de estar activa: TickerMode pasa a false y la rama
-      // sigue montada, como en StatefulShellRoute.indexedStack.
-      visible.value = false;
-      await tester.pumpAndSettle();
-      visible.value = true;
-      await tester.pumpAndSettle();
+        // La pestaña deja de estar activa: TickerMode pasa a false y la rama
+        // sigue montada, como en StatefulShellRoute.indexedStack.
+        visible.value = false;
+        await tester.pumpAndSettle();
+        // Fuera de la ventana de 4 s para que el reingreso refresque (019).
+        ahora = ahora.add(const Duration(seconds: 5));
+        visible.value = true;
+        await tester.pumpAndSettle();
 
-      expect(find.text('Filtros'), findsOneWidget);
-      expect(find.text('Mascota'), findsNothing);
-      expect(find.text('Limpiar filtros'), findsNothing);
-      expect(repository.calls, llamadas);
-      expect(repository.lastFilters, filtros);
-    });
+        expect(find.text('Filtros'), findsOneWidget);
+        expect(find.text('Mascota'), findsNothing);
+        expect(find.text('Limpiar filtros'), findsNothing);
+        expect(repository.calls, llamadas + 1);
+        expect(repository.lastFilters, filtros);
+      },
+    );
 
     testWidgets('los filtros y el botón usan el radio 8 del tema', (
       tester,
@@ -877,6 +924,456 @@ void main() {
       expect(find.text('Filtros'), findsOneWidget);
       expect(find.text('Mascota'), findsNothing);
     });
+  });
+
+  group('recarga del historial (RF-1, RF-2, RF-4, CP-1 a CP-5 y CP-9)', () {
+    testWidgets(
+      'CP-1: deslizar recarga conservando filtros y página, solo con el '
+      'indicador del gesto',
+      (tester) async {
+        repository.page = LogPage(
+          items: [_log(id: 1)],
+          total: 120,
+          page: 2,
+          pageSize: 50,
+        );
+        crearBlocs();
+        await montarVista(tester);
+        await asentar(tester);
+        logBloc!.add(
+          const LogsRequested(filters: LogFilters(petId: 1), page: 2),
+        );
+        await asentar(tester);
+        expect(logBloc!.state.page, 2);
+
+        final blocker = Completer<void>();
+        repository.blocker = blocker;
+        addTearDown(() {
+          if (!blocker.isCompleted) blocker.complete();
+        });
+
+        await deslizarRecarga(tester);
+
+        expect(repository.lastPage, 2);
+        expect(repository.lastFilters?.petId, 1);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.manual);
+        // La lista previa sigue visible: no hay vacío intermedio.
+        expect(logBloc!.state.items, isNotEmpty);
+        expect(find.text('Comida dispensada'), findsWidgets);
+        expect(
+          find.text('No hay registros para los filtros seleccionados'),
+          findsNothing,
+        );
+        // Solo el indicador del gesto; la barra lineal queda oculta.
+        expect(find.byType(RefreshProgressIndicator), findsOneWidget);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+
+        blocker.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+        expect(logBloc!.state.refresco, isNull);
+        expect(logBloc!.state.isLoading, isFalse);
+      },
+    );
+
+    testWidgets('CP-2: el gesto funciona con la lista vacía', (tester) async {
+      await pumpView(tester);
+      final llamadas = repository.calls;
+
+      await deslizarRecarga(tester);
+
+      expect(repository.calls, llamadas + 1);
+      expect(logBloc!.state.isLoading, isFalse);
+    });
+
+    testWidgets(
+      'CP-2: el gesto funciona con menos elementos que el alto de la pantalla',
+      (tester) async {
+        repository.page = LogPage(
+          items: [_log()],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        );
+        await pumpView(tester);
+        final llamadas = repository.calls;
+
+        await deslizarRecarga(tester);
+
+        expect(repository.calls, llamadas + 1);
+        expect(logBloc!.state.isLoading, isFalse);
+      },
+    );
+
+    testWidgets('CP-3: mostrar la pestaña refresca con la barra lineal, sin el '
+        'indicador del gesto y sin mover el scroll', (tester) async {
+      var ahora = DateTime.utc(2026, 10, 31, 12);
+      crearBlocs(ahora: () => ahora);
+      repository.page = LogPage(
+        items: List<ActivityLog>.generate(20, (i) => _log(id: i + 1)),
+        total: 20,
+        page: 1,
+        pageSize: 50,
+      );
+      final visible = ValueNotifier<bool>(true);
+      addTearDown(visible.dispose);
+
+      await montarShell(tester, visible);
+      await asentar(tester);
+      await abrirFiltros(tester);
+      expect(find.text('Mascota'), findsOneWidget);
+
+      final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
+      await tester.pump();
+      final desplazamiento = scrollable.position.pixels;
+      expect(desplazamiento, greaterThan(0));
+
+      // La pestaña deja de estar activa y vuelve pasada la ventana de 4 s.
+      visible.value = false;
+      await tester.pump();
+      ahora = ahora.add(const Duration(seconds: 5));
+
+      final blocker = Completer<void>();
+      repository.blocker = blocker;
+      addTearDown(() {
+        if (!blocker.isCompleted) blocker.complete();
+      });
+      final llamadas = repository.calls;
+
+      visible.value = true;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(repository.calls, llamadas + 1);
+      expect(logBloc!.state.refresco, LogRefreshOrigin.automatico);
+      // Solo la barra lineal existente, sin el indicador del gesto.
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(RefreshProgressIndicator), findsNothing);
+      // La posición de la lista no se mueve.
+      expect(scrollable.position.pixels, desplazamiento);
+      // El panel se pliega al reentrar (017) y el refresco no lo despliega.
+      expect(find.text('Filtros'), findsOneWidget);
+      expect(find.text('Mascota'), findsNothing);
+      expect(find.text('Limpiar filtros'), findsNothing);
+
+      blocker.complete();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.byType(LinearProgressIndicator), findsNothing);
+      expect(logBloc!.state.refresco, isNull);
+    });
+
+    testWidgets(
+      'CP-4: volver del segundo plano con el historial visible refresca',
+      (tester) async {
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        await montarVista(tester);
+        await asentar(tester);
+        ahora = ahora.add(const Duration(seconds: 5));
+
+        final blocker = Completer<void>();
+        repository.blocker = blocker;
+        addTearDown(() {
+          if (!blocker.isCompleted) blocker.complete();
+        });
+        final llamadas = repository.calls;
+
+        await reanudarApp(tester);
+
+        expect(repository.calls, llamadas + 1);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.automatico);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+
+        blocker.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+      },
+    );
+
+    testWidgets(
+      'CP-4: volver del segundo plano con otra pestaña activa no refresca',
+      (tester) async {
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        final visible = ValueNotifier<bool>(false);
+        addTearDown(visible.dispose);
+
+        await montarShell(tester, visible);
+        await asentar(tester);
+        ahora = ahora.add(const Duration(seconds: 5));
+        final llamadas = repository.calls;
+
+        await reanudarApp(tester);
+
+        expect(repository.calls, llamadas);
+        expect(logBloc!.state.refresco, isNull);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'CP-4: volver del segundo plano con un diálogo encima no refresca',
+      (tester) async {
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        await montarVista(tester);
+        await asentar(tester);
+        await abrirFiltros(tester);
+        await tester.tap(find.text('Rango de fechas'));
+        await tester.pumpAndSettle();
+        expect(find.byType(DateRangePickerDialog), findsOneWidget);
+
+        ahora = ahora.add(const Duration(seconds: 5));
+        final llamadas = repository.calls;
+
+        await reanudarApp(tester);
+
+        expect(repository.calls, llamadas);
+        expect(logBloc!.state.refresco, isNull);
+      },
+    );
+
+    testWidgets(
+      'CP-4: con navegador de rama, un diálogo del navegador raíz impide el '
+      'refresco al reanudar',
+      (tester) async {
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        await montarRama(tester);
+        await asentar(tester);
+        await abrirFiltros(tester);
+        // El selector de fechas usa el navegador raíz (como en la app).
+        await tester.tap(find.text('Rango de fechas'));
+        await tester.pumpAndSettle();
+        expect(find.byType(DateRangePickerDialog), findsOneWidget);
+
+        ahora = ahora.add(const Duration(seconds: 5));
+        final llamadas = repository.calls;
+
+        await reanudarApp(tester);
+
+        expect(repository.calls, llamadas);
+        expect(logBloc!.state.refresco, isNull);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'CP-4: con navegador de rama y sin diálogo, reanudar refresca',
+      (tester) async {
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        await montarRama(tester);
+        await asentar(tester);
+        ahora = ahora.add(const Duration(seconds: 5));
+
+        final blocker = Completer<void>();
+        repository.blocker = blocker;
+        addTearDown(() {
+          if (!blocker.isCompleted) blocker.complete();
+        });
+        final llamadas = repository.calls;
+
+        await reanudarApp(tester);
+
+        expect(repository.calls, llamadas + 1);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.automatico);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+
+        blocker.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+      },
+    );
+
+    testWidgets('CP-5: cerrar un diálogo o un selector no dispara refresco', (
+      tester,
+    ) async {
+      var ahora = DateTime.utc(2026, 10, 31, 12);
+      crearBlocs(ahora: () => ahora);
+      await montarVista(tester);
+      await asentar(tester);
+      await abrirFiltros(tester);
+      final llamadas = repository.calls;
+
+      // Diálogo: abrir y cerrar sin elegir rango.
+      await tester.tap(find.text('Rango de fechas'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DateRangePickerDialog), findsOneWidget);
+      Navigator.of(tester.element(find.byType(DateRangePickerDialog))).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(DateRangePickerDialog), findsNothing);
+
+      expect(repository.calls, llamadas);
+      expect(logBloc!.state.refresco, isNull);
+
+      // Selector: abrir y descartar sin elegir.
+      await tester.tap(find.text('Todas las mascotas'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(5, 5));
+      await tester.pumpAndSettle();
+
+      expect(repository.calls, llamadas);
+      expect(logBloc!.state.refresco, isNull);
+    });
+
+    testWidgets(
+      'CP-9: cambiar el filtro durante un refresco descarta el refresco y '
+      'deja un solo indicador',
+      (tester) async {
+        repository.page = LogPage(
+          items: [_log()],
+          total: 120,
+          page: 1,
+          pageSize: 50,
+        );
+        await pumpView(tester);
+        await abrirFiltros(tester);
+
+        final blocker = Completer<void>();
+        repository.blocker = blocker;
+        addTearDown(() {
+          if (!blocker.isCompleted) blocker.complete();
+        });
+
+        await deslizarRecarga(tester);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.manual);
+        expect(find.byType(RefreshProgressIndicator), findsOneWidget);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+
+        // La acción nueva prevalece: el refresco se descarta (RF-4).
+        await tester.tap(find.text('Todas las mascotas'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.text('Milo').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 600));
+
+        expect(logBloc!.state.filters.petId, 1);
+        expect(logBloc!.state.refresco, isNull);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+
+        blocker.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(logBloc!.state.isLoading, isFalse);
+        expect(logBloc!.state.filters.petId, 1);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'RF-4: deslizar durante un refresco automático no añade un segundo '
+      'indicador',
+      (tester) async {
+        repository.page = LogPage(
+          items: [_log()],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        );
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        await montarVista(tester);
+        await asentar(tester);
+
+        // Refresco automático en curso y bloqueado: solo barra lineal.
+        ahora = ahora.add(const Duration(seconds: 5));
+        final blocker = Completer<void>();
+        repository.blocker = blocker;
+        addTearDown(() {
+          if (!blocker.isCompleted) blocker.complete();
+        });
+        final llamadas = repository.calls;
+        await reanudarApp(tester);
+        expect(repository.calls, llamadas + 1);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.automatico);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+
+        // El gesto no apila otro indicador ni otra consulta (RF-4).
+        await deslizarRecarga(tester);
+        await tester.pump(const Duration(milliseconds: 600));
+
+        expect(repository.calls, llamadas + 1);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.automatico);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+
+        blocker.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        expect(logBloc!.state.refresco, isNull);
+      },
+    );
+
+    testWidgets(
+      'RF-4: deslizar tras cambiar un filtro durante un refresco no deja el '
+      'indicador del gesto pendiente',
+      (tester) async {
+        repository.page = LogPage(
+          items: [_log()],
+          total: 120,
+          page: 1,
+          pageSize: 50,
+        );
+        var ahora = DateTime.utc(2026, 10, 31, 12);
+        crearBlocs(ahora: () => ahora);
+        await montarVista(tester);
+        await asentar(tester);
+
+        // Refresco automático A en curso y bloqueado.
+        ahora = ahora.add(const Duration(seconds: 5));
+        final blocker = Completer<void>();
+        repository.blocker = blocker;
+        addTearDown(() {
+          if (!blocker.isCompleted) blocker.complete();
+        });
+        final llamadas = repository.calls;
+        await reanudarApp(tester);
+        expect(repository.calls, llamadas + 1);
+        expect(logBloc!.state.refresco, LogRefreshOrigin.automatico);
+
+        // Cambio de filtro durante A: nueva generación y `refresco` limpio,
+        // pero A sigue en curso hasta que responda.
+        logBloc!.add(const LogFiltersChanged(LogFilters(petId: 1)));
+        await tester.pump();
+        expect(repository.calls, llamadas + 2);
+        expect(logBloc!.state.refresco, isNull);
+        expect(logBloc!.state.isLoading, isTrue);
+        expect(logBloc!.refrescoEnCurso, isTrue);
+
+        // El gesto no debe añadir otra consulta ni dejar su indicador.
+        await deslizarRecarga(tester);
+        await tester.pump(const Duration(milliseconds: 600));
+
+        expect(repository.calls, llamadas + 2);
+        expect(logBloc!.state.isLoading, isTrue);
+        expect(find.byType(LinearProgressIndicator), findsOneWidget);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+
+        blocker.complete();
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+
+        expect(logBloc!.state.isLoading, isFalse);
+        expect(logBloc!.state.filters.petId, 1);
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        expect(find.byType(RefreshProgressIndicator), findsNothing);
+      },
+    );
   });
 
   group('gutter exterior (RF-09)', () {

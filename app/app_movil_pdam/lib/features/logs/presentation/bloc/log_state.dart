@@ -19,6 +19,9 @@ class LogState extends Equatable {
   /// Ya se completó al menos una consulta, con o sin datos.
   final bool hasLoaded;
 
+  /// Origen del refresco en curso; `null` si no hay ninguno (RF-1, RF-2).
+  final LogRefreshOrigin? refresco;
+
   const LogState({
     this.items = const <ActivityLog>[],
     this.filters = LogFilters.empty,
@@ -31,6 +34,7 @@ class LogState extends Equatable {
     this.isOffline = false,
     this.catalog = const LogCatalog(),
     this.hasLoaded = false,
+    this.refresco,
   });
 
   LogState copyWith({
@@ -46,6 +50,8 @@ class LogState extends Equatable {
     bool? isOffline,
     LogCatalog? catalog,
     bool? hasLoaded,
+    LogRefreshOrigin? refresco,
+    bool clearRefresco = false,
   }) {
     return LogState(
       items: items ?? this.items,
@@ -59,6 +65,7 @@ class LogState extends Equatable {
       isOffline: isOffline ?? this.isOffline,
       catalog: catalog ?? this.catalog,
       hasLoaded: hasLoaded ?? this.hasLoaded,
+      refresco: clearRefresco ? null : (refresco ?? this.refresco),
     );
   }
 
@@ -75,5 +82,6 @@ class LogState extends Equatable {
     isOffline,
     catalog,
     hasLoaded,
+    refresco,
   ];
 }
