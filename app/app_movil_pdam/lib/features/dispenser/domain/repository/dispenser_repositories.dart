@@ -1,6 +1,7 @@
 import 'package:app_movil_pdam/core/error/failures.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_adapter_status.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_scan_event.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
-import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:dartz/dartz.dart';
 
 /// Contrato único del módulo de dispensadores.
@@ -26,6 +27,16 @@ abstract class DispenserRepositories {
   Future<Either<Failures, bool>> activateDispenser(int dispenserId, int petId);
   Future<Either<Failures, Dispenser>> getDispenserByPet(int petId);
 
+  /// Solicita una dispensación rápida manual (spec 020). Requiere conexión: la
+  /// solicitud y la cobertura de horarios viven en el servidor. [operationId]
+  /// identifica la operación y hace idempotente el reintento (RF-14): debe
+  /// reutilizarse mientras la cantidad no cambie.
+  Future<Either<Failures, bool>> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  );
+
   /// Cambia la dirección MAC de un dispensador ya registrado (RF-04, RF-14).
   /// Requiere conexión: el cambio de MAC solo existe si el servidor lo acepta.
   Future<Either<Failures, Dispenser>> updateDispenserMac(
@@ -44,8 +55,22 @@ abstract class DispenserRepositories {
   Future<void> saveLocalDispenser(Dispenser dispenser);
   Future<void> refillFood(String dispenserId, double grams);
   Future<void> discountFood(String dispenserId, double grams);
-  Stream<List<ScannedDevice>> scanBleDispensers();
-  Future<void> stopBleScan();
+
+  /// Escaneo de dispensadores en modo configuración. Cada evento viaja
+  /// etiquetado con [cycleId] para que un cierre tardío no afecte al ciclo
+  /// vigente (RF-07); [window] acota la ventana de escucha (RF-01).
+  Stream<BleScanEvent> scanBleDispensers({
+    required int cycleId,
+    Duration? window,
+  });
+
+  /// Detiene el escaneo; [cycleId] limita la detención al ciclo indicado
+  /// (RF-07, RF-08).
+  Future<void> stopBleScan({int? cycleId});
+
+  /// Estado del adaptador Bluetooth para los avisos de la pantalla
+  /// (RF-11, RF-12, RF-25).
+  Stream<BleAdapterStatus> get adapterStatus;
   Future<void> connectAndProvisionBle({
     required String deviceId,
     required String ssid,

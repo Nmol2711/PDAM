@@ -61,6 +61,29 @@ class DispenserRefillRequest(BaseModel):
 class DispenserWiFiResetRequest(BaseModel):
     pass
 
+class QuickDispenseRequest(BaseModel):
+    """Solicitud de dispensación rápida manual (spec 020).
+
+    `amount` y `operation_id` son `Any` para que la validación viva en el
+    servicio: una cantidad ausente, no numérica o fuera del límite responde 400
+    del catálogo y nunca un 422 del esquema. `operation_id` es obligatorio para
+    el servicio y sostiene la idempotencia de RF-14.
+    """
+
+    amount: Any = None
+    operation_id: Any = None
+
+    class Config:
+        from_attributes = True
+
+class QuickDispenseResponse(BaseModel):
+    status: str
+    requested_grams: float
+    stock_grams: float
+
+    class Config:
+        from_attributes = True
+
 class DispenserWiFiResetResponse(BaseModel):
     success: bool
     message: str

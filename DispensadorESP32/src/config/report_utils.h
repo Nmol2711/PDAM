@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "dispensing_utils.h"
@@ -27,6 +28,16 @@ constexpr unsigned kReportMaxAttempts = 3;
 // Queda un reintento mientras los intentos hechos no lleguen al máximo.
 inline bool hayReintentoDisponible(unsigned intentosHechos) {
   return intentosHechos < kReportMaxAttempts;
+}
+
+// Indica si toca intentar el reenvío del pendiente en este arranque (RF-37).
+//
+// El reenvío se intenta una sola vez por arranque, justo después de conectar el
+// WiFi y antes de cualquier consulta al servidor. Depende solo de la bandera del
+// arranque: aunque el envío falle (servidor caído), no se repite en este
+// arranque y el reporte queda en NVS para el siguiente reinicio.
+inline bool tocaReenviarPendiente(bool yaReenviadoEnEsteArranque) {
+  return !yaReenviadoEnEsteArranque;
 }
 
 // Motivo del reporte por cada fin de ciclo (RF-36).
@@ -81,10 +92,14 @@ inline ReporteCiclo reporteVacio(dispensing::DispenseReason motivo) {
   return reporte;
 }
 
-// Traduce el resultado del ciclo al reporte (RF-36).
+// Traduce el resultado del ciclo al reporte (RF-36 de la 014, RF-7 de la 016).
 //
 // Los gramos medidos son el incremento del ciclo: sin línea base no hay
-// incremento atribuible y el campo se declara ausente.
+// incremento atribuible y el campo se declara ausente. Además, un cierre por
+// `SENSOR_UNAVAILABLE` nunca los declara —aunque el ciclo hubiera podido
+// calcularlos— porque la 016 exige los medidos como «no disponible» en los
+// cierres sin medición fiable; el resto de motivos los conserva. La regla vive
+// aquí para no alterar las banderas de `DispenseResult` que usa el log serie.
 inline ReporteCiclo reporteDesdeResultado(const dispensing::DispenseResult &result,
                                           bool orderIdAvailable, long orderId) {
   ReporteCiclo reporte{};
@@ -93,8 +108,11 @@ inline ReporteCiclo reporteDesdeResultado(const dispensing::DispenseResult &resu
   reporte.motivo = result.reason;
   reporte.solicitadosAvailable = result.requestedGrams > 0.0f;
   reporte.solicitados = reporte.solicitadosAvailable ? result.requestedGrams : 0.0f;
-  reporte.medidosAvailable = result.incrementAvailable;
-  reporte.medidos = result.incrementAvailable ? result.incrementGrams : 0.0f;
+  const bool medidosDeclarables =
+      result.incrementAvailable &&
+      result.reason != dispensing::DispenseReason::SENSOR_UNAVAILABLE;
+  reporte.medidosAvailable = medidosDeclarables;
+  reporte.medidos = medidosDeclarables ? result.incrementGrams : 0.0f;
   reporte.reintentos = result.retryCount;
   return reporte;
 }
@@ -157,6 +175,94 @@ inline bool construirReporteJson(const char *mac, const ReporteCiclo &reporte,
     buffer[0] = '\0';
   }
   return ok;
+}
+
+// Resumen del reporte para el monitor serie (RF-36, RNF-1): la orden, el motivo
+// y la longitud del cuerpo. Nunca la MAC ni el JSON completo.
+//
+// Se formatea a partir de los datos del ciclo y no releyendo el cuerpo: el
+// documento JSON necesario para releerlo no cabe en un `StaticJsonDocument`
+// pequeño y el resumen acababa mostrando «no disponible».
+inline void formatearResumenReporte(long orderId, bool orderIdAvailable,
+                                    const char *motivo, std::size_t longitud,
+                                    char *buffer, std::size_t size) {
+  if (buffer == nullptr || size == 0) {
+    return;
+  }
+
+  char orden[16];
+  if (orderIdAvailable) {
+    std::snprintf(orden, sizeof(orden), "%ld", orderId);
+  } else {
+    std::snprintf(orden, sizeof(orden), "no disponible");
+  }
+
+  std::snprintf(buffer, size,
+                "Reporte a enviar: order_id=%s, motivo=%s, longitud=%lu bytes",
+                orden,
+                (motivo != nullptr && motivo[0] != '\0') ? motivo
+                                                         : "no disponible",
+                static_cast<unsigned long>(longitud));
+}
+
+// Igual que el anterior, con los datos del reporte del ciclo.
+inline void formatearResumenCiclo(const ReporteCiclo &reporte,
+                                  std::size_t longitud, char *buffer,
+                                  std::size_t size) {
+  formatearResumenReporte(reporte.orderId, reporte.orderIdAvailable,
+                          motivoPara(reporte.motivo), longitud, buffer, size);
+}
+
+// Recupera la orden y el motivo de un cuerpo ya construido, para el resumen de
+// un pendiente que se reenvía desde la NVS (RF-37). No usa ArduinoJson: solo
+// busca las dos claves en el texto generado por `construirReporteJson`.
+//
+// Devuelve false solo si no hay cuerpo; si falta una clave, deja su salida como
+// ausente en lugar de inventar un valor.
+inline bool extraerResumenReporte(const char *json, long *orderId,
+                                  bool *orderIdAvailable, char *motivo,
+                                  std::size_t motivoSize) {
+  if (orderId != nullptr) {
+    *orderId = 0;
+  }
+  if (orderIdAvailable != nullptr) {
+    *orderIdAvailable = false;
+  }
+  if (motivo != nullptr && motivoSize > 0) {
+    motivo[0] = '\0';
+  }
+  if (json == nullptr) {
+    return false;
+  }
+
+  const char *claveOrden = "\"order_id\":";
+  const char *inicioOrden = std::strstr(json, claveOrden);
+  if (inicioOrden != nullptr && orderId != nullptr &&
+      orderIdAvailable != nullptr) {
+    const char *valor = inicioOrden + std::strlen(claveOrden);
+    char *fin = nullptr;
+    const long leido = std::strtol(valor, &fin, 10);
+    if (fin != valor) {
+      *orderId = leido;
+      *orderIdAvailable = true;
+    }
+  }
+
+  const char *claveMotivo = "\"motivo\":\"";
+  const char *inicioMotivo = std::strstr(json, claveMotivo);
+  if (inicioMotivo != nullptr && motivo != nullptr && motivoSize > 0) {
+    const char *valor = inicioMotivo + std::strlen(claveMotivo);
+    const char *fin = std::strchr(valor, '"');
+    if (fin != nullptr) {
+      std::size_t copiados = static_cast<std::size_t>(fin - valor);
+      if (copiados >= motivoSize) {
+        copiados = motivoSize - 1;
+      }
+      std::memcpy(motivo, valor, copiados);
+      motivo[copiados] = '\0';
+    }
+  }
+  return true;
 }
 
 // Códigos del catálogo que el servidor responde con 400 y son definitivos: la

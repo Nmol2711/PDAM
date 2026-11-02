@@ -1,4 +1,4 @@
-"""Catálogos cerrados del registro de actividad (spec 014).
+"""Catálogos cerrados del registro de actividad (specs 014 y 021).
 
 Una sola fuente para los códigos que se guardan en `logs`, las etiquetas que se
 muestran en español y los mensajes de error visibles. Cualquier valor fuera de
@@ -13,6 +13,10 @@ from typing import Optional
 # Resultados posibles de un registro.
 EXITO = "success"
 FALLO = "failure"
+
+# Único tipo de registro que aporta gramos dispensados (spec 022, RF-2). Es la
+# fuente única del literal: el servicio del panel lo usa para filtrar `logs`.
+EVENTO_DISPENSADO = "feeding_dispensed"
 
 # Origen de una causa: la declara el dispositivo en su reporte o la asigna el
 # servidor al cerrar la orden.
@@ -36,7 +40,7 @@ TIPOS_EVENTO: dict[str, str] = {
     "dispenser_updated": "Dispensador modificado",
     "dispenser_unlinked": "Dispensador desvinculado",
     "dispenser_wifi_reset": "WiFi del dispensador reiniciado",
-    "feeding_dispensed": "Comida dispensada",
+    EVENTO_DISPENSADO: "Comida dispensada",
     "dispenser_refilled": "Dispensador reabastecido",
 }
 
@@ -65,6 +69,7 @@ CAUSAS: dict[str, Causa] = {
     "orden_desconocida": Causa("Orden desconocida", FALLO, ORIGEN_SERVIDOR),
     "supera_capacidad": Causa("Supera la capacidad", FALLO, ORIGEN_SERVIDOR),
     "cantidad_invalida": Causa("Cantidad inválida", FALLO, ORIGEN_SERVIDOR),
+    "solicitud_vencida": Causa("Solicitud vencida", FALLO, ORIGEN_SERVIDOR),
 }
 
 # Subconjunto de causas que el dispositivo puede declarar como motivo de su
@@ -99,6 +104,19 @@ MENSAJES_ERROR: dict[str, str] = {
     ),
     "stock_fuera_de_rango": (
         "El stock resultante quedaría fuera del intervalo de 0 a 5000 g."
+    ),
+    "cantidad_rapida_invalida": (
+        "La cantidad rápida debe ser mayor que 0 y no superar 200 g."
+    ),
+    "stock_insuficiente": (
+        "La cantidad solicitada supera el stock disponible del dispensador."
+    ),
+    "dispensador_desactivado": "El dispensador está desactivado.",
+    "dispensacion_en_curso": (
+        "Ya hay una dispensación en curso para este dispensador."
+    ),
+    "operacion_invalida": (
+        "El identificador de operación es obligatorio y debe ser válido."
     ),
 }
 

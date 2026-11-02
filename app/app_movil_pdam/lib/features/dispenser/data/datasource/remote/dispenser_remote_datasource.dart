@@ -17,6 +17,16 @@ abstract class DispenserRemoteDatasource {
   Future<Dispenser> getDispenserByPet(int petId);
   Future<bool> deleteDispenserByPet(int petId);
 
+  /// Solicita una dispensación rápida manual (spec 020). El servidor responde
+  /// 202 con la solicitud pendiente; los rechazos llegan como `ApiException`
+  /// con el código del catálogo. [operationId] viaja en el cuerpo para que el
+  /// servidor deduplique el reintento con la misma cantidad (RF-14).
+  Future<bool> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  );
+
   /// Cambia la dirección MAC del dispensador (RF-04, RF-14). El servidor
   /// valida formato y unicidad por forma normalizada, así que un conflicto
   /// llega como `ApiException` con `code` `mac_in_use` o `mac_invalid_format`.
@@ -209,6 +219,26 @@ class DispenserRemoteDatasourceImpl implements DispenserRemoteDatasource {
       throw _apiExceptionFrom(
         e,
         staticMessage: 'Error con el servidor al reabastecer el dispensador',
+      );
+    }
+  }
+
+  @override
+  Future<bool> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  ) async {
+    try {
+      final response = await _dioClient.dio.post(
+        '${ApiConstants.dispenser}$dispenserId/quick-dispense',
+        data: {'amount': grams, 'operation_id': operationId},
+      );
+      return response.statusCode == 200 || response.statusCode == 202;
+    } on DioException catch (e) {
+      throw _apiExceptionFrom(
+        e,
+        staticMessage: 'Error con el servidor al dispensar la cantidad',
       );
     }
   }

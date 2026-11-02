@@ -35,6 +35,7 @@ const DashboardSummary _resumen = DashboardSummary(
   pendingFeedings: 5,
   completedFeedings: 2,
   weeklyDispensed: <double>[10, 20, 30, 40, 50, 60, 70],
+  todayIndex: 0,
 );
 
 class _FakeDashboardRepository implements DashboardRepository {
@@ -128,6 +129,11 @@ Future<void> _pumpDashboard(
       GoRoute(
         path: '/home',
         builder: (context, state) => const DashboardView(),
+      ),
+      GoRoute(
+        path: '/dispensers',
+        builder: (context, state) =>
+            const Scaffold(body: Center(child: Text('Sección de dispensadores'))),
       ),
     ],
   );
@@ -333,7 +339,7 @@ void main() {
     expect(_metrica(tester, 'Total Mascotas').value, '3');
     expect(_metrica(tester, 'Mascotas Castradas').value, '1');
     expect(_metrica(tester, 'Alimento Hoy (g)').value, '150');
-    expect(_metrica(tester, 'Cumplimiento Meta').value, '50%');
+    expect(_metrica(tester, 'Cumplimiento de lo programado').value, '50%');
     expect(find.text('2 realizadas de 7'), findsOneWidget);
     expect(find.text('5'), findsOneWidget);
   });
@@ -422,5 +428,17 @@ void main() {
         reason: '${archivo.path} usa Colors.* fuera de transparent',
       );
     }
+  });
+
+  testWidgets('«Dispositivos» abre la sección de dispensadores y no la de mascotas', (
+    tester,
+  ) async {
+    await _pumpDashboard(tester);
+
+    await tester.ensureVisible(find.text('Dispositivos'));
+    await tester.tap(find.text('Dispositivos'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sección de dispensadores'), findsOneWidget);
   });
 }

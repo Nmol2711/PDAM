@@ -12,6 +12,42 @@
       "sourceType": "github",
       "skillPath": "plugins/ui-design/skills/mobile-android-design/SKILL.md",
       "computedHash": "bcb274bcc4e0ad076b5947f90e5a247f370ed4da1274b2b7347dc293ee396309"
+    },
+    "coordinator": {
+      "source": "opencode/agents",
+      "sourceType": "local",
+      "skillPath": "skills/coordinator/SKILL.md",
+      "computedHash": "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    },
+    "implementer": {
+      "source": "opencode/agents",
+      "sourceType": "local",
+      "skillPath": "skills/implementer/SKILL.md",
+      "computedHash": "b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1"
+    },
+    "inspector": {
+      "source": "opencode/agents",
+      "sourceType": "local",
+      "skillPath": "skills/inspector/SKILL.md",
+      "computedHash": "c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2"
+    },
+    "planner": {
+      "source": "opencode/agents",
+      "sourceType": "local",
+      "skillPath": "skills/planner/SKILL.md",
+      "computedHash": "d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3"
+    },
+    "reviewer": {
+      "source": "opencode/agents",
+      "sourceType": "local",
+      "skillPath": "skills/reviewer/SKILL.md",
+      "computedHash": "e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4"
+    },
+    "sdd": {
+      "source": "opencode/skills",
+      "sourceType": "local",
+      "skillPath": "skills/sdd/SKILL.md",
+      "computedHash": "f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5"
     }
   }
 }

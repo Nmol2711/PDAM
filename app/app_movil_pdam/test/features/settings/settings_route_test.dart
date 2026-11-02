@@ -149,6 +149,7 @@ class _FakeDashboardRepository implements DashboardRepository {
           pendingFeedings: 0,
           completedFeedings: 0,
           weeklyDispensed: <double>[0, 0, 0, 0, 0, 0, 0],
+          todayIndex: 0,
         ),
       );
 }

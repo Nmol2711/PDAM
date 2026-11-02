@@ -4,7 +4,10 @@ import 'package:app_movil_pdam/core/presentation/widgets/app_cta_button.dart';
 import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/use_case/quick_dispense_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/bloc/quick_dispense_cubit.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/widgets/quick_dispense_sheet.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/pet.dart';
 import 'package:app_movil_pdam/features/pets/domain/entity/schedule.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/pet/pet_wsava_limit.dart';
@@ -43,6 +46,7 @@ void main() {
     Pet pet, {
     MockDispenserRepository? dispenserRepository,
     MockScheduleRepository? scheduleRepository,
+    QuickDispenseCubit? quickDispenseCubit,
     double textScaler = 1.0,
   }) async {
     final scheduleBloc = buildScheduleBloc(
@@ -70,7 +74,10 @@ void main() {
             ).copyWith(textScaler: TextScaler.linear(textScaler)),
             child: child!,
           ),
-          home: PetDetailView(pet: pet),
+          home: PetDetailView(
+            pet: pet,
+            quickDispenseCubit: quickDispenseCubit,
+          ),
         ),
       ),
     );
@@ -82,6 +89,8 @@ void main() {
     required String hora,
     required String gramos,
   }) async {
+    await tester.ensureVisible(find.byIcon(Icons.add_circle));
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.add_circle));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Agregar horario individual'));
@@ -315,6 +324,119 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump();
     }
+  });
+
+  testWidgets('muestra «Dispensar ahora» y abre la hoja con un dispensador activo', (
+    tester,
+  ) async {
+    final repository = MockDispenserRepository();
+    final cubit = QuickDispenseCubit(
+      quickDispenseUc: QuickDispenseUc(repository: repository),
+    );
+    addTearDown(cubit.close);
+
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      quickDispenseCubit: cubit,
+    );
+
+    expect(find.text('Dispensar ahora'), findsOneWidget);
+
+    await tester.tap(find.text('Dispensar ahora'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(QuickDispenseSheet), findsOneWidget);
+  });
+
+  testWidgets('la dispensación rápida muestra la confirmación al aceptar', (
+    tester,
+  ) async {
+    final repository = MockDispenserRepository();
+    final cubit = QuickDispenseCubit(
+      quickDispenseUc: QuickDispenseUc(repository: repository),
+    );
+    addTearDown(cubit.close);
+
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      quickDispenseCubit: cubit,
+    );
+
+    await tester.tap(find.text('Dispensar ahora'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('quick-dispense-amount')),
+      '50',
+    );
+    await tester.tap(find.text('Dispensar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Orden de dispensación enviada'), findsOneWidget);
+    expect(repository.quickDispenseCalls, 1);
+  });
+
+  testWidgets('con el dispensador desactivado la acción queda deshabilitada', (
+    tester,
+  ) async {
+    final cubit = QuickDispenseCubit(
+      quickDispenseUc: QuickDispenseUc(repository: MockDispenserRepository()),
+    );
+    addTearDown(cubit.close);
+
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      dispenserRepository: _InactiveDispenserRepository(),
+      quickDispenseCubit: cubit,
+    );
+
+    final boton = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('Dispensar ahora'),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(boton.onPressed, isNull);
+  });
+
+  testWidgets('con stock 0 la acción queda deshabilitada (RF-11)', (
+    tester,
+  ) async {
+    final cubit = QuickDispenseCubit(
+      quickDispenseUc: QuickDispenseUc(
+        repository: MockDispenserRepository(dispenserStock: 0),
+      ),
+    );
+    addTearDown(cubit.close);
+
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      dispenserRepository: MockDispenserRepository(dispenserStock: 0),
+      quickDispenseCubit: cubit,
+    );
+
+    expect(find.text('Dispensar ahora'), findsOneWidget);
+    final boton = tester.widget<FilledButton>(
+      find.ancestor(
+        of: find.text('Dispensar ahora'),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    expect(boton.onPressed, isNull);
+  });
+
+  testWidgets('sin dispensador no ofrece la acción (RF-6)', (tester) async {
+    await pumpPetDetail(
+      tester,
+      mascotaDePrueba(TypePest.canino),
+      dispenserRepository: MockDispenserRepository(shouldFail: true),
+    );
+
+    expect(find.text('Dispensar ahora'), findsNothing);
+    expect(find.text('Vincular Dispensador Inteligente'), findsOneWidget);
   });
 }
 

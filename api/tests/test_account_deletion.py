@@ -78,6 +78,7 @@ class BaseBajaTests(unittest.TestCase):
         sesion = SessionLocal()
         try:
             for modelo in (
+                models.ManualDispensingRequest,
                 models.DispensingQueue,
                 models.DispensingOrder,
                 models.RefillOperation,
@@ -618,6 +619,122 @@ class TestBajaAtomica(BaseBajaTests):
         )
         self.assertEqual(perfil.status_code, 200, perfil.text)
         self.assertEqual(perfil.json()["email"], "user@test.com")
+
+
+class TestBajaConSolicitudRapida(BaseBajaTests):
+    """RF-16: la baja borra las solicitudes rápidas pendientes sin evento.
+
+    La solicitud manual vive en su propia tabla y enlaza con el dispensador por
+    clave foránea. La baja la borra dentro de la misma transacción, sin escribir
+    ningún registro por la solicitud ni por la cobertura de horarios.
+    """
+
+    def _crear_solicitud(self, operation_id="op-rapida-propia"):
+        return self._guardar(
+            models.ManualDispensingRequest(
+                dispenser_id=self.datos.dispensador.id,
+                pet_id=self.datos.mascota.id,
+                amount=50.0,
+                operation_id=operation_id,
+                requested_at=AHORA_NAIVE,
+            )
+        )
+
+    def _contar_solicitudes(self, dispenser_id=None):
+        sesion = SessionLocal()
+        try:
+            consulta = sesion.query(models.ManualDispensingRequest)
+            if dispenser_id is not None:
+                consulta = consulta.filter(
+                    models.ManualDispensingRequest.dispenser_id == dispenser_id
+                )
+            return consulta.count()
+        finally:
+            sesion.close()
+
+    def test_la_solicitud_pendiente_no_escribe_registros(self):
+        registros_antes = self._contar(models.ActivityLog)
+        self._crear_solicitud()
+
+        self.assertEqual(self._contar(models.ActivityLog), registros_antes)
+
+    def test_la_baja_borra_la_solicitud_pendiente_sin_error(self):
+        self._crear_solicitud()
+        self.assertEqual(
+            self._contar_solicitudes(self.datos.dispensador.id),
+            1,
+            "La solicitud pendiente debe existir antes de la baja",
+        )
+
+        respuesta = self._baja(self._token())
+
+        self.assertEqual(respuesta.status_code, 200, respuesta.text)
+        self.assertEqual(respuesta.json(), {"deleted": True})
+        self.assertEqual(
+            self._contar_solicitudes(), 0, "Quedaron solicitudes rápidas"
+        )
+        self.assertEqual(
+            self._contar(
+                models.ActivityLog,
+                models.ActivityLog.pet_id == self.datos.mascota.id,
+            ),
+            0,
+            "La baja no debe dejar registros de la mascota",
+        )
+
+    def test_la_baja_no_toca_la_solicitud_de_otra_cuenta(self):
+        propia = self._crear_solicitud()
+        ajena = self._guardar(
+            models.ManualDispensingRequest(
+                dispenser_id=self.datos_ajenos.dispensador.id,
+                pet_id=self.datos_ajenos.mascota.id,
+                amount=30.0,
+                operation_id="op-rapida-ajena",
+                requested_at=AHORA_NAIVE,
+            )
+        )
+
+        self._baja(self._token())
+
+        self.assertEqual(self._contar_solicitudes(), 1)
+        self.assertEqual(
+            self._contar_solicitudes(self.datos_ajenos.dispensador.id), 1
+        )
+        self.assertNotEqual(propia.id, ajena.id)
+
+    def test_contar_huerfanos_incluye_la_solicitud_pendiente(self):
+        self._crear_solicitud()
+
+        sesion = SessionLocal()
+        try:
+            huerfanos = account_service.contar_huerfanos(
+                sesion,
+                self.usuario.id,
+                self.usuario.public_id,
+                pet_ids=[self.datos.mascota.id],
+                dispenser_ids=[self.datos.dispensador.id],
+                schedule_ids=[self.datos.horario.id],
+            )
+        finally:
+            sesion.close()
+
+        self.assertEqual(huerfanos, 9, "La solicitud rápida también cuenta")
+
+        self._baja(self._token())
+
+        sesion = SessionLocal()
+        try:
+            huerfanos = account_service.contar_huerfanos(
+                sesion,
+                self.usuario.id,
+                self.usuario.public_id,
+                pet_ids=[self.datos.mascota.id],
+                dispenser_ids=[self.datos.dispensador.id],
+                schedule_ids=[self.datos.horario.id],
+            )
+        finally:
+            sesion.close()
+        self.assertEqual(huerfanos, 0)
 
 
 class TestContarHuerfanos(BaseBajaTests):

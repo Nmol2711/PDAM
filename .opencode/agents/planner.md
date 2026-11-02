@@ -6,9 +6,6 @@ permissions:
   - action: edit
     resource: "specs/**"
     effect: allow
-  - action: edit
-    resource: "*"
-    effect: deny
   - action: shell
     resource: "*"
     effect: deny

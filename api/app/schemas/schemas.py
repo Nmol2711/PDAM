@@ -1,5 +1,5 @@
 import re
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from datetime import datetime, date
 
@@ -141,10 +141,23 @@ class AutoScheduleResponse(BaseModel):
 
 # --- SCHEMAS DE DASHBOARD ---
 class DashboardSummary(BaseModel):
+    """Resumen del panel calculado con datos reales (spec 022, RF-6).
+
+    Conserva los siete campos anteriores y añade `today_index` (posición de hoy
+    en la serie, de 0 lunes a 6 domingo) y `calculated_at` (instante del cálculo
+    en UTC con sufijo `Z`). La app usa estos dos campos del servidor como fuente
+    de verdad, nunca el reloj del dispositivo.
+    """
+
     total_pets: int
     sterilized_pets: int
     food_dispensed_today: float
     food_target_today: float
     pending_feedings: int
     completed_feedings: int
-    weekly_dispensed: List[float]
+    # Exactamente siete posiciones (lunes a domingo) y una posición de hoy
+    # válida: el contrato no admite series incompletas ni índices fuera de rango
+    # (RF-5, RF-6).
+    weekly_dispensed: List[float] = Field(min_length=7, max_length=7)
+    today_index: int = Field(ge=0, le=6)
+    calculated_at: str

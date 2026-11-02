@@ -1,4 +1,5 @@
 import 'package:app_movil_pdam/core/constant/app_aplicacion.dart';
+import 'package:app_movil_pdam/core/di/injection_container.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,6 +11,9 @@ import 'package:app_movil_pdam/core/error/failures.dart';
 import 'package:app_movil_pdam/core/presentation/widgets/app_notice_dialog.dart';
 import 'package:app_movil_pdam/core/theme/app_shape.dart';
 import 'package:app_movil_pdam/core/theme/app_spacing.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/bloc/quick_dispense_cubit.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/widgets/quick_dispense_sheet.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/widgets/dispenser_notice_mapper.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/pets/domain/use_case/pet/pet_wsava_limit.dart';
@@ -18,7 +22,15 @@ import 'package:app_movil_pdam/features/pets/presentation/views/edit_pet_view.da
 class PetDetailView extends StatefulWidget {
   final Pet pet;
 
-  const PetDetailView({super.key, required this.pet});
+  /// Cubit inyectable para las pruebas de widget; en la aplicación se crea desde
+  /// la fábrica de dependencias al abrir la hoja.
+  final QuickDispenseCubit? quickDispenseCubit;
+
+  const PetDetailView({
+    super.key,
+    required this.pet,
+    this.quickDispenseCubit,
+  });
 
   @override
   State<PetDetailView> createState() => _PetDetailViewState();
@@ -34,6 +46,43 @@ class _PetDetailViewState extends State<PetDetailView> {
     );
     // Solicitamos al backend saber si esta mascota ya tiene un dispensador asociado
     context.read<DispenserBloc>().add(LoadDispenserByPetEvent(widget.pet.id));
+  }
+
+  /// Abre la hoja de dispensación rápida y conserva el cubit de prueba si se
+  /// inyectó; en la aplicación la hoja crea y cierra el suyo (RF-11).
+  Future<void> _abrirDispensacionRapida(
+    BuildContext context,
+    Dispenser dispenser,
+  ) async {
+    final inyectado = widget.quickDispenseCubit;
+    final cubit = inyectado ?? sl<QuickDispenseCubit>();
+    final dispenserBloc = context.read<DispenserBloc>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final resultado = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final hoja = QuickDispenseSheet(dispenser: dispenser);
+        if (inyectado != null) {
+          return BlocProvider<QuickDispenseCubit>.value(
+            value: cubit,
+            child: hoja,
+          );
+        }
+        return BlocProvider<QuickDispenseCubit>(
+          create: (_) => cubit,
+          child: hoja,
+        );
+      },
+    );
+
+    if (!mounted || resultado != true) return;
+
+    dispenserBloc.add(LoadDispenserByPetEvent(widget.pet.id));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Orden de dispensación enviada')),
+    );
   }
 
   String _getDefaultAssetPath(TypePest species) {
@@ -148,53 +197,75 @@ class _PetDetailViewState extends State<PetDetailView> {
                         : (state as DispenserFailure).dispenser!;
                     final isActive = dispenser.isActive;
 
-                    return InkWell(
-                      onTap: () =>
-                          _showDispenserOptionsDialog(context, dispenser),
-                      child: Card(
-                        color: isActive
-                            ? esquema.primaryContainer
-                            : esquema.surfaceContainerHighest,
-                        shape: RoundedRectangleBorder(
-                          side: BorderSide(
-                            color: isActive ? esquema.primary : esquema.outline,
-                            width: 1,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        InkWell(
+                          onTap: () =>
+                              _showDispenserOptionsDialog(context, dispenser),
+                          child: Card(
+                            color: isActive
+                                ? esquema.primaryContainer
+                                : esquema.surfaceContainerHighest,
+                            shape: RoundedRectangleBorder(
+                              side: BorderSide(
+                                color: isActive
+                                    ? esquema.primary
+                                    : esquema.outline,
+                                width: 1,
+                              ),
+                              borderRadius: AppRadii.cardRadius,
+                            ),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: isActive
+                                    ? esquema.primary
+                                    : esquema.onSurfaceVariant,
+                                child: Icon(
+                                  isActive ? Icons.check : Icons.pause_circle,
+                                  color: isActive
+                                      ? esquema.onPrimary
+                                      : esquema.surface,
+                                ),
+                              ),
+                              title: Text(
+                                isActive
+                                    ? 'Dispensador Vinculado'
+                                    : 'Dispensador Desactivado',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isActive
+                                      ? esquema.onPrimaryContainer
+                                      : esquema.onSurfaceVariant,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'MAC: ${dispenser.macAddress}\nEstado: ${isActive ? 'Activo' : 'Desactivado'}',
+                                style: TextStyle(
+                                  color: isActive
+                                      ? esquema.onPrimaryContainer
+                                      : esquema.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
                           ),
-                          borderRadius: AppRadii.cardRadius,
                         ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: isActive
-                                ? esquema.primary
-                                : esquema.onSurfaceVariant,
-                            child: Icon(
-                              isActive ? Icons.check : Icons.pause_circle,
-                              color: isActive
-                                  ? esquema.onPrimary
-                                  : esquema.surface,
-                            ),
-                          ),
-                          title: Text(
-                            isActive
-                                ? 'Dispensador Vinculado'
-                                : 'Dispensador Desactivado',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isActive
-                                  ? esquema.onPrimaryContainer
-                                  : esquema.onSurfaceVariant,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'MAC: ${dispenser.macAddress}\nEstado: ${isActive ? 'Activo' : 'Desactivado'}',
-                            style: TextStyle(
-                              color: isActive
-                                  ? esquema.onPrimaryContainer
-                                  : esquema.onSurfaceVariant,
-                            ),
-                          ),
+                        const SizedBox(height: AppSpacing.sm),
+                        FilledButton.icon(
+                          // Sin stock no hay nada que dispensar: la acción
+                          // queda deshabilitada aunque el equipo esté activo
+                          // (RF-11). El servidor vuelve a validarlo.
+                          onPressed:
+                              isActive && dispenser.currentFoodGrams > 0
+                              ? () => _abrirDispensacionRapida(
+                                  context,
+                                  dispenser,
+                                )
+                              : null,
+                          icon: const Icon(Icons.bolt),
+                          label: const Text('Dispensar ahora'),
                         ),
-                      ),
+                      ],
                     );
                   }
 

@@ -82,6 +82,33 @@ void logVerificationDiagnostics(const CycleDiagnostics &diagnostics,
   }
 }
 
+// Motivo real del rechazo de la línea base (RF-3, RNF-4): una sola línea con el
+// veredicto en español, las válidas de la ventana y la mediana observada.
+void logBaselineRejection(const CycleDiagnostics &diagnostics) {
+  if (diagnostics.hasBaseline) {
+    Serial.printf("Linea base rechazada: motivo=%s, validas=%u, base=%.2f g\n",
+                  baselineStatusText(diagnostics.baselineRejection),
+                  diagnostics.valid, diagnostics.baselineGrams);
+  } else {
+    Serial.printf("Linea base rechazada: motivo=%s, validas=%u, "
+                  "base=sin_calcular\n",
+                  baselineStatusText(diagnostics.baselineRejection),
+                  diagnostics.valid);
+  }
+}
+
+// Cierre por plausibilidad (RF-5): una única línea en español con la causa real,
+// el mayor incremento observado, la base y el tope. Nunca el diagnóstico de la
+// ventana de verificación: en este camino sí hubo una base aceptada y volcarlo
+// solo confundiría.
+void logPlausibilityClosure(const CycleDiagnostics &diagnostics) {
+  Serial.printf("Cierre por plausibilidad: motivo=%s, incremento_max=%.2f g, "
+                "base=%.2f g, tope=%.2f g\n",
+                plausibilityCauseText(diagnostics.plausibility),
+                diagnostics.maxIncrementGrams, diagnostics.baselineGrams,
+                diagnostics.topGrams);
+}
+
 } // namespace
 
 DispenseResult dispenseWeight(float amountGrams) {
@@ -103,13 +130,9 @@ DispenseResult dispenseWeight(float amountGrams) {
     return result;
   }
 
-  // La celda se inicializa una sola vez, ya validadas las entradas. main.cpp no
-  // llama a initHx711().
-  static bool hx711Initialized = false;
-  if (!hx711Initialized) {
-    initHx711();
-    hx711Initialized = true;
-  }
+  // La celda se inicializa una sola vez desde el driver; el muestreo del
+  // asentamiento y el ciclo comparten esa misma inicialización (Spec 016).
+  ensureHx711Initialized();
 
   CyclePorts ports;
   ports.context = nullptr;
@@ -126,11 +149,23 @@ DispenseResult dispenseWeight(float amountGrams) {
   result = runDispenseCycle(ports, amountGrams, hx711CalibrationFactor,
                             hx711RawSign, &diagnostics);
 
-  // RF-4: si la verificación no se supera, se imprime el diagnóstico de la
-  // ventana; el servo no llegó a arrancar.
-  if (result.reason == DispenseReason::SENSOR_UNAVAILABLE) {
+  // Caminos de cierre sin una dispensación correcta (RF-3, RF-4 de la 013, RF-8,
+  // RF-5):
+  // - rechazo de la base: diagnóstico de la ventana más su motivo real;
+  // - aborto por 3 inválidas: exactamente el diagnóstico de la 013, sin veredicto
+  //   de base, porque es lo que distingue un sensor desconectado;
+  // - cierre por plausibilidad: base aceptada y solo su línea, nunca el
+  //   diagnóstico de la ventana.
+  if (result.reason == DispenseReason::SENSOR_UNAVAILABLE &&
+      diagnostics.plausibility != PlausibilityVerdict::PLAUSIBLE) {
+    logPlausibilityClosure(diagnostics);
+  } else if (result.reason == DispenseReason::SENSOR_UNAVAILABLE &&
+             diagnostics.baselineRejection != BaselineStatus::ACCEPTED) {
     logVerificationDiagnostics(diagnostics, hx711CalibrationFactor,
                                hx711RawSign);
+    if (diagnostics.baselineRejection != BaselineStatus::NOT_EVALUATED) {
+      logBaselineRejection(diagnostics);
+    }
   }
 
   // RF-12: una única línea final con el motivo y reintentos=N.

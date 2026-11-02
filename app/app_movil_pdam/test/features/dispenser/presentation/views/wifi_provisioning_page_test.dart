@@ -6,11 +6,14 @@ import 'package:app_movil_pdam/core/presentation/widgets/password_visibility_fie
 import 'package:app_movil_pdam/core/theme/app_semantic_colors.dart';
 import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/core/theme/app_theme.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_permission_result.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/provisioning_stage.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/views/wifi_provisioning_page.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/widgets/device_card_widget.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/widgets/provisioning_stage_messages.dart';
 
 import '../../presentation/bloc/dispenser_bloc_test.dart';
 
@@ -165,6 +168,7 @@ void main() {
     Size tamano = const Size(800, 1200),
     double textScaler = 1.0,
     MockDispenserRepository? repositorio,
+    Future<void> Function()? openSettings,
   }) async {
     tester.view.physicalSize = tamano;
     tester.view.devicePixelRatio = 1.0;
@@ -185,7 +189,10 @@ void main() {
         ),
         home: BlocProvider<DispenserBloc>.value(
           value: bloc,
-          child: const WifiProvisioningPage(device: device),
+          child: WifiProvisioningPage(
+            device: device,
+            openSettings: openSettings,
+          ),
         ),
       ),
     );
@@ -385,10 +392,10 @@ void main() {
     expect(texto.style?.color, semantica.onSuccess);
   });
 
-  testWidgets('RF-04: el error del aprovisionamiento usa error/onError', (
+  testWidgets('RF-19: un fallo por etapa muestra su mensaje y habilita el botón', (
     tester,
   ) async {
-    await pumpWifi(
+    final bloc = await pumpWifi(
       tester,
       repositorio: MockDispenserRepository(shouldFail: true),
     );
@@ -398,17 +405,211 @@ void main() {
     await tester.tap(find.text('Enviar Credenciales y Conectar'));
     await tester.pumpAndSettle();
 
+    expect(bloc.state, isA<ProvisioningFailureState>());
+    final failure = (bloc.state as ProvisioningFailureState).failure;
+    expect(failure.stage, ProvisioningStage.conexion);
+    expect(find.text(provisioningFailureMessage(failure)), findsOneWidget);
+    expect(find.textContaining('Acércalo al teléfono'), findsOneWidget);
+
+    // El estado terminal no es "en progreso": el botón vuelve a estar activo.
+    final boton = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(boton.onPressed, isNotNull);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('RF-17: la denegación permanente muestra el aviso de permisos', (
+    tester,
+  ) async {
+    const failure = ProvisioningException(
+      stage: ProvisioningStage.conexion,
+      permission: BlePermissionResult.permanentlyDenied(),
+    );
+    final bloc = await pumpWifi(
+      tester,
+      repositorio: MockDispenserRepository(provisioningError: failure),
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), 'RedCasa');
+    await tester.enterText(find.byType(TextFormField).at(1), 'claveWiFi');
+    await tester.pump();
+    await tester.tap(find.text('Enviar Credenciales y Conectar'));
+    await tester.pumpAndSettle();
+
+    expect(bloc.state, isA<ProvisioningFailureState>());
+    expect(
+      find.text(provisioningPermissionMessage(failure.permission!)),
+      findsOneWidget,
+    );
+    expect(find.textContaining('permisos'), findsOneWidget);
+
+    final boton = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(boton.onPressed, isNotNull);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('RF-17: la denegación recuperable permite reintentar', (
+    tester,
+  ) async {
+    const failure = ProvisioningException(
+      stage: ProvisioningStage.conexion,
+      permission: BlePermissionResult.denied(),
+    );
+    final bloc = await pumpWifi(
+      tester,
+      repositorio: MockDispenserRepository(provisioningError: failure),
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), 'RedCasa');
+    await tester.enterText(find.byType(TextFormField).at(1), 'claveWiFi');
+    await tester.pump();
+    await tester.tap(find.text('Enviar Credenciales y Conectar'));
+    await tester.pumpAndSettle();
+
+    expect(bloc.state, isA<ProvisioningFailureState>());
+    expect(
+      find.text(provisioningPermissionMessage(failure.permission!)),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Vuelve a intentarlo'), findsOneWidget);
+
+    final boton = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(boton.onPressed, isNotNull);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  group('Catálogo de etapas del aprovisionamiento (RF-19 a RF-21)', () {
+    test('los seis literales son los de la spec', () {
+      expect(
+        provisioningStageMessage(ProvisioningStage.conexion),
+        'No se pudo conectar con el dispensador. Acércalo al teléfono y '
+        'vuelve a intentarlo.',
+      );
+      expect(
+        provisioningStageMessage(ProvisioningStage.descubrimiento),
+        'El dispensador no respondió al iniciar la configuración. Vuelve a '
+        'intentarlo.',
+      );
+      expect(
+        provisioningStageMessage(ProvisioningStage.escritura),
+        'No se pudieron enviar las credenciales al dispensador. Vuelve a '
+        'intentarlo.',
+      );
+      expect(
+        provisioningStageMessage(ProvisioningStage.desconexion),
+        'La configuración se envió, pero el dispensador no confirmó el '
+        'cierre de la conexión. Vuelve a intentarlo.',
+      );
+      expect(
+        provisioningStageMessage(ProvisioningStage.conexion_perdida),
+        'Se perdió la conexión con el dispensador. Acércalo al teléfono y '
+        'vuelve a intentarlo.',
+      );
+      expect(
+        provisioningStageMessage(ProvisioningStage.presupuesto_agotado),
+        'La configuración tardó demasiado y se canceló. Vuelve a intentarlo.',
+      );
+    });
+
+    test('los permisos y la ubicación tienen su copy', () {
+      expect(
+        provisioningPermissionMessage(
+          const BlePermissionResult.permanentlyDenied(),
+        ),
+        'La aplicación no tiene autorización para usar el Bluetooth. '
+        'Revisa los permisos en los ajustes.',
+      );
+      expect(
+        provisioningPermissionMessage(const BlePermissionResult.denied()),
+        contains('permiso de Bluetooth'),
+      );
+      expect(
+        provisioningPermissionMessage(
+          const BlePermissionResult.granted(
+            locationRequired: true,
+            locationEnabled: false,
+          ),
+        ),
+        'Activa la ubicación del teléfono para configurar el dispensador.',
+      );
+    });
+  });
+
+  testWidgets('RF-19: el fallo de escritura usa el copy de su etapa y el error del tema', (
+    tester,
+  ) async {
+    const failure = ProvisioningException(stage: ProvisioningStage.escritura);
+    await pumpWifi(
+      tester,
+      repositorio: MockDispenserRepository(provisioningError: failure),
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), 'RedCasa');
+    await tester.enterText(find.byType(TextFormField).at(1), 'claveWiFi');
+    await tester.pump();
+    await tester.tap(find.text('Enviar Credenciales y Conectar'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(provisioningStageMessage(ProvisioningStage.escritura)),
+      findsOneWidget,
+    );
     final esquema = Theme.of(
       tester.element(find.byType(WifiProvisioningPage)),
     ).colorScheme;
     final aviso = tester.widget<SnackBar>(find.byType(SnackBar));
     expect(aviso.backgroundColor, esquema.error);
-    final texto = tester.widget<Text>(
-      find.descendant(
-        of: find.byType(SnackBar),
-        matching: find.textContaining('Error al aprovisionar'),
-      ),
+  });
+
+  testWidgets('RF-17: la denegación permanente ofrece abrir ajustes', (
+    tester,
+  ) async {
+    var settingsOpened = false;
+    const failure = ProvisioningException(
+      stage: ProvisioningStage.conexion,
+      permission: BlePermissionResult.permanentlyDenied(),
     );
-    expect(texto.style?.color, esquema.onError);
+    final bloc = await pumpWifi(
+      tester,
+      repositorio: MockDispenserRepository(provisioningError: failure),
+      openSettings: () async {
+        settingsOpened = true;
+      },
+    );
+    await tester.enterText(find.byType(TextFormField).at(0), 'RedCasa');
+    await tester.enterText(find.byType(TextFormField).at(1), 'claveWiFi');
+    await tester.pump();
+    await tester.tap(find.text('Enviar Credenciales y Conectar'));
+    await tester.pumpAndSettle();
+
+    expect(bloc.state, isA<ProvisioningFailureState>());
+    expect(
+      find.text(provisioningPermissionMessage(failure.permission!)),
+      findsOneWidget,
+    );
+    expect(find.text('Abrir ajustes'), findsOneWidget);
+
+    await tester.tap(find.text('Abrir ajustes'));
+    await tester.pumpAndSettle();
+    expect(settingsOpened, isTrue);
+
+    // El botón sigue habilitado: el fallo es terminal, no "en progreso".
+    final boton = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(boton.onPressed, isNotNull);
+  });
+
+  testWidgets('RNF-01: el error legado no muestra el texto de la excepción', (
+    tester,
+  ) async {
+    final bloc = await pumpWifi(
+      tester,
+      repositorio: MockDispenserRepository(shouldFail: true),
+    );
+
+    bloc.add(const ResetWifiEvent(dispenserId: 'AA:BB:CC:DD:EE:FF'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No se pudo completar la operación. Vuelve a intentarlo.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Error al resetear'), findsNothing);
+    expect(find.textContaining('Exception'), findsNothing);
   });
 }

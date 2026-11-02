@@ -7,9 +7,10 @@ import 'package:app_movil_pdam/core/services/storage_service.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/local/local_dispenser_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/datasource/remote/dispenser_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_adapter_status.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/entity/ble_scan_event.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/entity/dispenser_food_status.dart';
-import 'package:app_movil_pdam/features/dispenser/domain/entity/scanned_device.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/repository/dispenser_repositories.dart';
 import 'package:app_movil_pdam/features/logs/domain/utils/operation_id_utils.dart';
 import 'package:dio/dio.dart';
@@ -167,6 +168,27 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       final result = await _dispenserRemoteDatasource.activateDispenser(
         dispenserId,
         petId,
+      );
+      return Right(result);
+    } catch (e) {
+      return Left(_failureFrom(e));
+    }
+  }
+
+  @override
+  Future<Either<Failures, bool>> quickDispense(
+    int dispenserId,
+    double grams,
+    String operationId,
+  ) async {
+    if (!await _syncService.hasConnection()) {
+      return Left(ConnectivityRequiredFailures(_sinConexionAlDispensar));
+    }
+    try {
+      final result = await _dispenserRemoteDatasource.quickDispense(
+        dispenserId,
+        grams,
+        operationId,
       );
       return Right(result);
     } catch (e) {
@@ -430,14 +452,20 @@ class DispenserRepositoryImpl implements DispenserRepositories {
   }
 
   @override
-  Stream<List<ScannedDevice>> scanBleDispensers() {
-    return _bleService.scanDevices();
+  Stream<BleScanEvent> scanBleDispensers({
+    required int cycleId,
+    Duration? window,
+  }) {
+    return _bleService.scanBleDispensers(cycleId: cycleId, window: window);
   }
 
   @override
-  Future<void> stopBleScan() async {
-    await _bleService.stopScan();
+  Future<void> stopBleScan({int? cycleId}) async {
+    await _bleService.stopBleScan(cycleId: cycleId);
   }
+
+  @override
+  Stream<BleAdapterStatus> get adapterStatus => _bleService.adapterStatus;
 
   @override
   Future<void> connectAndProvisionBle({
@@ -507,6 +535,8 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       'No hay conexión con el servidor para desactivar el dispensador';
   static const String _sinConexionAlEliminar =
       'No hay conexión con el servidor para eliminar el dispensador';
+  static const String _sinConexionAlDispensar =
+      'No hay conexión con el servidor para dispensar la cantidad';
   static const String _codeRefillExceedsCapacity = 'supera_capacidad';
   static const String _origenServidor = 'servidor';
   static const String _origenSincronizacion = 'sincronizacion_sin_conexion';
@@ -548,6 +578,14 @@ class DispenserRepositoryImpl implements DispenserRepositories {
       // `pet_already_has_dispenser` y `server_error` conservan el copy actual.
       case 'pet_already_has_dispenser':
       case ApiException.serverErrorCode:
+        return ServerFailures(message);
+      // Dispensación rápida manual (spec 020): el rechazo se presenta con el
+      // mensaje del catálogo y nunca con el `toString()` de la excepción.
+      case 'cantidad_rapida_invalida':
+      case 'stock_insuficiente':
+      case 'dispensador_desactivado':
+      case 'dispensacion_en_curso':
+      case 'operacion_invalida':
         return ServerFailures(message);
       default:
         return ServerFailures(message);

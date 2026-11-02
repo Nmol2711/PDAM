@@ -52,7 +52,18 @@ void runDispenserTask() {
         Serial.println("Conectado exitosamente al WiFi (2.4GHz).");
         Serial.print("Direccion IP asignada al ESP32: ");
         Serial.println(WiFi.localIP());
-        
+
+        // RF-37: el reporte pendiente de un arranque anterior se reenvía justo
+        // después de conectar el WiFi, antes de validar el servidor y de la
+        // primera consulta. Así el servidor recibe el reporte antes de que su
+        // barrido cierre la orden como `sin_reporte`. Se intenta una sola vez
+        // por arranque y aunque el servidor no responda: si falla, se aplican
+        // los reintentos y el pendiente queda en NVS para el próximo reinicio.
+        if (reporting::tocaReenviarPendiente(pendingReportRetried)) {
+          pendingReportRetried = true;
+          reporting::reenviarReportePendiente(REPORTS_URL);
+        }
+
         if (validateServerConnectivity(serverUrl)) {
           Serial.println("Validación HTTP exitosa (Status 200). Entrando en estado normal.");
           checkDispenserAction(serverUrl);
@@ -80,13 +91,6 @@ void runDispenserTask() {
     }
 
     case STATE_NORMAL: {
-      // RF-37: al entrar en estado normal, y antes de consultar el servidor, se
-      // reenvía el reporte que quedó pendiente de un arranque anterior.
-      if (!pendingReportRetried) {
-        pendingReportRetried = true;
-        reporting::reenviarReportePendiente(REPORTS_URL);
-      }
-
       if (dispensing::isCheckDue(lastCheckTime, millis(), CHECK_INTERVAL)) {
         if (WiFi.status() == WL_CONNECTED) {
           checkDispenserAction(serverUrl);

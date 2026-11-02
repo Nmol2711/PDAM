@@ -64,25 +64,33 @@ void extraerCodigo(const String &cuerpo, char *codigo, std::size_t tamanio) {
   codigo[tamanio - 1] = '\0';
 }
 
+// Tamaño del resumen del monitor serie: orden, motivo y longitud.
+constexpr std::size_t kResumenBufferSize = 128;
+
 // Resumen del reporte para el monitor serie. Nunca imprime la MAC completa ni
 // el JSON entero (RNF-1): solo la orden, el motivo y la longitud del cuerpo.
-void imprimirResumen(const char *json, std::size_t longitud) {
-  StaticJsonDocument<192> doc;
-  const bool valido = deserializeJson(doc, json) == DeserializationError::Ok;
+//
+// Se formatea con los datos del ciclo y no releyendo el cuerpo: el documento
+// JSON de seis miembros no cabe en un `StaticJsonDocument` pequeño y el resumen
+// acababa mostrando «no disponible» aunque el reporte fuera correcto.
+void imprimirResumen(const ReporteCiclo &reporte, std::size_t longitud) {
+  char resumen[kResumenBufferSize];
+  formatearResumenCiclo(reporte, longitud, resumen, sizeof(resumen));
+  Serial.println(resumen);
+}
 
-  Serial.print("Reporte a enviar: order_id=");
-  if (valido && doc["order_id"].is<long>()) {
-    Serial.print(doc["order_id"].as<long>());
-  } else {
-    Serial.print("no disponible");
-  }
+// Resumen del pendiente que se reenvía desde la NVS: la orden y el motivo se
+// recuperan del cuerpo guardado, sin ArduinoJson.
+void imprimirResumenPendiente(const char *json, std::size_t longitud) {
+  long orden = 0;
+  bool ordenDisponible = false;
+  char motivo[32];
+  extraerResumenReporte(json, &orden, &ordenDisponible, motivo, sizeof(motivo));
 
-  const char *motivo = valido ? (doc["motivo"] | "") : "";
-  Serial.print(", motivo=");
-  Serial.print(motivo[0] != '\0' ? motivo : "no disponible");
-  Serial.print(", longitud=");
-  Serial.print(static_cast<unsigned long>(longitud));
-  Serial.println(" bytes");
+  char resumen[kResumenBufferSize];
+  formatearResumenReporte(orden, ordenDisponible, motivo, longitud, resumen,
+                          sizeof(resumen));
+  Serial.println(resumen);
 }
 
 // Un intento de envío. Devuelve el código HTTP del servidor o un valor negativo
@@ -175,7 +183,7 @@ bool enviarReporte(const char *mac, const ReporteCiclo &reporte,
     Serial.println("Reporte: aviso, no se pudo guardar en NVS.");
   }
 
-  imprimirResumen(json, std::strlen(json));
+  imprimirResumen(reporte, std::strlen(json));
   return enviarConReintentos(url, json);
 }
 
@@ -186,7 +194,7 @@ bool reenviarReportePendiente(const char *url) {
   }
 
   Serial.println("Reporte pendiente encontrado en NVS");
-  imprimirResumen(json, std::strlen(json));
+  imprimirResumenPendiente(json, std::strlen(json));
   return enviarConReintentos(url, json);
 }
 

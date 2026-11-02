@@ -2,6 +2,7 @@
 #include "config/config.h"
 #include "config/provisioning_utils.h"
 #include "drivers/servo_driver.h"
+#include "services/scale_guard_service.h"
 #include "services/wifi_service.h"
 #include "tasks/dispenser_task.h"
 #include "esp_mac.h"
@@ -34,8 +35,14 @@ void setup() {
 
   // 3. Inicializar driver del servomotor
   initServo();
+
+  // 4. Inicializar la celda y el muestreo continuo del asentamiento (RF-1)
+  guard::initScaleGuard();
 }
 
 void loop() {
+  // Muestreo del asentamiento fuera del ciclo de motor y antes de la consulta
+  // periódica, que sigue intacta (RF-1, RNF-1).
+  guard::updateSettlement();
   runDispenserTask();
 }

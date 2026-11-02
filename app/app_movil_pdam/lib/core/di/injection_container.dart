@@ -26,6 +26,7 @@ import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/current_user
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/login_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/register_uc.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:app_movil_pdam/features/dashboard/data/datasources/dashboard_local_datasource.dart';
 import 'package:app_movil_pdam/features/dashboard/data/datasources/dashboard_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:app_movil_pdam/features/dashboard/domain/repositories/dashboard_repository.dart';
@@ -40,8 +41,10 @@ import 'package:app_movil_pdam/features/dispenser/domain/use_case/check_pending_
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/dasactivate_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/delete_dispenser_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/get_dispenser_by_pet_uc.dart';
+import 'package:app_movil_pdam/features/dispenser/domain/use_case/quick_dispense_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/domain/use_case/update_dispenser_mac_uc.dart';
 import 'package:app_movil_pdam/features/dispenser/presentation/bloc/dispenser_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/presentation/bloc/quick_dispense_cubit.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/local/local_pet_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/local/local_schedule_datasource.dart';
 import 'package:app_movil_pdam/features/pets/data/datasource/remote/pet_remote_datasource.dart';
@@ -70,6 +73,8 @@ import 'package:app_movil_pdam/features/logs/domain/repository/log_repositories.
 import 'package:app_movil_pdam/features/logs/domain/use_case/get_logs_uc.dart';
 import 'package:app_movil_pdam/features/logs/presentation/bloc/log_bloc.dart';
 import 'package:app_movil_pdam/features/pets/presentation/bloc/schedule_bloc/schedule_bloc.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_adapter.dart';
+import 'package:app_movil_pdam/features/dispenser/data/services/ble_permissions.dart';
 import 'package:app_movil_pdam/features/dispenser/data/services/ble_provisioning_service.dart';
 import 'package:app_movil_pdam/features/nutrition/domain/usecases/calculate_nutrition_usecase.dart';
 import 'package:app_movil_pdam/features/nutrition/presentation/bloc/nutrition_cubit.dart';
@@ -159,6 +164,11 @@ Future<void> setup() async {
     () => DashboardRemoteDatasourceImpl(dioClient: sl<DioClient>()),
   );
 
+  // Caché del último resumen del panel (RF-7, RF-8).
+  sl.registerLazySingleton<DashboardLocalDatasource>(
+    () => DashboardLocalDatasourceImpl(),
+  );
+
   // Repositorios
   sl.registerLazySingleton<AuthTokenRepositories>(
     () => AuthRepositoriesImpl(authLocalDatasource: sl<AuthLocalDatasource>()),
@@ -196,8 +206,23 @@ Future<void> setup() async {
     ),
   );
 
+  // Fronteras del ciclo BLE: hardware y permisos con implementación real; las
+  // pruebas inyectan dobles y el servicio recibe duraciones propias.
+  sl.registerLazySingleton<BleAdapter>(
+    () => const FlutterBluePlusBleAdapter(),
+  );
+
+  sl.registerLazySingleton<BlePermissions>(
+    () => const PermissionHandlerBlePermissions(),
+  );
+
   sl.registerLazySingleton<BleProvisioningService>(
-    () => BleProvisioningService(),
+    () => BleProvisioningService(
+      adapter: sl<BleAdapter>(),
+      permissions: sl<BlePermissions>(),
+      window: BleProvisioningService.scanWindow,
+      cooldown: BleProvisioningService.scanCooldown,
+    ),
   );
 
   sl.registerLazySingleton<DispenserRepositories>(
@@ -221,6 +246,9 @@ Future<void> setup() async {
   sl.registerLazySingleton<DashboardRepository>(
     () => DashboardRepositoryImpl(
       remoteDatasource: sl<DashboardRemoteDatasource>(),
+      localDatasource: sl<DashboardLocalDatasource>(),
+      // RF-7: sin conexión y sin caché solo se muestran las mascotas locales.
+      localPetDatasource: sl<LocalPetDatasource>(),
     ),
   );
 
@@ -319,6 +347,13 @@ Future<void> setup() async {
 
   sl.registerLazySingleton(
     () => UpdateDispenserMacUc(repository: sl<DispenserRepositories>()),
+  );
+
+  sl.registerLazySingleton(
+    () => QuickDispenseUc(repository: sl<DispenserRepositories>()),
+  );
+  sl.registerFactory(
+    () => QuickDispenseCubit(quickDispenseUc: sl<QuickDispenseUc>()),
   );
 
   // Nutrición (motor WSAVA, Spec 011)

@@ -50,7 +50,7 @@ RESULTADOS_ESPERADOS = {
     "failure": "Fallo",
 }
 
-# 12 causas con etiqueta, resultado asociado y origen.
+# 13 causas con etiqueta, resultado asociado y origen.
 CAUSAS_ESPERADAS = {
     "objetivo_alcanzado": ("Objetivo alcanzado", "success", "reporte"),
     "objetivo_no_alcanzado": ("Objetivo no alcanzado", "failure", "reporte"),
@@ -68,6 +68,7 @@ CAUSAS_ESPERADAS = {
     "orden_desconocida": ("Orden desconocida", "failure", "servidor"),
     "supera_capacidad": ("Supera la capacidad", "failure", "servidor"),
     "cantidad_invalida": ("Cantidad inválida", "failure", "servidor"),
+    "solicitud_vencida": ("Solicitud vencida", "failure", "servidor"),
 }
 
 # Subconjunto de causas que un dispositivo puede declarar como motivo.
@@ -104,6 +105,19 @@ ERRORES_ESPERADOS = {
     ),
     "stock_fuera_de_rango": (
         "El stock resultante quedaría fuera del intervalo de 0 a 5000 g."
+    ),
+    "cantidad_rapida_invalida": (
+        "La cantidad rápida debe ser mayor que 0 y no superar 200 g."
+    ),
+    "stock_insuficiente": (
+        "La cantidad solicitada supera el stock disponible del dispensador."
+    ),
+    "dispensador_desactivado": "El dispensador está desactivado.",
+    "dispensacion_en_curso": (
+        "Ya hay una dispensación en curso para este dispensador."
+    ),
+    "operacion_invalida": (
+        "El identificador de operación es obligatorio y debe ser válido."
     ),
 }
 
@@ -175,11 +189,11 @@ class TestCatalogoDeResultados(unittest.TestCase):
 
 
 class TestCatalogoDeCausas(unittest.TestCase):
-    """RF-3, RF-17, RF-24, RNF-7: 12 causas con resultado y origen."""
+    """RF-3, RF-17, RF-24, RNF-7: 13 causas con resultado y origen."""
 
-    def test_contiene_exactamente_las_doce_causas(self):
+    def test_contiene_exactamente_las_trece_causas(self):
         self.assertEqual(set(catalogos.CAUSAS), set(CAUSAS_ESPERADAS))
-        self.assertEqual(len(catalogos.CAUSAS), 12)
+        self.assertEqual(len(catalogos.CAUSAS), 13)
 
     def test_etiqueta_resultado_y_origen_de_cada_causa(self):
         for codigo, (etiqueta, resultado, origen) in CAUSAS_ESPERADAS.items():
@@ -195,7 +209,7 @@ class TestCatalogoDeCausas(unittest.TestCase):
             with self.subTest(causa=codigo):
                 self.assertIn(causa.resultado, catalogos.RESULTADOS)
 
-    def test_seis_causas_son_de_reporte_y_seis_del_servidor(self):
+    def test_seis_causas_son_de_reporte_y_siete_del_servidor(self):
         de_reporte = {
             codigo
             for codigo, causa in catalogos.CAUSAS.items()
@@ -208,7 +222,7 @@ class TestCatalogoDeCausas(unittest.TestCase):
         }
         self.assertEqual(de_reporte, MOTIVOS_REPORTE_ESPERADOS)
         self.assertEqual(len(de_reporte), 6)
-        self.assertEqual(len(del_servidor), 6)
+        self.assertEqual(len(del_servidor), 7)
 
     def test_ningun_valor_libre_se_acepta_como_causa(self):
         for valor in VALORES_LIBRES + ["sin_reporte ", "entrega_incompleta "]:
@@ -231,7 +245,7 @@ class TestMotivosDeReporte(unittest.TestCase):
             for codigo, causa in catalogos.CAUSAS.items()
             if causa.origen == "servidor"
         ]
-        self.assertEqual(len(causas_del_servidor), 6)
+        self.assertEqual(len(causas_del_servidor), 7)
 
         for motivo in causas_del_servidor:
             with self.subTest(motivo=motivo):

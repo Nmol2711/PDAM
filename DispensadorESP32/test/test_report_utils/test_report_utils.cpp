@@ -1,5 +1,6 @@
 #include <unity.h>
 
+#include <cstdio>
 #include <cstring>
 
 #include "config/report_utils.h"
@@ -230,6 +231,138 @@ void test_sin_identificador_de_orden_el_reporte_lo_declara_ausente() {
   TEST_ASSERT_FALSE(reporte.orderIdAvailable);
 }
 
+void test_sensor_no_disponible_no_declara_gramos_medidos() {
+  // Aunque el ciclo hubiera calculado un incremento, un cierre por sensor no
+  // disponible lo declara ausente (RF-7 de la spec 016). El resto de campos de
+  // la 014 se conservan: order_id, solicitados y reintentos.
+  const auto result = resultado(dispensing::DispenseReason::SENSOR_UNAVAILABLE,
+                                50.0f, true, 50.4f, 0);
+  const reporting::ReporteCiclo reporte =
+      reporting::reporteDesdeResultado(result, true, 12);
+
+  TEST_ASSERT_FALSE(reporte.medidosAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, reporte.medidos);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"sensor_no_disponible\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":0}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
+void test_sensor_no_disponible_conserva_los_reintentos_sin_medidos() {
+  // Omitir la medición no puede perder el contador de reintentos (RF-37 de la
+  // 014, RF-7 de la 016).
+  const auto result = resultado(dispensing::DispenseReason::SENSOR_UNAVAILABLE,
+                                50.0f, true, 50.4f, 2);
+  const reporting::ReporteCiclo reporte =
+      reporting::reporteDesdeResultado(result, true, 12);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"sensor_no_disponible\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":2}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
+void test_sin_incremento_por_causa_distinta_al_sensor_tampoco_hay_medidos() {
+  // El criterio de los medidos tiene dos mitades: el motivo no puede ser
+  // `sensor_no_disponible` Y el ciclo debe haber podido calcular el incremento.
+  // Este caso fija la segunda mitad con motivos que sí los declararían si los
+  // hubiera (RF-7 de la 016): sin línea base no hay incremento atribuible y el
+  // JSON no puede inventar `gramos_medidos`.
+  const auto sinAlcanzar =
+      resultado(dispensing::DispenseReason::NOT_REACHED, 50.0f, false, 0.0f, 0);
+  const reporting::ReporteCiclo reporteSinAlcanzar =
+      reporting::reporteDesdeResultado(sinAlcanzar, true, 12);
+  TEST_ASSERT_FALSE(reporteSinAlcanzar.medidosAvailable);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, reporteSinAlcanzar.medidos);
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson(
+      "AA:BB:CC:DD:AB:1F", reporteSinAlcanzar, json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"objetivo_no_alcanzado\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":0}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+
+  // Fallo del sensor sin medición calculable y con reintentos: tampoco declara
+  // medidos y conserva el contador (RF-37 de la 014).
+  const auto fallo =
+      resultado(dispensing::DispenseReason::SENSOR_FAILURE, 50.0f, false, 0.0f,
+                1);
+  const reporting::ReporteCiclo reporteFallo =
+      reporting::reporteDesdeResultado(fallo, true, 12);
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F",
+                                                   reporteFallo, json,
+                                                   sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":12,"
+      "\"motivo\":\"fallo_sensor_dispensacion\",\"gramos_solicitados\":50.00,"
+      "\"reintentos\":1}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
+void test_los_demas_motivos_conservan_los_medidos_disponibles() {
+  // Solo `sensor_no_disponible` omite los medidos: los otros seis motivos del
+  // catálogo los conservan cuando el ciclo pudo calcularlos.
+  const dispensing::DispenseReason motivos[] = {
+      dispensing::DispenseReason::COMPLETED,
+      dispensing::DispenseReason::NOT_REACHED,
+      dispensing::DispenseReason::SENSOR_FAILURE,
+      dispensing::DispenseReason::STALL_UNRESOLVED,
+      dispensing::DispenseReason::INVALID_CONFIG,
+      dispensing::DispenseReason::INVALID_AMOUNT};
+
+  for (const auto motivo : motivos) {
+    const auto result = resultado(motivo, 50.0f, true, 50.4f, 0);
+    const reporting::ReporteCiclo reporte =
+        reporting::reporteDesdeResultado(result, true, 12);
+
+    TEST_ASSERT_TRUE(reporte.medidosAvailable);
+    TEST_ASSERT_EQUAL_FLOAT(50.4f, reporte.medidos);
+
+    char json[256];
+    TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F",
+                                                     reporte, json,
+                                                     sizeof(json)));
+    TEST_ASSERT_NOT_NULL(std::strstr(json, "\"gramos_medidos\":50.40"));
+  }
+}
+
+void test_reporte_vacio_de_sensor_no_disponible_tampoco_declara_medidos() {
+  // `reporteVacio` se usa en la compuerta de entrada y ya nace sin medidos; con
+  // orden y solicitados conocidos, el JSON mantiene el contrato de la 014 y no
+  // gana claves.
+  reporting::ReporteCiclo reporte =
+      reporting::reporteVacio(dispensing::DispenseReason::SENSOR_UNAVAILABLE);
+  reporte.orderIdAvailable = true;
+  reporte.orderId = 34;
+  reporte.solicitadosAvailable = true;
+  reporte.solicitados = 25.0f;
+
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:AB:1F", reporte,
+                                                   json, sizeof(json)));
+  TEST_ASSERT_EQUAL_STRING(
+      "{\"mac\":\"AA:BB:CC:DD:AB:1F\",\"order_id\":34,"
+      "\"motivo\":\"sensor_no_disponible\",\"gramos_solicitados\":25.00,"
+      "\"reintentos\":0}",
+      json);
+  TEST_ASSERT_NULL(std::strstr(json, "gramos_medidos"));
+}
+
 // --- Clasificación de la respuesta (RF-39) ---
 
 void test_un_200_descarta_el_reporte() {
@@ -277,6 +410,98 @@ void test_codigos_definitivos_del_catalogo() {
   TEST_ASSERT_FALSE(reporting::esCodigoDescartable(nullptr));
 }
 
+// --- Resumen del monitor serie (RF-36) ---
+
+void test_el_resumen_muestra_la_orden_y_el_motivo_del_ciclo() {
+  const reporting::ReporteCiclo reporte = reporteCompleto();
+  char resumen[160];
+  reporting::formatearResumenCiclo(reporte, 118, resumen, sizeof(resumen));
+  TEST_ASSERT_EQUAL_STRING("Reporte a enviar: order_id=12, "
+                           "motivo=objetivo_alcanzado, longitud=118 bytes",
+                           resumen);
+}
+
+void test_el_resumen_sin_identificador_de_orden_lo_declara_no_disponible() {
+  const reporting::ReporteCiclo reporte = reporting::reporteVacio(
+      dispensing::DispenseReason::SENSOR_UNAVAILABLE);
+  char resumen[160];
+  reporting::formatearResumenCiclo(reporte, 60, resumen, sizeof(resumen));
+  TEST_ASSERT_EQUAL_STRING("Reporte a enviar: order_id=no disponible, "
+                           "motivo=sensor_no_disponible, longitud=60 bytes",
+                           resumen);
+}
+
+void test_el_resumen_no_repite_la_mac_ni_el_cuerpo() {
+  reporting::ReporteCiclo reporte = reporteCompleto();
+  reporte.motivo = dispensing::DispenseReason::STALL_UNRESOLVED;
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:EE:FF", reporte,
+                                                   json, sizeof(json)));
+
+  char resumen[160];
+  reporting::formatearResumenCiclo(reporte, std::strlen(json), resumen,
+                                   sizeof(resumen));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, "order_id=12"));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, "motivo=atasco_no_resuelto"));
+  char longitud[32];
+  std::snprintf(longitud, sizeof(longitud), "longitud=%lu bytes",
+                static_cast<unsigned long>(std::strlen(json)));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, longitud));
+  TEST_ASSERT_NULL(std::strstr(resumen, "AA:BB:CC"));
+  TEST_ASSERT_NULL(std::strstr(resumen, "gramos_medidos"));
+}
+
+void test_el_resumen_de_un_pendiente_recupera_orden_y_motivo() {
+  reporting::ReporteCiclo reporte = reporteCompleto();
+  reporte.motivo = dispensing::DispenseReason::SENSOR_FAILURE;
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:EE:FF", reporte,
+                                                   json, sizeof(json)));
+
+  long orden = -1;
+  bool ordenDisponible = true;
+  char motivo[32];
+  TEST_ASSERT_TRUE(reporting::extraerResumenReporte(
+      json, &orden, &ordenDisponible, motivo, sizeof(motivo)));
+  TEST_ASSERT_TRUE(ordenDisponible);
+  TEST_ASSERT_EQUAL_INT(12, static_cast<int>(orden));
+  TEST_ASSERT_EQUAL_STRING("fallo_sensor_dispensacion", motivo);
+
+  char resumen[160];
+  reporting::formatearResumenReporte(orden, ordenDisponible, motivo,
+                                     std::strlen(json), resumen,
+                                     sizeof(resumen));
+  TEST_ASSERT_NOT_NULL(std::strstr(
+      resumen, "order_id=12, motivo=fallo_sensor_dispensacion"));
+  TEST_ASSERT_NOT_NULL(std::strstr(resumen, "longitud="));
+}
+
+void test_el_resumen_de_un_pendiente_sin_orden_no_inventa_un_numero() {
+  const reporting::ReporteCiclo reporte = reporting::reporteVacio(
+      dispensing::DispenseReason::INVALID_AMOUNT);
+  char json[256];
+  TEST_ASSERT_TRUE(reporting::construirReporteJson("AA:BB:CC:DD:EE:FF", reporte,
+                                                   json, sizeof(json)));
+
+  long orden = 7;
+  bool ordenDisponible = true;
+  char motivo[32];
+  TEST_ASSERT_TRUE(reporting::extraerResumenReporte(
+      json, &orden, &ordenDisponible, motivo, sizeof(motivo)));
+  TEST_ASSERT_FALSE(ordenDisponible);
+  TEST_ASSERT_EQUAL_STRING("orden_invalida", motivo);
+}
+
+void test_el_resumen_ignora_un_cuerpo_inexistente() {
+  long orden = 7;
+  bool ordenDisponible = true;
+  char motivo[16] = "x";
+  TEST_ASSERT_FALSE(reporting::extraerResumenReporte(
+      nullptr, &orden, &ordenDisponible, motivo, sizeof(motivo)));
+  TEST_ASSERT_FALSE(ordenDisponible);
+  TEST_ASSERT_EQUAL_STRING("", motivo);
+}
+
 // --- Política de reintentos (RF-37) ---
 
 void test_la_politica_conserva_timeout_y_esperas() {
@@ -291,6 +516,23 @@ void test_se_reintenta_solo_mientras_queden_intentos() {
   TEST_ASSERT_TRUE(reporting::hayReintentoDisponible(1));
   TEST_ASSERT_TRUE(reporting::hayReintentoDisponible(2));
   TEST_ASSERT_FALSE(reporting::hayReintentoDisponible(3));
+}
+
+// --- Reenvío del pendiente al arrancar (RF-37) ---
+
+void test_el_pendiente_se_reenvia_una_sola_vez_por_arranque() {
+  // Primer intento del arranque: toca reenviar.
+  TEST_ASSERT_TRUE(reporting::tocaReenviarPendiente(false));
+  // Ya se intentó (haya ido bien o mal): no se repite en este arranque.
+  TEST_ASSERT_FALSE(reporting::tocaReenviarPendiente(true));
+}
+
+void test_el_reenvio_no_depende_de_la_respuesta_del_servidor() {
+  // El reenvío se decide por el arranque, no por el resultado: tras un fallo la
+  // bandera ya está puesta y el pendiente queda en NVS para el siguiente
+  // reinicio. La función solo recibe la bandera, no el resultado del envío.
+  const bool reintentadoTrasFallo = true;
+  TEST_ASSERT_FALSE(reporting::tocaReenviarPendiente(reintentadoTrasFallo));
 }
 
 int main(int argc, char **argv) {
@@ -308,12 +550,25 @@ int main(int argc, char **argv) {
   RUN_TEST(test_el_reporte_usa_el_incremento_medido_del_ciclo);
   RUN_TEST(test_sin_incremento_disponible_no_hay_medidos);
   RUN_TEST(test_sin_identificador_de_orden_el_reporte_lo_declara_ausente);
+  RUN_TEST(test_sensor_no_disponible_no_declara_gramos_medidos);
+  RUN_TEST(test_sensor_no_disponible_conserva_los_reintentos_sin_medidos);
+  RUN_TEST(test_sin_incremento_por_causa_distinta_al_sensor_tampoco_hay_medidos);
+  RUN_TEST(test_los_demas_motivos_conservan_los_medidos_disponibles);
+  RUN_TEST(test_reporte_vacio_de_sensor_no_disponible_tampoco_declara_medidos);
   RUN_TEST(test_un_200_descarta_el_reporte);
   RUN_TEST(test_los_tres_400_enumerados_se_descartan);
   RUN_TEST(test_un_400_no_enumerado_tambien_se_descarta);
   RUN_TEST(test_los_5xx_y_los_errores_de_red_se_reintentan);
   RUN_TEST(test_codigos_definitivos_del_catalogo);
+  RUN_TEST(test_el_resumen_muestra_la_orden_y_el_motivo_del_ciclo);
+  RUN_TEST(test_el_resumen_sin_identificador_de_orden_lo_declara_no_disponible);
+  RUN_TEST(test_el_resumen_no_repite_la_mac_ni_el_cuerpo);
+  RUN_TEST(test_el_resumen_de_un_pendiente_recupera_orden_y_motivo);
+  RUN_TEST(test_el_resumen_de_un_pendiente_sin_orden_no_inventa_un_numero);
+  RUN_TEST(test_el_resumen_ignora_un_cuerpo_inexistente);
   RUN_TEST(test_la_politica_conserva_timeout_y_esperas);
   RUN_TEST(test_se_reintenta_solo_mientras_queden_intentos);
+  RUN_TEST(test_el_pendiente_se_reenvia_una_sola_vez_por_arranque);
+  RUN_TEST(test_el_reenvio_no_depende_de_la_respuesta_del_servidor);
   return UNITY_END();
 }

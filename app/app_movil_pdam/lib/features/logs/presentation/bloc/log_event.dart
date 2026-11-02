@@ -35,3 +35,19 @@ class LogRetryRequested extends LogEvent {
 class LogCatalogRequested extends LogEvent {
   const LogCatalogRequested();
 }
+
+/// Origen de un refresco del historial (RF-1, RF-2).
+enum LogRefreshOrigin {
+  /// Gesto de deslizar la lista hacia abajo.
+  manual,
+
+  /// Activación de la pestaña o vuelta a primer plano (RF-3).
+  automatico,
+}
+
+/// Pide recargar la página y los filtros actuales sin vaciar la lista.
+class LogRefreshRequested extends LogEvent {
+  final LogRefreshOrigin origin;
+
+  const LogRefreshRequested(this.origin);
+}
