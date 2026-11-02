@@ -1,46 +1,49 @@
 # MEMORY.md — PDAM
 
 ## Estado actual
-* **020 cerrada (T1–T6); verificación manual confirmada. Pendiente solo commit/PR:** dispensación rápida manual
-  (máx. 200 g), cobertura de horarios en la ventana de 10 min y acceso «Dispositivos».
-* **Specs 001–019 aprobadas e implementadas.** 018 (escaneo BLE) y 019 (refresco de historial) cerradas el 2026-11-01.
-* **Cifras:** `pytest` 778 passed (937 subtests); `flutter test` 1139/1139; `flutter analyze` 91 issues con 0 errores;
-  `pio test -e native` 230/230; `pio run` SUCCESS (RAM 19,7 %, Flash 64,5 %).
-* 016 cerrada con el firmware del 2026-10-30 14:18:04 (`HEAD 05703d5` en `pruebas/endpoint-fijo-hx711`), sin merge.
+* **022 cerrada (T1–T8); verificación manual confirmada el 2026-11-01.** Pendiente solo commit/PR acotado a los
+  archivos de la 022, sin incluir los cambios de 021 ni de docs. La verificación manual de la 021 T7 sigue
+  pendiente; también el commit/PR de 020.
+* **Specs 001–021 aprobadas e implementadas**; 018 y 019 cerradas el 2026-11-01. La 016 quedó con el firmware
+  del 2026-10-30 (`HEAD 05703d5` en `pruebas/endpoint-fijo-hx711`), sin merge.
+* **Cifras 2026-11-01 (árbol con 022):** `pytest` 884 passed / 961 subtests; `flutter test` 1213;
+  `flutter analyze` 103 issues (85 avisos, 18 info) y 0 errores; RNF-4 p95 59,3 ms con 10 000 logs
+  (6 000 en la semana y 4 000 anteriores, base propia); `pio test` 230/230 y `pio run` SUCCESS sin cambios.
 
 ## Decisiones clave
-* 020 — reserva de stock = stock − solicitudes pendientes, revalidada bajo bloqueo de escritura; `operation_id`
-  obligatorio con deduplicación por dispensador; revalidación de orden en curso tras el bloqueo; cobertura de ocurrencias
-  sin rastro visible; prevalencia acotada sobre 014 RF-25 (solo la ocurrencia cubierta); descuento solo en cierre exitoso;
-  solicitud descartada si el dispensador se reasigna; baja de mascota con dispensador como 409 `pet_has_dispenser` (sin
-  cascada por mascota); solicitud sin entrega queda pendiente sin vencimiento.
-* 019 — refresco manual solo con el spinner del gesto; ventana de 4 s desde el fin del último automático; máximo una
-  consulta extra de ajuste; un solo indicador; error y sin conexión excluyentes; filtros por 017.
-* 018 — ciclo con identidad (`cycleId`) y ventana de 15 s; cierre idempotente; comandos por cola secuencial propia;
-  tres ventanas vacías pasan al estado final; `BleScanStoppedState` es la única cesión a la lista (RF-24).
-* 018 — frontera `BleAdapter`/`BlePermissions` con implementación real por defecto y dobles en pruebas; aprovisionamiento
-  acotado a 15/10/10/5 s y presupuesto de 60 s; avisos tipados con «Abrir ajustes»/«Reintentar»; `neverForLocation` y
-  ubicación en el manifiesto solo para Android ≤11.
-* 017 — tokens claro/oscuro, `ColorScheme` explícito, radios 8/12 y escala 4–32.
-* 015 — `SessionEvents` es el canal único; la baja ordena marca → token → credenciales → perfil → Isar.
-* Stock: descuento con `UPDATE` relativo y `rowcount` (tope 5000); firmware con timeout 10 s y pendiente en NVS.
+* 022 — el APK `0.2.0+3` es la versión que incluye la 022 y se mantiene; no se toca `pubspec.yaml`.
+* 022 — fuente del panel: `logs` con `event_type='feeding_dispensed'` y gramos = `measured_grams`, con
+  `discounted_grams` como respaldo solo para nulos inesperados; meta = suma de horarios de mascotas con
+  dispensador activo (nunca 300); completadas = éxitos de hoy con gramos acotados a las ocurrencias.
+* 022 — `today_index` y `calculated_at` (ISO UTC con `Z`) vienen del servidor o de la caché, nunca del
+  reloj del dispositivo; caché Isar de clave fija `ultimo`; un refresco fallido conserva lo visible con
+  copy fijo; el gráfico pinta 7 posiciones y un día en 0 no lleva barra ni fondo.
+* 021 — plazo de 15 min inclusivo, barrido `cerrar → descartar → encolar`, un `instante` por consulta.
+* 020 — reserva = stock − pendientes, `operation_id` idempotente y descuento solo al cerrar.
+* 019/018/017/015 — refresco manual de 4 s; BLE con identidad y ventana de 15 s; tokens de tema; canal
+  único `SessionEvents`. Stock con `UPDATE` relativo y `rowcount`; firmware con timeout 10 s y NVS.
+
+## Verificación manual de la 022 (confirmada el 2026-11-01)
+1. Panel con datos reales: mascotas, dispensado hoy, semana y completadas/pendientes.
+2. Sin conexión con caché: aviso y fecha del servidor.
+3. Sin conexión sin caché: solo mascotas locales y ceros, sin gráfico inventado.
+4. Error de servidor con resumen visible: conserva cifras, avisa y no muestra textos de excepción.
+5. Reintento desde el error inicial.
+6. Gráfico: 7 días, días en 0 sin barra, resaltado de hoy y mensaje de semana vacía.
 
 ## Errores a evitar
-* No duplicar duraciones (ventana/cooldown/poll) fuera del servicio; no leer `Platform` fuera de
-  `AndroidLocationRequirement` y no exigir ubicación si el parseo falla.
-* No emitir listas (`LoadDispensersEvent`, refresco o reabastecimiento) sin `_puedeEmitirLista()`.
-* No usar textos de excepciones en la UI (RNF-01): siempre etapa tipada o copy fijo en español.
-* `StatefulShellRoute.indexedStack` mantiene las ramas montadas: usar `TickerMode` o estado local.
-* No volcar estados completos en `AppBlocObserver`; no crear BLoC en `setUp` de un `testWidgets`.
-* Las pruebas de logs de la 019 fallan por carga de forma intermitente: repetir, no tocarlas.
+* No usar `DateTime.now` en negocio ni presentación del panel; no introducir `300` ni series literales.
+* No usar textos de excepción en la UI (RNF-01); no volver a `n * 50`.
+* `StatefulShellRoute.indexedStack` mantiene ramas montadas: `TickerMode` o estado local.
+* La prueba de rendimiento de la 022 tiene base propia y temporal; `api/test.db` la comparten otras suites
+  (contamina resultados): para esas, `DATABASE_URL` temporal; repetir fallos de la 019, no tocarlos.
 
 ## Deuda aceptada y riesgos
-* 020: una solicitud sin entrega no vence; la idempotencia depende de que la app reutilice el `operation_id`; el límite de
-  200 g no garantiza alcanzarlo en los 30 s de la 013; la base `test.db` es compartida entre pruebas.
-* 019: `canPop()` del navegador raíz no detecta modales abiertos dentro de la rama; mientras hay un refresco en curso el
-  gesto manual se ignora; un refresco puede solaparse con una carga de filtro/página (el resultado viejo se descarta por
-  generación).
-* 018: escaneo verificado en dispositivo el 2026-11-01; «Abrir ajustes de ubicación» abre los ajustes de la app y los
-  textos legados del listado de 010 quedan sin tocar.
-* Tensión RF-04/RF-05: en resultados conservados y final conviven «Volver a buscar» y «Cancelar»; en ventana abierta
-  solo cancelar. `workspace.json` de Obsidian es ajeno al repositorio.
+* 022 — la atribución es agregada (no por mascota); el día del servidor puede diferir del usado en 014;
+  la caché no se borra al eliminar la cuenta.
+* `build_runner` arrastra un [SEVERE] preexistente en `account_local_cleaner.dart:245`; el APK `0.2.0+3` va
+  firmado con clave debug e incluye la 022 sin commitear.
+* 021 — su verificación manual sigue pendiente; el barrido recorre todo el histórico si creciera mucho y el
+  diagnóstico no escribe, así que su vista puede divergir.
+* 020 — idempotencia según `operation_id`; 019 — `canPop()` no detecta modales; 018 — «Abrir ajustes» abre
+  los ajustes de la app; `workspace.json` es ajeno al repositorio.

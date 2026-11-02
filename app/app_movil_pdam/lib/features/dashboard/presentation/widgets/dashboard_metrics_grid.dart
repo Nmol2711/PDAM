@@ -1,5 +1,6 @@
 import 'package:app_movil_pdam/core/theme/app_shape.dart';
 import 'package:app_movil_pdam/core/theme/app_spacing.dart';
+import 'package:app_movil_pdam/features/dashboard/domain/utils/dashboard_metrics.dart';
 import 'package:flutter/material.dart';
 
 class MetricCard extends StatelessWidget {
@@ -82,9 +83,12 @@ class DashboardMetricsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final esquema = Theme.of(context).colorScheme;
-    final foodPercentage = foodTargetToday > 0
-        ? (foodDispensedToday / foodTargetToday).clamp(0.0, 1.0)
-        : 0.0;
+    // El porcentaje es un valor derivado de dominio (RF-10): la vista solo lo
+    // formatea y deja «—» cuando no hay ración programada.
+    final porcentaje = porcentajeCumplimiento(
+      foodDispensedToday,
+      foodTargetToday,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,14 +122,14 @@ class DashboardMetricsGrid extends StatelessWidget {
             ),
             MetricCard(
               label: "Alimento Hoy (g)",
-              value: foodDispensedToday.toStringAsFixed(0),
+              value: formatearGramos(foodDispensedToday),
               icon: Icons.local_fire_department_outlined,
               iconColor: esquema.tertiary,
               backgroundColor: esquema.tertiary,
             ),
             MetricCard(
-              label: "Cumplimiento Meta",
-              value: "${(foodPercentage * 100).toInt()}%",
+              label: "Cumplimiento de lo programado",
+              value: porcentaje == null ? "—" : "$porcentaje%",
               icon: Icons.analytics_outlined,
               iconColor: esquema.tertiary,
               backgroundColor: esquema.tertiary,

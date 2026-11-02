@@ -6,6 +6,7 @@ import 'package:app_movil_pdam/core/offline/models/local_schedule.dart';
 import 'package:app_movil_pdam/core/offline/models/local_log.dart';
 import 'package:app_movil_pdam/core/offline/models/local_dispenser.dart';
 import 'package:app_movil_pdam/core/offline/models/local_profile.dart';
+import 'package:app_movil_pdam/core/offline/models/local_dashboard_summary.dart';
 
 class IsarService {
   static Isar? _isarInstance;
@@ -63,6 +64,7 @@ class IsarService {
           LocalLogSchema,
           LocalDispenserSchema,
           LocalProfileSchema,
+          LocalDashboardSummarySchema,
         ],
         directory: dir.path,
         inspector: true,
@@ -83,6 +85,7 @@ class IsarService {
               LocalLogSchema,
               LocalDispenserSchema,
               LocalProfileSchema,
+              LocalDashboardSummarySchema,
             ],
             directory: dir.path,
             inspector: true,

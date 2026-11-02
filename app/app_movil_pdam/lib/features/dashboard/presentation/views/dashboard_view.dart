@@ -5,6 +5,7 @@ import 'package:app_movil_pdam/core/di/injection_container.dart';
 import 'package:app_movil_pdam/core/theme/app_shape.dart';
 import 'package:app_movil_pdam/core/theme/app_spacing.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:app_movil_pdam/features/dashboard/domain/entities/dashboard_summary.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/bloc/dashboard_cubit.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/widgets/dashboard_header.dart';
 import 'package:app_movil_pdam/features/dashboard/presentation/widgets/dashboard_hero_card.dart';
@@ -23,25 +24,6 @@ class DashboardView extends StatelessWidget {
       child: Scaffold(
         body: BlocBuilder<DashboardCubit, DashboardState>(
           builder: (context, state) {
-            int totalPets = 0;
-            int sterilizedPets = 0;
-            double foodDispensed = 0.0;
-            double foodTarget = 300.0;
-            int pendingFeedings = 0;
-            int completedFeedings = 0;
-            List<double> weeklyDispensed = [0, 0, 0, 0, 0, 0, 0];
-
-            if (state is DashboardLoaded) {
-              final summary = state.summary;
-              totalPets = summary.totalPets;
-              sterilizedPets = summary.sterilizedPets;
-              foodDispensed = summary.foodDispensedToday;
-              foodTarget = summary.foodTargetToday;
-              pendingFeedings = summary.pendingFeedings;
-              completedFeedings = summary.completedFeedings;
-              weeklyDispensed = summary.weeklyDispensed;
-            }
-
             return SafeArea(
               child: RefreshIndicator(
                 onRefresh: () async {
@@ -63,35 +45,7 @@ class DashboardView extends StatelessWidget {
                         },
                       ),
                       const SizedBox(height: AppSpacing.sectionGap),
-
-                      DashboardHeroCard(
-                        totalFeedings: pendingFeedings + completedFeedings,
-                        completedFeedings: completedFeedings,
-                        pendingFeedings: pendingFeedings,
-                        onLogsPressed: () {
-                          context.go('/logs');
-                        },
-                      ),
-                      const SizedBox(height: AppSpacing.sectionGap),
-
-                      _buildNutritionEntry(context),
-                      const SizedBox(height: AppSpacing.sectionGap),
-
-                      DashboardMetricsGrid(
-                        totalPets: totalPets,
-                        sterilizedPets: sterilizedPets,
-                        foodDispensedToday: foodDispensed,
-                        foodTargetToday: foodTarget,
-                      ),
-                      const SizedBox(height: AppSpacing.sectionGap),
-
-                      DashboardChartCard(
-                        weeklyDispensed: weeklyDispensed,
-                        dailyTarget: foodTarget,
-                      ),
-                      const SizedBox(height: AppSpacing.sectionGap),
-
-                      _buildQuickActions(context),
+                      _buildEstado(context, state),
                     ],
                   ),
                 ),
@@ -100,6 +54,72 @@ class DashboardView extends StatelessWidget {
           },
         ),
       ),
+    );
+  }
+
+  /// Presenta el estado del cubit: carga, error con reintento o contenido.
+  ///
+  /// La vista no calcula cifras ni parte de valores prefijados: las del
+  /// contenido salen siempre del resumen recibido (RF-7, RF-12).
+  Widget _buildEstado(BuildContext context, DashboardState state) {
+    if (state is DashboardLoaded) {
+      return _buildContenido(context, state);
+    }
+    if (state is DashboardError) {
+      return _PanelError(
+        mensaje: state.message,
+        onReintentar: () {
+          context.read<DashboardCubit>().reintentar();
+        },
+      );
+    }
+    return const _PanelCargando();
+  }
+
+  Widget _buildContenido(BuildContext context, DashboardLoaded state) {
+    final summary = state.summary;
+    final hayAvisos =
+        summary.isFromCache ||
+        summary.calculatedAt == null ||
+        state.errorMessage != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (hayAvisos) ...[
+          _PanelAvisos(summary: summary, errorMessage: state.errorMessage),
+          const SizedBox(height: AppSpacing.sectionGap),
+        ],
+
+        DashboardHeroCard(
+          totalFeedings: summary.pendingFeedings + summary.completedFeedings,
+          completedFeedings: summary.completedFeedings,
+          pendingFeedings: summary.pendingFeedings,
+          onLogsPressed: () {
+            context.go('/logs');
+          },
+        ),
+        const SizedBox(height: AppSpacing.sectionGap),
+
+        _buildNutritionEntry(context),
+        const SizedBox(height: AppSpacing.sectionGap),
+
+        DashboardMetricsGrid(
+          totalPets: summary.totalPets,
+          sterilizedPets: summary.sterilizedPets,
+          foodDispensedToday: summary.foodDispensedToday,
+          foodTargetToday: summary.foodTargetToday,
+        ),
+        const SizedBox(height: AppSpacing.sectionGap),
+
+        DashboardChartCard(
+          weeklyDispensed: summary.weeklyDispensed,
+          todayIndex: summary.todayIndex,
+        ),
+        const SizedBox(height: AppSpacing.sectionGap),
+
+        _buildQuickActions(context),
+      ],
     );
   }
 
@@ -328,4 +348,189 @@ class _QuickActionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Indicador de la primera carga del panel.
+///
+/// No muestra cifras: mientras no hay resumen no existe nada que presentar.
+class _PanelCargando extends StatelessWidget {
+  const _PanelCargando();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.xxxl),
+      child: Center(
+        child: CircularProgressIndicator(semanticsLabel: 'Cargando panel'),
+      ),
+    );
+  }
+}
+
+/// Error sin resumen visible: copy fijo en español y acción de reintento.
+class _PanelError extends StatelessWidget {
+  final String mensaje;
+  final VoidCallback onReintentar;
+
+  const _PanelError({required this.mensaje, required this.onReintentar});
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    final textos = Theme.of(context).textTheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      decoration: BoxDecoration(
+        color: colores.errorContainer,
+        borderRadius: AppRadii.cardRadius,
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.error_outline, color: colores.onErrorContainer, size: 32),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            mensaje,
+            textAlign: TextAlign.center,
+            style: textos.bodyMedium?.copyWith(
+              color: colores.onErrorContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          FilledButton(
+            onPressed: onReintentar,
+            child: const Text('Reintentar'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Avisos del resumen visible: respaldo sin conexión y refresco fallido.
+class _PanelAvisos extends StatelessWidget {
+  final DashboardSummary summary;
+  final String? errorMessage;
+
+  const _PanelAvisos({required this.summary, required this.errorMessage});
+
+  @override
+  Widget build(BuildContext context) {
+    final avisos = <Widget>[];
+
+    if (summary.isFromCache) {
+      final fecha = summary.calculatedAt;
+      avisos.add(
+        _PanelAviso(
+          icono: Icons.cloud_off_outlined,
+          titulo: 'Mostrando datos sin conexión',
+          detalle: fecha == null
+              ? null
+              : 'Última actualización: ${_formatearFechaHora(fecha)}',
+        ),
+      );
+    } else if (summary.calculatedAt == null) {
+      avisos.add(
+        const _PanelAviso(
+          icono: Icons.wifi_off_outlined,
+          titulo: 'Sin conexión: solo datos locales',
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      avisos.add(
+        _PanelAviso(
+          icono: Icons.sync_problem_outlined,
+          titulo: errorMessage!,
+          detalle: 'Se muestran los últimos datos disponibles.',
+          esError: true,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (var i = 0; i < avisos.length; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sm),
+          avisos[i],
+        ],
+      ],
+    );
+  }
+}
+
+/// Banda de aviso con el color semántico del tema global.
+class _PanelAviso extends StatelessWidget {
+  final IconData icono;
+  final String titulo;
+  final String? detalle;
+  final bool esError;
+
+  const _PanelAviso({
+    required this.icono,
+    required this.titulo,
+    this.detalle,
+    this.esError = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colores = Theme.of(context).colorScheme;
+    final textos = Theme.of(context).textTheme;
+    final fondo = esError ? colores.errorContainer : colores.secondaryContainer;
+    final frente = esError
+        ? colores.onErrorContainer
+        : colores.onSecondaryContainer;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: fondo,
+        borderRadius: AppRadii.cardRadius,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icono, color: frente, size: 20),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titulo,
+                  style: textos.bodyMedium?.copyWith(
+                    color: frente,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (detalle != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    detalle!,
+                    style: textos.bodySmall?.copyWith(color: frente),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Formatea el instante del servidor como `dd/MM/yyyy HH:mm`.
+///
+/// Solo usa los campos de [calculatedAt]; nunca consulta el reloj del
+/// dispositivo (RF-6, RF-7).
+String _formatearFechaHora(DateTime calculatedAt) {
+  String dosDigitos(int valor) => valor.toString().padLeft(2, '0');
+  return '${dosDigitos(calculatedAt.day)}/${dosDigitos(calculatedAt.month)}/'
+      '${calculatedAt.year} ${dosDigitos(calculatedAt.hour)}:'
+      '${dosDigitos(calculatedAt.minute)}';
 }

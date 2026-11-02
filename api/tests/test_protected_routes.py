@@ -44,6 +44,7 @@ class TestProtectedEndpoints(BaseApiTests):
             "/dispensers/1",
             "/logs/",
             "/logs/catalog",
+            "/dashboard/summary",
             "/schedules/",
             "/schedules/1?pet_id=1",
             "/schedules/pet/1",

@@ -14,6 +14,10 @@ from typing import Optional
 EXITO = "success"
 FALLO = "failure"
 
+# Único tipo de registro que aporta gramos dispensados (spec 022, RF-2). Es la
+# fuente única del literal: el servicio del panel lo usa para filtrar `logs`.
+EVENTO_DISPENSADO = "feeding_dispensed"
+
 # Origen de una causa: la declara el dispositivo en su reporte o la asigna el
 # servidor al cerrar la orden.
 ORIGEN_REPORTE = "reporte"
@@ -36,7 +40,7 @@ TIPOS_EVENTO: dict[str, str] = {
     "dispenser_updated": "Dispensador modificado",
     "dispenser_unlinked": "Dispensador desvinculado",
     "dispenser_wifi_reset": "WiFi del dispensador reiniciado",
-    "feeding_dispensed": "Comida dispensada",
+    EVENTO_DISPENSADO: "Comida dispensada",
     "dispenser_refilled": "Dispensador reabastecido",
 }
 

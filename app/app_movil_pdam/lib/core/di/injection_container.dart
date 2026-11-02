@@ -26,6 +26,7 @@ import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/current_user
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/login_uc.dart';
 import 'package:app_movil_pdam/features/auth/domain/usecase/user_uc/register_uc.dart';
 import 'package:app_movil_pdam/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:app_movil_pdam/features/dashboard/data/datasources/dashboard_local_datasource.dart';
 import 'package:app_movil_pdam/features/dashboard/data/datasources/dashboard_remote_datasource.dart';
 import 'package:app_movil_pdam/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:app_movil_pdam/features/dashboard/domain/repositories/dashboard_repository.dart';
@@ -163,6 +164,11 @@ Future<void> setup() async {
     () => DashboardRemoteDatasourceImpl(dioClient: sl<DioClient>()),
   );
 
+  // Caché del último resumen del panel (RF-7, RF-8).
+  sl.registerLazySingleton<DashboardLocalDatasource>(
+    () => DashboardLocalDatasourceImpl(),
+  );
+
   // Repositorios
   sl.registerLazySingleton<AuthTokenRepositories>(
     () => AuthRepositoriesImpl(authLocalDatasource: sl<AuthLocalDatasource>()),
@@ -240,6 +246,9 @@ Future<void> setup() async {
   sl.registerLazySingleton<DashboardRepository>(
     () => DashboardRepositoryImpl(
       remoteDatasource: sl<DashboardRemoteDatasource>(),
+      localDatasource: sl<DashboardLocalDatasource>(),
+      // RF-7: sin conexión y sin caché solo se muestran las mascotas locales.
+      localPetDatasource: sl<LocalPetDatasource>(),
     ),
   );
 
