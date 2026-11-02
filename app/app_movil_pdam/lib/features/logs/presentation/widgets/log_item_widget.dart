@@ -8,7 +8,8 @@ import 'package:flutter/material.dart';
 ///
 /// Muestra fecha y hora, etiqueta del evento, etiquetas de resultado y causa,
 /// mascota, MAC parcial y, en los dispensados, los gramos solicitados, medidos
-/// y descontados. Todos los colores salen del tema global.
+/// y descontados, más el stock resultante cuando el servidor lo informa. Todos
+/// los colores salen del tema global.
 class LogItemWidget extends StatelessWidget {
   final ActivityLog log;
 
@@ -81,6 +82,17 @@ class LogItemWidget extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 _gramos,
+                style: textos.bodySmall?.copyWith(
+                  color: colores.onSurfaceVariant,
+                ),
+              ),
+            ],
+            // Solo aparece cuando el servidor informa el stock resultante
+            // (021 RF-8): el item no calcula ni deduce nada.
+            if (log.resultingStock != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Stock resultante: ${_formatearGramos(log.resultingStock)}',
                 style: textos.bodySmall?.copyWith(
                   color: colores.onSurfaceVariant,
                 ),

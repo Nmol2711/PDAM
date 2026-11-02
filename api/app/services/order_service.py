@@ -11,6 +11,9 @@ Responsabilidades de esta capa:
   escribe el registro **en la misma transacción** (RF-1, RF-14 a RF-24).
 - `cerrar_vencidas`: cierra como `sin_reporte` las órdenes cuyo plazo más la
   tolerancia de 1 s ya venció, sin descuento y sin exigir reporte (RF-19, RF-40).
+- `descartar_solicitudes_vencidas`: marca consumidas las solicitudes rápidas
+  cuyo plazo de entrega venció y escribe su registro, sin crear orden ni tocar
+  la cola o el stock (spec 021, RF-2, RF-9, RF-10).
 - `encolar_comida`: guarda en `dispensing_queue` cada ocurrencia programada una
   sola vez, aunque el dispensador esté ocupado o desactivado (RF-25).
 - `solicitar_dispensacion_rapida`: registra la solicitud manual de la spec 020,
@@ -52,11 +55,19 @@ EVENTO_DISPENSADO = "feeding_dispensed"
 ESTADO_PENDIENTE = "pending"
 ESTADO_CERRADA = "closed"
 CAUSA_SIN_REPORTE = "sin_reporte"
+CAUSA_SOLICITUD_VENCIDA = "solicitud_vencida"
 
 DESCRIPCION_EXITO = "Comida dispensada"
 DESCRIPCION_FALLO = "Comida dispensada con fallo"
 DESCRIPCION_SIN_REPORTE = "Comida dispensada sin reporte del dispositivo"
 DESCRIPCION_ORDEN_DESCONOCIDA = "Reporte de una orden desconocida"
+DESCRIPCION_SOLICITUD_VENCIDA = "Solicitud rápida vencida sin entregar"
+
+# Claves del contexto del registro del descarte (spec 021, RF-9). Los instantes
+# se guardan como texto ISO 8601 en UTC.
+CLAVE_GRAMOS_RESERVADOS = "gramos_reservados"
+CLAVE_RECIBIDA_EN = "recibida_en"
+CLAVE_LIMITE_ENTREGA = "limite_entrega"
 
 MENSAJE_ERROR_ESCRITURA = "Error interno al cerrar la orden de dispensación."
 MENSAJE_ERROR_ENTREGA = "Error interno al entregar la orden de dispensación."
@@ -394,13 +405,15 @@ def solicitar_dispensacion_rapida(
     """Registra una solicitud rápida y cubre los horarios coincidentes (spec 020).
 
     Orden de comprobación: identificador de operación, dueño del dispensador,
-    reintento idempotente, cierre de órdenes vencidas, cantidad, stock reservado,
-    estado y orden en curso. El reintento con el mismo `operation_id` devuelve la
-    solicitud ya registrada sin volver a validar ni a cubrir horarios (RF-14).
+    reintento idempotente, descarte de solicitudes vencidas del dispensador,
+    cierre de órdenes vencidas, cantidad, stock reservado, estado y orden en
+    curso. El reintento con el mismo `operation_id` devuelve la solicitud ya
+    registrada sin volver a validar ni a cubrir horarios (RF-14 de la 020) y sin
+    disparar ningún barrido (spec 021, RF-7).
 
-    La solicitud y la cobertura se confirman en una única transacción (RF-7). No
-    crea la orden: se entrega en la consulta siguiente del dispositivo, con
-    prioridad sobre la comida programada.
+    La solicitud y la cobertura se confirman en una única transacción (RF-7 de la
+    020). No crea la orden: se entrega en la consulta siguiente del dispositivo,
+    con prioridad sobre la comida programada.
     """
     instante = tiempo.a_utc_naive(ahora or tiempo.ahora_utc())
 
@@ -413,6 +426,12 @@ def solicitar_dispensacion_rapida(
     existente = _solicitud_por_operacion(db, dispensador.id, operacion)
     if existente is not None:
         return _respuesta_solicitud(existente, dispensador)
+
+    # Barrido perezoso limitado a este dispensador (spec 021, RF-6): una reserva
+    # caducada deja de contar antes de evaluar el stock, así que la solicitud
+    # nueva ya no se rechaza por ella. Va después del reintento idempotente para
+    # que un reintento no descarte solicitudes ajenas (RF-7).
+    descartar_solicitudes_vencidas(db, instante, dispenser_id=dispensador.id)
 
     # Una orden vencida deja de bloquear; el cierre escribe su registro
     # `sin_reporte` como en la spec 014 (RF-5).
@@ -500,6 +519,12 @@ def entregar_solicitud_manual(
     `rowcount`; si otra consulta gana, se prueba la siguiente. La orden resultante
     es la misma entidad de la spec 014 y conserva su plazo, reporte y cierre.
 
+    Una solicitud vencida no se entrega nunca (spec 021, RF-4): se compara con el
+    mismo `instante` que usó el barrido perezoso, así que el límite exacto gana la
+    entrega y un instante después gana el descarte (RF-5). Si el barrido no pudo
+    escribirla, la entrega real la excluye en memoria y prueba la siguiente; el
+    diagnóstico responde reposo sin escribir nada.
+
     Si el dispensador se reasignó a otra mascota, una solicitud de la mascota
     anterior se marca consumida y se descarta sin orden ni evento (RF-16); el
     bucle continúa con la siguiente solicitud vigente.
@@ -529,6 +554,16 @@ def entregar_solicitud_manual(
         solicitud_id = solicitud.id
         amount = solicitud.amount
         pet_id = solicitud.pet_id
+
+        # Guarda de vigencia (RF-4, RF-5): con el mismo instante del barrido, una
+        # solicitud vencida no se entrega nunca. El diagnóstico responde reposo
+        # porque no puede escribir el descarte; la entrega real la excluye en
+        # memoria y prueba la siguiente, por si el barrido no pudo escribirla.
+        if tiempo.entrega_vencida(solicitud.requested_at, instante):
+            if simular:
+                return dict(REPOSO)
+            descartadas.add(solicitud_id)
+            continue
 
         if pet_id != dispensador.pet_id:
             if simular:
@@ -624,6 +659,10 @@ def entregar_orden(
 
     `simular=True` es el modo del endpoint de diagnóstico: responde lo mismo que
     la entrega real pero no escribe nada (ni orden, ni cierre, ni banderas).
+
+    En la consulta real se descarta antes, de forma perezosa y limitada a este
+    dispensador, toda solicitud rápida vencida (spec 021, RF-3, RF-4); el mismo
+    instante decide después la entrega y la reclamación (RF-5).
     """
     instante = tiempo.a_utc_naive(ahora or tiempo.ahora_utc())
 
@@ -641,6 +680,13 @@ def entregar_orden(
             dispensador.pending_wifi_reset = False
             db.commit()
         return {"serve": False, "amount": 0, "reset_wifi": True}
+
+    # Barrido perezoso limitado al dispensador consultado (RF-3, RF-4): descarta
+    # sus solicitudes vencidas antes de evaluar la orden en curso, con el mismo
+    # instante que usará la entrega, de modo que el reloj decida el ganador y no
+    # el orden de llegada (RF-5). El diagnóstico no escribe nada.
+    if not simular:
+        descartar_solicitudes_vencidas(db, instante, dispenser_id=dispensador.id)
 
     pendientes = _ordenes_pendientes(db, dispensador.id)
 
@@ -1145,6 +1191,153 @@ def _cerrar_vencida(db: Session, order_id: int, instante: datetime) -> bool:
         db.commit()
         return True
     except Exception:
+        db.rollback()
+        return False
+
+
+# --- Descarte de solicitudes vencidas ----------------------------------------
+
+
+def descartar_solicitudes_vencidas(
+    db: Session,
+    ahora: Optional[datetime] = None,
+    dispenser_id: Optional[int] = None,
+) -> list[int]:
+    """Descarta las solicitudes rápidas no consumidas cuyo plazo ya venció.
+
+    Devuelve los identificadores efectivamente descartados (spec 021, RF-2). El
+    descarte marca la solicitud consumida y escribe el registro del vencimiento
+    en una única transacción, sin crear orden, sin tocar `dispensing_queue` y sin
+    descontar stock (RF-2, RF-9).
+
+    Cada solicitud se resuelve en su propia transacción con un `UPDATE ...
+    WHERE consumed_at IS NULL` y su `rowcount`, de modo que dos barridos o dos
+    sesiones dejan un único ganador, un solo registro y una sola liberación de
+    la reserva (RNF-5). Si una falla, se revierte solo esa y el resto continúa;
+    el siguiente barrido la reintenta (RF-10).
+
+    El filtro exacto del plazo lo decide `tiempo.entrega_vencida`: en el
+    instante exacto del límite la solicitud sigue vigente y no se descarta
+    (RF-1). El reloj se inyecta y siempre se compara en UTC naive (RNF-8).
+    """
+    instante = tiempo.a_utc_naive(ahora or tiempo.ahora_utc())
+
+    consulta = db.query(models.ManualDispensingRequest).filter(
+        models.ManualDispensingRequest.consumed_at.is_(None)
+    )
+    if dispenser_id is not None:
+        consulta = consulta.filter(
+            models.ManualDispensingRequest.dispenser_id == dispenser_id
+        )
+
+    # La consulta solo trae las no consumidas; el vencimiento se decide aquí
+    # para no duplicar la regla del plazo en SQL (RF-1).
+    candidatas = [
+        solicitud.id
+        for solicitud in consulta.all()
+        if tiempo.entrega_vencida(solicitud.requested_at, instante)
+    ]
+
+    descartadas: list[int] = []
+    for solicitud_id in candidatas:
+        if _descartar_vencida(db, solicitud_id, instante):
+            descartadas.append(solicitud_id)
+    return descartadas
+
+
+def _descartar_vencida(db: Session, solicitud_id: int, instante: datetime) -> bool:
+    """Descarta una única solicitud vencida; `False` si no procede o falla.
+
+    El registro y la marca se confirman juntos: si cualquiera falla, el
+    `rollback` no deja registro ni marca y la solicitud conserva su reserva para
+    el siguiente intento (RF-10). El `rowcount` del `UPDATE` condicional es el
+    único ganador de la transición (RNF-5).
+    """
+    solicitud = (
+        db.query(models.ManualDispensingRequest)
+        .filter(models.ManualDispensingRequest.id == solicitud_id)
+        .first()
+    )
+    if solicitud is None or solicitud.consumed_at is not None:
+        return False
+    if not tiempo.entrega_vencida(solicitud.requested_at, instante):
+        return False
+
+    dispensador = (
+        db.query(models.Dispenser)
+        .filter(models.Dispenser.id == solicitud.dispenser_id)
+        .first()
+    )
+    if dispensador is None:
+        # La baja en cascada del dispensador ya borró su solicitud: no queda
+        # nada que descartar ni que registrar.
+        return False
+
+    pet_id = solicitud.pet_id
+    nombre_mascota, dueno = _datos_de_la_mascota(db, pet_id)
+    if nombre_mascota is None:
+        # La mascota se eliminó después de reasignar el dispensador: se conserva
+        # su referencia y el registro queda visible para el dueño actual del
+        # equipo, con el nombre como «no disponible» (RF-9).
+        _, dueno = _datos_de_la_mascota(db, dispensador.pet_id)
+        nombre_mascota = NO_DISPONIBLE
+
+    contexto = {
+        CLAVE_GRAMOS_RESERVADOS: float(solicitud.amount),
+        CLAVE_RECIBIDA_EN: tiempo.a_texto_utc(solicitud.requested_at),
+        CLAVE_LIMITE_ENTREGA: tiempo.a_texto_utc(
+            tiempo.limite_de_entrega(solicitud.requested_at)
+        ),
+    }
+
+    try:
+        # `registrar` no confirma: el registro y la marca se confirman juntos.
+        activity_service.registrar(
+            db,
+            event_type=EVENTO_DISPENSADO,
+            outcome=catalogos.FALLO,
+            cause=CAUSA_SOLICITUD_VENCIDA,
+            description=DESCRIPCION_SOLICITUD_VENCIDA,
+            user_id=dueno,
+            pet_id=pet_id,
+            pet_name=nombre_mascota,
+            dispenser_id=dispensador.id,
+            dispenser_mac=dispensador.mac_address,
+            context=contexto,
+            # Una solicitud descartada no tiene orden ni medidas: la app los
+            # presenta como «no disponible» (RNF-1 de la 014, RF-9).
+            order_id=None,
+            requested_grams=float(solicitud.amount),
+            measured_grams=None,
+            discounted_grams=None,
+            resulting_stock=float(dispensador.current_food_grams or 0.0),
+            retry_count=None,
+            created_at=instante,
+        )
+
+        # Transición condicional: solo una transacción marca la solicitud; el
+        # resto recibe `rowcount == 0` y revierte su registro (RNF-5).
+        filas = (
+            db.query(models.ManualDispensingRequest)
+            .filter(
+                models.ManualDispensingRequest.id == solicitud.id,
+                models.ManualDispensingRequest.consumed_at.is_(None),
+            )
+            .update(
+                {models.ManualDispensingRequest.consumed_at: instante},
+                synchronize_session=False,
+            )
+        )
+        if not filas:
+            # Otra entrega o barrido ganó la transición: no hay segundo registro
+            # ni segunda liberación.
+            db.rollback()
+            return False
+
+        db.commit()
+        return True
+    except Exception:
+        # RF-10: sin marca ni registro parciales; el siguiente ciclo reintenta.
         db.rollback()
         return False
 

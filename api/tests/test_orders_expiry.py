@@ -493,7 +493,7 @@ class TestExclusionMutuaConElReporte(BaseVencimientoTests):
 
 
 class TestBarridoProgramado(unittest.TestCase):
-    """RNF-3: un único job de 30 s que cierra y después encola."""
+    """RNF-3: un único job de 30 s que cierra, descarta y después encola."""
 
     def test_el_job_ejecuta_primero_el_cierre_y_despues_el_encolado(self):
         llamadas = []
@@ -502,14 +502,23 @@ class TestBarridoProgramado(unittest.TestCase):
         with patch.object(
             order_service, "cerrar_vencidas", side_effect=lambda *a, **k: llamadas.append("cerrar") or []
         ), patch.object(
+            order_service,
+            "descartar_solicitudes_vencidas",
+            side_effect=lambda *a, **k: llamadas.append("descartar") or [],
+        ), patch.object(
             order_service, "encolar_comida", side_effect=lambda *a, **k: llamadas.append("encolar") or []
         ):
-            background_schedules.ejecutar_barrido(db)
+            resultado = background_schedules.ejecutar_barrido(db)
 
         self.assertEqual(
             llamadas,
-            ["cerrar", "encolar"],
-            "RF-19, RF-25: primero se cierran los vencimientos y después se encola",
+            ["cerrar", "descartar", "encolar"],
+            "RF-3, RF-11: el descarte va entre el cierre y el encolado",
+        )
+        self.assertEqual(
+            resultado,
+            {"cerradas": [], "descartadas": [], "encoladas": []},
+            "El ciclo informa los tres pasos del barrido (RF-3)",
         )
 
     def test_el_arranque_programa_un_unico_job_cada_30_s(self):

@@ -40,6 +40,9 @@ ActivityLog _log({
   double? requested = 50,
   double? measured = 50.4,
   double? discounted = 50.4,
+  int? orderId = 12,
+  double? resultingStock = 1000,
+  int? retryCount = 0,
 }) {
   return ActivityLog(
     id: id,
@@ -54,12 +57,12 @@ ActivityLog _log({
     petId: petId,
     petName: petName,
     dispenserMacMasked: mac,
-    orderId: 12,
+    orderId: orderId,
     requestedGrams: requested,
     measuredGrams: measured,
     discountedGrams: discounted,
-    resultingStock: 1000,
-    retryCount: 0,
+    resultingStock: resultingStock,
+    retryCount: retryCount,
     context: const {},
   );
 }
@@ -386,6 +389,79 @@ void main() {
 
       expect(find.textContaining('Solicitados:'), findsNothing);
     });
+  });
+
+  group('registro de solicitud vencida (021 RF-8)', () {
+    testWidgets(
+      'test_el_registro_de_solicitud_vencida_muestra_fallo_causa_y_gramos',
+      (tester) async {
+        // El servidor escribe el descarte como dispensado fallido con la causa
+        // nueva; la vista solo pinta las etiquetas que llegan en el registro.
+        // El fixture reproduce el contrato de RF-9: sin identificador de orden,
+        // medidos, descontados y reintentos «no disponible», y el stock
+        // resultante del dispensador.
+        repository.page = LogPage(
+          items: [
+            _log(
+              eventType: 'feeding_dispensed',
+              eventLabel: 'Comida dispensada',
+              outcome: 'failure',
+              outcomeLabel: 'Fallo',
+              cause: 'solicitud_vencida',
+              causeLabel: 'Solicitud vencida',
+              measured: null,
+              discounted: null,
+              orderId: null,
+              retryCount: null,
+              resultingStock: 900,
+            ),
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        );
+
+        await pumpView(tester);
+
+        expect(find.text('Comida dispensada'), findsWidgets);
+        expect(find.text('Fallo'), findsOneWidget);
+        expect(find.text('Solicitud vencida'), findsOneWidget);
+        expect(find.textContaining('Milo'), findsWidgets);
+        expect(find.text('**:AB:1F'), findsOneWidget);
+        expect(find.textContaining('Solicitados: 50 g'), findsOneWidget);
+        expect(find.textContaining('Medidos: No disponible'), findsOneWidget);
+        expect(
+          find.textContaining('Descontados: No disponible'),
+          findsOneWidget,
+        );
+        expect(find.text('Stock resultante: 900 g'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'test_el_registro_sin_stock_no_muestra_la_linea_de_stock',
+      (tester) async {
+        // Un registro sin stock resultante conserva el item tal como estaba.
+        repository.page = LogPage(
+          items: [
+            _log(
+              eventType: 'feeding_dispensed',
+              eventLabel: 'Comida dispensada',
+              measured: null,
+              discounted: null,
+              resultingStock: null,
+            ),
+          ],
+          total: 1,
+          page: 1,
+          pageSize: 50,
+        );
+
+        await pumpView(tester);
+
+        expect(find.textContaining('Stock resultante'), findsNothing);
+      },
+    );
   });
 
   group('filtros (RF-27 a RF-31, RF-33)', () {

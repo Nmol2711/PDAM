@@ -1,4 +1,4 @@
-"""Instantes, plazos y tolerancias del servidor (spec 014).
+"""Instantes, plazos y tolerancias del servidor (specs 014 y 021).
 
 El servidor trabaja siempre en UTC (RNF-8): los límites del filtro de fechas
 llegan como ISO 8601 con desplazamiento explícito o sufijo `Z` y se convierten
@@ -18,6 +18,10 @@ from app.domain.catalogos import ErrorDominio
 
 # Plazo de una orden de dispensación desde su entrega (RF-19).
 PLAZO_ORDEN = timedelta(minutes=5)
+
+# Plazo de entrega de una solicitud rápida desde su recepción en el servidor
+# (spec 021, RF-1). No usa `TOLERANCIA`: esa pertenece al plazo de las órdenes.
+PLAZO_SOLICITUD_RAPIDA = timedelta(minutes=15)
 
 # Tolerancia inclusiva después de cumplirse el plazo: un reporte recibido en
 # `entregada_en + PLAZO_ORDEN + TOLERANCIA` sigue dentro del plazo (RF-20).
@@ -124,3 +128,21 @@ def plazo_vencido(entregada_en: datetime, ahora: datetime) -> bool:
     plazo no está vencido (RF-19, RF-20).
     """
     return a_utc_naive(ahora) > limite_del_plazo(entregada_en)
+
+
+def limite_de_entrega(recibida_en: datetime) -> datetime:
+    """Último instante en que una solicitud rápida sigue vigente (inclusivo).
+
+    Se cuenta desde la recepción en el servidor y sin tolerancia (spec 021,
+    RF-1): en el límite exacto la solicitud todavía puede entregarse.
+    """
+    return a_utc_naive(recibida_en) + PLAZO_SOLICITUD_RAPIDA
+
+
+def entrega_vencida(recibida_en: datetime, ahora: datetime) -> bool:
+    """Indica si `ahora` supera el plazo de entrega de la solicitud (exclusivo).
+
+    En el instante exacto del límite devuelve `False`: la solicitud sigue
+    vigente y puede entregarse (spec 021, RF-1, RF-5).
+    """
+    return a_utc_naive(ahora) > limite_de_entrega(recibida_en)

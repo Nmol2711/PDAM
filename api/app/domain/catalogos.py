@@ -1,4 +1,4 @@
-"""Catálogos cerrados del registro de actividad (spec 014).
+"""Catálogos cerrados del registro de actividad (specs 014 y 021).
 
 Una sola fuente para los códigos que se guardan en `logs`, las etiquetas que se
 muestran en español y los mensajes de error visibles. Cualquier valor fuera de
@@ -69,6 +69,7 @@ CAUSAS: dict[str, Causa] = {
     "orden_desconocida": Causa("Orden desconocida", FALLO, ORIGEN_SERVIDOR),
     "supera_capacidad": Causa("Supera la capacidad", FALLO, ORIGEN_SERVIDOR),
     "cantidad_invalida": Causa("Cantidad inválida", FALLO, ORIGEN_SERVIDOR),
+    "solicitud_vencida": Causa("Solicitud vencida", FALLO, ORIGEN_SERVIDOR),
 }
 
 # Subconjunto de causas que el dispositivo puede declarar como motivo de su

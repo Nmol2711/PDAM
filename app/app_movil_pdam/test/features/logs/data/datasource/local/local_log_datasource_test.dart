@@ -22,6 +22,10 @@ ActivityLog _log({
   double? requestedGrams,
   double? measuredGrams,
   double? discountedGrams,
+  String? mac = '**:AB:1F',
+  double? resultingStock = 1000,
+  int? orderId = 12,
+  int? retryCount = 0,
   Map<String, dynamic> context = const <String, dynamic>{},
 }) {
   return ActivityLog(
@@ -36,13 +40,13 @@ ActivityLog _log({
     description: description,
     petId: petId,
     petName: petName,
-    dispenserMacMasked: '**:AB:1F',
-    orderId: 12,
+    dispenserMacMasked: mac,
+    orderId: orderId,
     requestedGrams: requestedGrams,
     measuredGrams: measuredGrams,
     discountedGrams: discountedGrams,
-    resultingStock: 1000,
-    retryCount: 0,
+    resultingStock: resultingStock,
+    retryCount: retryCount,
     context: context,
   );
 }
@@ -169,6 +173,52 @@ void main() {
       );
 
       expect(page.items.single.id, 5);
+    });
+  });
+
+  // El descarte por vencimiento conserva en la caché el mismo contrato que
+  // sirve el servidor: causa, etiquetas, mascota, MAC parcial, gramos y stock
+  // resultante, con la orden y los reintentos «no disponible» (021 RF-8 y
+  // RF-9).
+  group('registro de solicitud vencida (021 RF-8)', () {
+    test('test_conserva_la_causa_de_solicitud_vencida_en_la_cache', () async {
+      await datasource.cacheLogs([
+        _log(
+          id: 92,
+          eventType: 'feeding_dispensed',
+          eventLabel: 'Comida dispensada',
+          outcome: 'failure',
+          outcomeLabel: 'Fallo',
+          cause: 'solicitud_vencida',
+          causeLabel: 'Solicitud vencida',
+          description: 'Solicitud rápida vencida sin entregar',
+          requestedGrams: 50,
+          resultingStock: 900,
+          orderId: null,
+          retryCount: null,
+        ),
+      ]);
+
+      final page = await datasource.getLocalLogs(
+        filters: LogFilters.empty,
+        page: 1,
+      );
+      final log = page.items.single;
+
+      expect(log.cause, 'solicitud_vencida');
+      expect(log.causeLabel, 'Solicitud vencida');
+      expect(log.eventLabel, 'Comida dispensada');
+      expect(log.outcome, 'failure');
+      expect(log.outcomeLabel, 'Fallo');
+      expect(log.description, 'Solicitud rápida vencida sin entregar');
+      expect(log.petName, 'Milo');
+      expect(log.dispenserMacMasked, '**:AB:1F');
+      expect(log.requestedGrams, 50);
+      expect(log.resultingStock, 900);
+      expect(log.measuredGrams, isNull);
+      expect(log.discountedGrams, isNull);
+      expect(log.orderId, isNull);
+      expect(log.retryCount, isNull);
     });
   });
 

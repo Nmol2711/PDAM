@@ -25,8 +25,9 @@ ID_JOB_BARRIDO = "barrido_ordenes"
 def execute_cron_task():
     db = SessionLocal()
     try:
-        # Un único ciclo: primero se cierran los vencimientos y después se
-        # encolan las comidas programadas (RF-19, RF-25, RNF-3).
+        # Un único ciclo: primero se cierran las órdenes vencidas, después se
+        # descartan las solicitudes rápidas vencidas y por último se encolan las
+        # comidas programadas (RF-19, RF-25, RNF-3, RF-3 de la 021).
         ejecutar_barrido(db=db)
     finally:
         db.close()

@@ -22,7 +22,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 from fastapi import HTTPException
 
 from app.db.database import SessionLocal
-from app.domain.tiempo import PLAZO_ORDEN
+from app.domain.tiempo import PLAZO_ORDEN, PLAZO_SOLICITUD_RAPIDA
 from app.models import models
 from app.schemas.reports import DispenserReportRequest
 from app.services import order_service, pet_service
@@ -416,7 +416,7 @@ class TestCicloDeVidaSolicitud(BaseDispensacionRapidaTests):
         self.assertIsNone(self._solicitudes()[0].consumed_at)
         self.assertEqual(self._registros(), [], "La baja rechazada no escribe evento")
 
-    def test_una_solicitud_sin_consulta_sigue_pendiente_y_no_vence(self):
+    def test_una_solicitud_sin_consulta_se_entrega_antes_del_plazo(self):
         self._solicitar(50)
 
         sesion = SessionLocal()
@@ -429,17 +429,35 @@ class TestCicloDeVidaSolicitud(BaseDispensacionRapidaTests):
         finally:
             sesion.close()
 
+        # El cierre de órdenes de la 014 no toca la solicitud rápida ("no vence").
         self.assertEqual(cerradas, [])
         self.assertEqual(self._ordenes(), [])
         self.assertEqual(self._registros(), [])
         solicitud = self._solicitud_fresca()
-        self.assertIsNotNone(solicitud, "La solicitud no vence ni se borra")
+        self.assertIsNotNone(solicitud, "La solicitud no se borra")
         self.assertIsNone(solicitud.consumed_at)
 
-        respuesta = self._entregar(ahora=AHORA + timedelta(minutes=30))
+        respuesta = self._entregar(ahora=AHORA + timedelta(minutes=10))
 
         self.assertTrue(respuesta["serve"])
         self.assertEqual(respuesta["amount"], 50.0)
+
+    def test_una_solicitud_sin_consulta_vence_y_ya_no_se_entrega(self):
+        # La 021 sustituye el caso límite de la 020 «equipo que nunca consulta:
+        # queda pendiente sin vencimiento»: pasados los 15 minutos la consulta
+        # descarta la solicitud vencida y no dispensa (RF-1, RF-4).
+        self._solicitar(50)
+
+        respuesta = self._entregar(
+            ahora=AHORA + PLAZO_SOLICITUD_RAPIDA + timedelta(seconds=1)
+        )
+
+        self.assertEqual(respuesta, {"serve": False, "amount": 0})
+        self.assertEqual(self._ordenes(), [], "Una vencida no crea orden")
+        self.assertIsNotNone(self._solicitud_fresca().consumed_at)
+        registros = self._registros()
+        self.assertEqual(len(registros), 1)
+        self.assertEqual(registros[0].cause, "solicitud_vencida")
 
     def test_objetivo_no_alcanzado_en_200_g_no_descuenta_stock(self):
         self._solicitar(200)
